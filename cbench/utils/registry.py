@@ -29,8 +29,13 @@
 from typing import Type
 from vlutils.base.registry import Registry
 import torch
+from cbench.train.trainer import _baseTrainer
+from cbench.nn.model.base import _baseCompound
 
 class ModelRegistry(Registry[Type["torch.nn.Module"]]):
+    pass
+
+class CompoundRegistry(Registry[Type["_baseCompound"]]):
     pass
 
 class OptimizerRegistry(Registry[Type["torch.optim.Optimizer"]]):
@@ -41,3 +46,9 @@ class SchedulerRegistry(Registry[Type["torch.optim.lr_scheduler._LRScheduler"]])
 
 class LossRegistry(Registry[Type["torch.nn.Module"]]):
     pass
+
+class TrainerRegistry(Registry[Type["_baseTrainer"]]):
+    pass
+
+# class LayerRegistry(Registry[Type["torch.nn.Module"]]):
+#     pass

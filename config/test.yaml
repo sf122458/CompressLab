@@ -7,15 +7,11 @@ model:
     size: [16, 8, 8, 8, 8, 4, 4, 4, 4, 2, 2, 2, 2, 1, 1, 1, 1]
     denseNorm: true
 train:
-  # totalStep: 198587 # totalimage / gpus / batchsize * epochs (6354785 / 8 / 6 * 1.5)
   batchSize: 4
   epoch: 20
-  # valFreq: 10000
   trainSet: E:\compress
   valSet: /mnt/sdb/SJTU_3DGS/lyx/McQuic/data/Kodak
   output: E:\compress
-  # loss: PSNR
-  # loss: {"MSE": 0.6, "MSSSIM": 0.4}
   loss: {"MSE": 1.0}
   optim:
     key: Adam
@@ -37,3 +33,7 @@ train:
     wantsMore: false
 env:
   WANDB_ENABLE: false
+log:
+  key: wandb
+  params:
+    

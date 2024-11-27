@@ -1,0 +1,30 @@
+# Template of Compressai FactorizedPrior
+model:
+  compound: CompressAI
+  net: 
+    key: FactorizedPrior
+    params:
+      N: 128
+      M: 192
+
+train:
+  batchsize: 16
+  epoch: 100
+  trainset: data/clic
+  valset: data/kodak
+  output: output/CompressAI/FactorizedPrior
+  loss: {MSE: 0.5, bpp: 0.5}
+  optim: 
+    key: Adam
+    params:
+      lr: 1e-4
+log:
+  key: wandb
+  params:
+    project: ${net}
+    name: ${}
+    dir: ${train.output}
+env:
+  WANDB_API_KEY: None
+  CUDA_VISIBLE_DEVICES: None
+  NUM_WORKERS: 0

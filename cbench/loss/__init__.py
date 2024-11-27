@@ -1,6 +1,30 @@
 from cbench.utils.registry import LossRegistry
+from cbench.config.config import Config
 import torch
 import torch.nn as nn
+import math
+import logging
+
+class LossFn(nn.Module):
+    def __init__(self, config: Config):
+        super(LossFn, self).__init__()
+        self.loss = []
+        self.bpp_loss_lmbd = None
+        for type, lmbd in config.Train.Loss:
+            try:
+                loss_fn = LossRegistry.get(type)()
+                self.loss.append(lmbd * loss_fn)
+            except:
+                if type.upper() == "BPP":
+                    logging.info(f"Find bpp loss. Please check the compound has implemented the bpp loss calculation.")
+                else:
+                    logging.warning(f"Loss function {type} is not implemented. Skip this loss function.")
+
+    def forward(self, x, xHat, **kwargs):
+        loss = 0
+        for l in self.loss:
+            loss += l(x, xHat)
+        return loss
 
 
 @LossRegistry.register("MSE")

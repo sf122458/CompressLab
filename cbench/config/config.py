@@ -19,82 +19,51 @@ class General:
     @property
     def Params(self) -> Dict[str, Any]:
         return self.params
+    
+@dataclass
+class Model:
+    compound: str
+    net: General
+
+    @property
+    def Compound(self) -> str:
+        return self.compound
+    
+    @property
+    def Net(self) -> General:
+        return self.net
+
+
+@dataclass
+class Dataset:
+    path: str
+    transform: Dict[str, Any]
+
+    @property
+    def Path(self) -> str:
+        return self.path
+    
+    @property
+    def Transform(self) -> Dict[str, Any]:
+        return self.transform
+
 
     
 @dataclass
-class GPU:
-    gpus: int
-    vRam: int
-    wantsMore: bool
-
-    @property
-    def GPUs(self) -> int:
-        return self.gpus
-
-    @property
-    def VRam(self) -> int:
-        return self.vRam
-
-    @property
-    def WantsMore(self) -> bool:
-        return self.wantsMore
-
-@dataclass
-class Train:
-    batchSize: int
-    epoch: int
-    trainSet: str
-    valSet: str
-    output: str
-    loss: Dict[str, Any]
-    optim: General
-    gpu: str
-    schdr: General=None
-
-    @property
-    def BatchSize(self) -> int:
-        return self.batchSize
-
-    @property
-    def Epoch(self) -> int:
-        return self.epoch
-    
-    @property
-    def TrainSet(self) -> str:
-        return self.trainSet
-    
-    @property
-    def ValSet(self) -> str:
-        return self.valSet
-    
-    @property
-    def Output(self) -> str:
-        return self.output
-    
-    @property
-    def Loss(self) -> Dict[str, Any]:
-        return self.loss
-    
-    @property
-    def Optim(self) -> General:
-        # TODO
-        raise NotImplementedError
-    
-    @property
-    def Schdr(self) -> General:
-        return self.schdr
-    
-    @property
-    def GPU(self):
-        return self.gpu
+class Log:
+    wandb_enable: bool
+    wandb_project: str=None
+    wandb_name: str=None
     
 @dataclass
 class ENV:
-    WANDB_ENABLE: bool
+    # WANDB_ENABLE: bool
     WANDB_API_KEY: str=None
-    WANDB_PROJECT: str=None
+    # WANDB_PROJECT: str=None
+    # WANDB_NAME: str=None
 
     CUDA_VISIBLE_DEVICES: str=None
+    NUM_WORKERS: int=None
 
 class GeneralSchema(Schema):
     class Meta:
@@ -106,29 +75,92 @@ class GeneralSchema(Schema):
     def _(self, data, **kwargs):
         return General(**data)
     
-class GPUSchema(Schema):
+class ModelSchema(Schema):
     class Meta:
         unknown = RAISE
-    gpus = fields.Int(required=True, description="Number of gpus for training. This affects the `world size` of PyTorch DDP.", exclusiveMinimum=0)
-    vRam = fields.Int(required=True, description="Minimum VRam required for each gpu. Set it to `-1` to use all gpus.")
-    wantsMore = fields.Bool(required=True, description="Set to `true` to use all visible gpus and all VRams and ignore `gpus` and `vRam`.")
+    compound = fields.Str(required=True, description="")
+    net = fields.Nested(GeneralSchema(), required=True)
 
     @post_load
     def _(self, data, **kwargs):
-        return GPU(**data)
+        return Model(**data)
     
+class DatasetSchema(Schema):
+    class Meta:
+        unknown = RAISE
+    path = fields.Str(required=True, description="Path to the dataset.")
+    transform = fields.Dict(required=True, description="Transforms to apply to the dataset.")
+
+    @post_load
+    def _(self, data, **kwargs):
+        return Dataset(**data)
+
+@dataclass
+class Train:
+    batchsize: int
+    epoch: int
+    valinterval: int
+    trainset: Dataset
+    valset: Dataset
+    output: str
+    loss: Dict[str, Any]
+    optim: General
+    schdr: General=None
+    trainer: str=None
+
+    @property
+    def BatchSize(self) -> int:
+        return self.batchsize
+
+    @property
+    def Epoch(self) -> int:
+        return self.epoch
+    
+    @property
+    def ValInterval(self) -> int:
+        return self.valinterval
+
+    @property
+    def TrainSet(self) -> Dataset:
+        return self.trainset
+    
+    @property
+    def ValSet(self) -> Dataset:
+        return self.valset
+    
+    @property
+    def Output(self) -> str:
+        return self.output
+    
+    @property
+    def Loss(self) -> Dict[str, Any]:
+        return self.loss
+    
+    @property
+    def Optim(self) -> General:
+        return self.optim
+    
+    @property
+    def Schdr(self) -> General:
+        return self.schdr
+    
+    @property
+    def Trainer(self) -> str:
+        return self.trainer
+
 class TrainSchema(Schema):
     class Meta:
         unknown = RAISE
-    batchSize = fields.Int(required=True, description="Batch size")
+    batchsize = fields.Int(required=True, description="Batch size")
     epoch = fields.Int(required=True, description="Epoch")
-    trainSet = fields.Str(required=True)
-    valSet = fields.Str(required=True)
+    valinterval = fields.Int(required=True, description="Validation interval")
+    trainset = fields.Str(required=True)
+    valset = fields.Str(required=True)
     output = fields.Str(required=True)
     loss = fields.Dict(required=True)
     optim = fields.Nested(GeneralSchema(), required=True)
     schdr = fields.Nested(GeneralSchema(), required=False)
-    gpu = fields.Nested(GPUSchema(), required=True)
+    trainer = fields.Str(required=False)
 
     @post_load
     def _(self, data, **kwargs):
@@ -137,10 +169,11 @@ class TrainSchema(Schema):
 class ENVSchema(Schema):
     class Meta:
         unknown = RAISE
-    WANDB_ENABLE = fields.Bool(required=True)
+    # WANDB_ENABLE = fields.Bool(required=True)
     WANDB_API_KEY = fields.Str(required=False)
-    WANDB_PROJECT = fields.Str(required=False)
+    # WANDB_PROJECT = fields.Str(required=False)
     CUDA_VISIBLE_DEVICES = fields.Str(required=False)
+    NUM_WORKERS = fields.Int(required=False)
 
     @post_load
     def _(self, data, **kwargs):
@@ -149,8 +182,9 @@ class ENVSchema(Schema):
 class ConfigSchema(Schema):
     class Meta:
         unknown = RAISE
-    model = fields.Nested(GeneralSchema(), required=True, description="Compress Model")
+    model = fields.Nested(ModelSchema(), required=True, description="Compress Model")
     train = fields.Nested(TrainSchema(), required=True, description="Training configs.")
+    log = fields.Nested(GeneralSchema(), required=True, description="Logging configs.")
     env = fields.Nested(ENVSchema(), required=False, description="Environment variables.")
 
     @post_load
@@ -159,18 +193,23 @@ class ConfigSchema(Schema):
 
 @dataclass
 class Config:
-    model: General
+    model: Model
     train: Train
+    log: General
     env: ENV=None
 
     @property
-    def Model(self):
+    def Model(self) -> Model:
         return self.model
     
     @property
     def Train(self) -> Train:
         return self.train
     
+    @property
+    def Log(self) -> General:
+        return self.log
+
     @property
     def ENV(self) -> ENV:
         return self.env
@@ -180,5 +219,5 @@ class Config:
     
     @staticmethod
     def deserialize(data: dict) -> "Config":
-        date = {key: value for key, value in data.items() if "$" not in key}
+        data = {key: value for key, value in data.items() if "$" not in key}
         return ConfigSchema().load(data)
