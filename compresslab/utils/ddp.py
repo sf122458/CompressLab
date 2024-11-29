@@ -5,9 +5,9 @@ import logging
 from tensorboardX import SummaryWriter
 import datetime
 
-from cbench.config.config import Config
+from compresslab.config.config import Config
 # from cbench.train.trainer import *
-from cbench.utils.registry import TrainerRegistry
+from compresslab.utils.registry import TrainerRegistry
 
 def ddpTraining(
         config: Config, 

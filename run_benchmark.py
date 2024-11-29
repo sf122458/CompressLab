@@ -2,19 +2,19 @@ import yaml
 import inspect
 from pathlib import Path
 import logging
-from cbench.config.config import Config
+from compresslab.config.config import Config
 import os
-import cbench.utils
-from cbench.utils.ddp import ddpTraining
-from cbench.utils.registry import *
+import compresslab.utils
+from compresslab.utils.ddp import ddpTraining
+from compresslab.utils.registry import *
 import argparse
 
 # register all the classes
-import cbench.nn.model
-import cbench.loss
-import cbench.optim
-import cbench.train.trainer
-import cbench.utils.registry
+import compresslab.nn
+import compresslab.loss
+import compresslab.optim
+import compresslab.train.trainer
+import compresslab.utils.registry
 
 def main(configPath: Path):
 
@@ -44,12 +44,12 @@ if __name__ == "__main__":
     parser.add_argument('--list', action="store_true", help='List all available models.')
     args = parser.parse_args()
     if args.list:
-        registry_name = [clsname for (clsname, _) in inspect.getmembers(cbench.utils.registry, inspect.isclass)]
+        registry_name = [clsname for (clsname, _) in inspect.getmembers(compresslab.utils.registry, inspect.isclass)]
         for registry in registry_name:
             if registry == "Registry":
                 continue
             print(registry)
-            print(getattr(cbench.utils.registry, registry).summary())
+            print(getattr(compresslab.utils.registry, registry).summary())
 
     else:
         if args.config is None:

@@ -13,10 +13,10 @@ import torch
 import torch.nn as nn
 from typing import Dict, List, Any
 
-from cbench.config.config import Config
-from cbench.utils.base import  _baseCompound
-from cbench.loss import LossFn
-from cbench.utils.registry import ModelRegistry, CompoundRegistry
+from compresslab.config.config import Config
+from compresslab.utils.base import  _baseCompound
+from compresslab.loss import LossFn
+from compresslab.utils.registry import ModelRegistry, CompoundRegistry
 # from compressai
 from compressai.models import *
 # from compressai.models import CompressionModel

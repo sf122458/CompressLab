@@ -1,5 +1,5 @@
 import torchvision.transforms as transforms
-from cbench.utils.registry import TransformRegistry
+from compresslab.utils.registry import TransformRegistry
 
 TransformRegistry.register("ToTensor")(transforms.ToTensor)
 

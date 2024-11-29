@@ -15,11 +15,12 @@ Trainer
 import logging
 import torch
 from torch.utils.data import DataLoader
-from cbench.config.config import Config
-from cbench.utils.registry import OptimizerRegistry, SchedulerRegistry, CompoundRegistry, TrainerRegistry
-from cbench.dataset.data import Dataset, ImageDataset
-from cbench.utils.base import _baseTrainer
+from compresslab.config.config import Config
+from compresslab.utils.registry import OptimizerRegistry, SchedulerRegistry, CompoundRegistry, TrainerRegistry
+from compresslab.dataset.data import Dataset, ImageDataset
+from compresslab.utils.base import _baseTrainer
 
+# Default trainer
 @TrainerRegistry.register("Default")
 class Trainer(_baseTrainer):
     def __init__(self, config: Config, run):
@@ -29,7 +30,7 @@ class Trainer(_baseTrainer):
         
         self.config = config
 
-        self.compound = CompoundRegistry.get(config.Model.Compound)(config)
+        self.compound = CompoundRegistry.get(config.Model.Compound)(config).to(self.device)
 
         self.optimizer = OptimizerRegistry.get(config.Train.Optim.Key)(self.compound.model.parameters(), **config.Train.Optim.Params)
         self.scheduler = SchedulerRegistry.get(config.Train.Schdr.Key)(self.optimizer, **config.Train.Schdr.Params) if config.Train.Schdr is not None else None
@@ -56,7 +57,6 @@ class Trainer(_baseTrainer):
         for epoch in range(self.config.Train.Epoch):
             for images in self.trainloader:
                 images = images.to(self.device)
-
                 # rewrite here if the output of the compound is different
                 out = self.compound(images)
                 
@@ -83,17 +83,19 @@ class Trainer(_baseTrainer):
     def log(self):
         pass
 
+# CompressAI models needs to consider loss of nn models and aux loss of entropy models
 @TrainerRegistry.register("CompressAI")
 class CompressAITrainer(_baseTrainer):
     def __init__(self, config: Config, run):
         
         logging.info("Initialize Trainer.")
+        # TODO: DDP
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         logging.info(f"Use {self.device}.")
         
         self.config = config
 
-        self.compound = CompoundRegistry.get(config.Model.Compound)(config)
+        self.compound = CompoundRegistry.get(config.Model.Compound)(config).to(self.device)
 
         parameters = set(p for n, p in self.compound.model.named_parameters() if not n.endswith(".quantiles"))
         aux_parameters = set(p for n, p in self.compound.model.named_parameters() if n.endswith(".quantiles"))

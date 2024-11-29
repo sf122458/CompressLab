@@ -30,7 +30,7 @@ from typing import Type
 from vlutils.base.registry import Registry
 import torch
 import torchvision
-from cbench.utils.base import _baseTrainer, _baseCompound
+from compresslab.utils.base import _baseTrainer, _baseCompound
 
 class ModelRegistry(Registry[Type["torch.nn.Module"]]):
     pass

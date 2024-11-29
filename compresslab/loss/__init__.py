@@ -1,5 +1,5 @@
-from cbench.utils.registry import LossRegistry
-from cbench.config.config import Config
+from compresslab.utils.registry import LossRegistry
+from compresslab.config.config import Config
 import torch
 import torch.nn as nn
 import math

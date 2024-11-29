@@ -1,7 +1,7 @@
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 
-from cbench.utils.registry import OptimizerRegistry, SchedulerRegistry
+from compresslab.utils.registry import OptimizerRegistry, SchedulerRegistry
 
 # Optimizer
 
