@@ -29,8 +29,8 @@
 from typing import Type
 from vlutils.base.registry import Registry
 import torch
-from cbench.train.trainer import _baseTrainer
-from cbench.nn.model.base import _baseCompound
+import torchvision
+from cbench.utils.base import _baseTrainer, _baseCompound
 
 class ModelRegistry(Registry[Type["torch.nn.Module"]]):
     pass
@@ -50,5 +50,7 @@ class LossRegistry(Registry[Type["torch.nn.Module"]]):
 class TrainerRegistry(Registry[Type["_baseTrainer"]]):
     pass
 
+class TransformRegistry(Registry):
+    pass
 # class LayerRegistry(Registry[Type["torch.nn.Module"]]):
 #     pass

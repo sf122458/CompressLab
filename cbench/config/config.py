@@ -37,7 +37,7 @@ class Model:
 @dataclass
 class Dataset:
     path: str
-    transform: Dict[str, Any]
+    transform: Dict[str, Any]=None
 
     @property
     def Path(self) -> str:
@@ -89,7 +89,7 @@ class DatasetSchema(Schema):
     class Meta:
         unknown = RAISE
     path = fields.Str(required=True, description="Path to the dataset.")
-    transform = fields.Dict(required=True, description="Transforms to apply to the dataset.")
+    transform = fields.Dict(required=False, description="Transforms to apply to the dataset.")
 
     @post_load
     def _(self, data, **kwargs):
@@ -154,8 +154,8 @@ class TrainSchema(Schema):
     batchsize = fields.Int(required=True, description="Batch size")
     epoch = fields.Int(required=True, description="Epoch")
     valinterval = fields.Int(required=True, description="Validation interval")
-    trainset = fields.Str(required=True)
-    valset = fields.Str(required=True)
+    trainset = fields.Nested(DatasetSchema(), required=True)
+    valset = fields.Nested(DatasetSchema(), required=True)
     output = fields.Str(required=True)
     loss = fields.Dict(required=True)
     optim = fields.Nested(GeneralSchema(), required=True)

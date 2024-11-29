@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='my_package',
+    name='compresslab',
     version='0.1',
     packages=find_packages(),
     description="Pytorch training framework",

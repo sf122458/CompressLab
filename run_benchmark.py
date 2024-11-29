@@ -13,18 +13,19 @@ import argparse
 import cbench.nn.model
 import cbench.loss
 import cbench.optim
+import cbench.train.trainer
 import cbench.utils.registry
 
 def main(configPath: Path):
 
     # Logging level setting.
-    loggingLevel = logging.INFO
+    loggingLevel = logging.DEBUG
     logging.basicConfig(level=loggingLevel)
 
     config = Config.deserialize(yaml.full_load(configPath.read_text()))
 
     # If the output ckpt exist, resume training.
-    if os.path.exists(os.path.join(config.Train.TrainSet, 'latest', 'saved.ckpt')):
+    if os.path.exists(os.path.join(config.Train.TrainSet.Path, 'latest', 'saved.ckpt')):
         resume = os.path.join(os.path.join(config.Train.SaveDir))
         # ckpt = torch.load(resume, "cpu")
         logging.info(f"Restore from the checkpoint {resume}")

@@ -14,10 +14,12 @@ import torch.nn as nn
 from typing import Dict, List, Any
 
 from cbench.config.config import Config
-from cbench.nn.model.base import  _baseCompound
-from cbench.utils.registry import ModelRegistry, CompoundRegistry, LossRegistry
+from cbench.utils.base import  _baseCompound
+from cbench.loss import LossFn
+from cbench.utils.registry import ModelRegistry, CompoundRegistry
 # from compressai
-# from compressai.models import *
+from compressai.models import *
+# from compressai.models import CompressionModel
 
 @CompoundRegistry.register("CompressAI")
 class Compound(_baseCompound):
@@ -26,7 +28,9 @@ class Compound(_baseCompound):
         self.config = config
         
         self.model = ModelRegistry.get(config.Model.Net.Key)(**config.Model.Net.Params)
-        self.loss = LossRegistry.get(config.Train.Loss)()
+        assert issubclass(self.model.__class__, CompressionModel), "Model should be a subclass of `CompressModel`."
+        # self.loss = LossRegistry.get(config.Train.Loss.keys())()
+        self.loss = LossFn(config)
 
 
     def train(self, mode: bool=True):
@@ -56,6 +60,8 @@ class Compound(_baseCompound):
         
         loss = distortion_loss + bpp_loss * self.config.Train.Loss["bpp"]
 
+        aux_loss = self.model.aux_loss()
+
         return \
             {   
                 "loss": loss,
@@ -67,6 +73,7 @@ class Compound(_baseCompound):
                 "likelihoods": out["likelihoods"],
                 "distortion_loss": distortion_loss,
                 "bpp_loss": bpp_loss,
+                "aux_loss": aux_loss
             }
     
     def compress(self, x: torch.Tensor) -> Dict[str, Any]:
@@ -78,10 +85,20 @@ class Compound(_baseCompound):
 
 
 
-@ModelRegistry.register("Balle")
-class Balle2017(nn.Module):
-    def __init__(self):
-        super().__init__()
+ModelRegistry.register("FactorizedPrior")(FactorizedPrior)
 
-    def forward(self, x):
-        return x
+ModelRegistry.register("ScaleHyperprior")(ScaleHyperprior)
+
+ModelRegistry.register("MeanScaleHyperprior")(MeanScaleHyperprior)
+
+ModelRegistry.register("JointAutoregressiveHierarchicalPriors")(JointAutoregressiveHierarchicalPriors)
+
+ModelRegistry.register("Cheng2020Attention")(Cheng2020Attention)
+
+ModelRegistry.register("Cheng2020AnchorCheckerboard")(Cheng2020AnchorCheckerboard)
+
+ModelRegistry.register("Cheng2020Anchor")(Cheng2020Anchor)
+
+ModelRegistry.register("Elic2022Official")(Elic2022Official)
+
+ModelRegistry.register("Elic2022Chandelier")(Elic2022Chandelier)

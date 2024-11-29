@@ -11,24 +11,17 @@ train:
   trainer: CompressAI
   batchsize: 16
   epoch: 100
-  valinterval: 5
-  trainset: 
-    path: data/Kodak
-    transform: {}
-  valset: 
-    path: data/Kodak
+  trainset: data/clic
+  valset: data/kodak
   output: output/CompressAI/FactorizedPrior
-  loss: {MSE: 0.5, L1: 0.5}
+  loss: {MSE: 1, bpp: 1}
   optim: 
     key: Adam
     params:
-      lr: 1.0e-4
+      lr: 1e-4
+
 log:
-  key: None
-  params:
-    project: ${net}
-    name: ${}
-    dir: ${train.output}
+
 env:
   WANDB_API_KEY: None
   CUDA_VISIBLE_DEVICES: None

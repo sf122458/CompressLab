@@ -17,9 +17,11 @@ import torch
 from torch.utils.data import DataLoader
 from cbench.config.config import Config
 from cbench.utils.registry import OptimizerRegistry, SchedulerRegistry, CompoundRegistry, TrainerRegistry
-from cbench.dataset.data import Dataset
+from cbench.dataset.data import Dataset, ImageDataset
+from cbench.utils.base import _baseTrainer
 
-class _baseTrainer:
+@TrainerRegistry.register("Default")
+class Trainer(_baseTrainer):
     def __init__(self, config: Config, run):
         logging.info("Initialize Trainer.")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -49,20 +51,6 @@ class _baseTrainer:
 
         self.run = run
 
-    def train(self):
-        raise NotImplementedError
-    
-    def val(self):
-        raise NotImplementedError
-
-    def log(self):
-        raise NotImplementedError
-
-@TrainerRegistry.register("Default")
-class Trainer(_baseTrainer):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
 
     def train(self):
         for epoch in range(self.config.Train.Epoch):
@@ -89,6 +77,85 @@ class Trainer(_baseTrainer):
             for images in self.valloader:
                 images = images.to(self.device)
                 out = self.compound(images)
+
+                
+
+    def log(self):
+        pass
+
+@TrainerRegistry.register("CompressAI")
+class CompressAITrainer(_baseTrainer):
+    def __init__(self, config: Config, run):
+        
+        logging.info("Initialize Trainer.")
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        logging.info(f"Use {self.device}.")
+        
+        self.config = config
+
+        self.compound = CompoundRegistry.get(config.Model.Compound)(config)
+
+        parameters = set(p for n, p in self.compound.model.named_parameters() if not n.endswith(".quantiles"))
+        aux_parameters = set(p for n, p in self.compound.model.named_parameters() if n.endswith(".quantiles"))
+
+        self.optimizer = OptimizerRegistry.get(config.Train.Optim.Key)(parameters, **config.Train.Optim.Params)
+        self.aux_optimizer = OptimizerRegistry.get(config.Train.Optim.Key)(aux_parameters, **config.Train.Optim.Params)
+
+        self.scheduler = SchedulerRegistry.get(config.Train.Schdr.Key)(self.optimizer, **config.Train.Schdr.Params) if config.Train.Schdr is not None else None
+        
+        self.trainloader = DataLoader(
+            ImageDataset(config.Train.TrainSet.Path, config.Train.TrainSet.Transform),
+            batch_size=config.Train.BatchSize,
+            shuffle=True,
+            num_workers=config.ENV.NUM_WORKERS if config.ENV.NUM_WORKERS is not None else 0
+        )
+
+        self.valloader = DataLoader(
+            ImageDataset(config.Train.ValSet.Path, config.Train.ValSet.Transform),
+            # batch_size=config.Train.BatchSize,
+            batch_size=1,
+            shuffle=False,
+            num_workers=config.ENV.NUM_WORKERS if config.ENV.NUM_WORKERS is not None else 0
+        )
+
+        self.run = run
+
+    def train(self):
+        for epoch in range(self.config.Train.Epoch):
+            for idx, images in enumerate(self.trainloader):
+                self.optimizer.zero_grad()
+                self.aux_optimizer.zero_grad()
+                images = images.to(self.device)
+
+                # rewrite here if the output of the compound is different
+                out = self.compound(images)
+                
+                # optimizer step
+                out["loss"].backward()
+                
+                self.optimizer.step()
+                if self.scheduler is not None:
+                    self.scheduler.step()
+                
+                out["aux_loss"].backward()
+                self.aux_optimizer.step()
+
+                if idx % 10 == 0:
+                    print(out["loss"].item(), out["aux_loss"].item(), out["bpp_loss"].item(), out["log"]["psnr"])
+
+                #TODO: log: PSNR, SSIM, etc.
+
+            # if epoch % self.config.Train.ValInterval == 0:
+            #     self.val()
+
+    def val(self):
+        with torch.no_grad():
+            for images in self.valloader:
+                images = images.to(self.device)
+                out = self.compound(images)
+
+                bpp = out["bpp_loss"].item()
+                psnr = out["log"]["psnr"]
 
                 
 

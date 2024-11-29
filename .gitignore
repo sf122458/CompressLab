@@ -1,3 +1,5 @@
 __pycache__/
 .vscode/
-my_package.egg-info/
+data/*
+compresslab.egg-info
+build

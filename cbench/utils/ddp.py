@@ -6,7 +6,7 @@ from tensorboardX import SummaryWriter
 import datetime
 
 from cbench.config.config import Config
-from cbench.train.trainer import *
+# from cbench.train.trainer import *
 from cbench.utils.registry import TrainerRegistry
 
 def ddpTraining(
@@ -22,6 +22,7 @@ def ddpTraining(
         raise NotImplementedError
 
     # WANDB or Tensorboard
+    run = None
     if config.Log.Key.upper() == "WANDB":
         logging.info("Use WANDB.")
         wandb.login(config.env.WANDB_API_KEY)
@@ -39,9 +40,10 @@ def ddpTraining(
         raise NotImplementedError
     else:
         logging.warning("No logging service is enabled.")
-
+    
     # trainer = ImageCompressionTrainer(config, 
     #                   log=run)
+    logging.debug(config.Train.Trainer)
     trainer = TrainerRegistry.get(config.train.Trainer if config.train.Trainer is not None else "Default")(config=config, run=run)
 
     trainer.train()
