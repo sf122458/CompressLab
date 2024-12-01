@@ -38,6 +38,8 @@ python run_benchmark.py --list
 - [x] Loss function interface.
 - [x] Dataset implementation.
 - [ ] Trainer interface.
+- [ ] 
+- [ ] Breakpoint training.
 - [ ] Wandb and Tensorboard. What to record in trainer.
 - [ ] DDP training.
 - [ ] Notes for `.yaml` files.

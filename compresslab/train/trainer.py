@@ -15,6 +15,7 @@ Trainer
 import logging
 import torch
 from torch.utils.data import DataLoader
+from rich.progress import Progress, TimeElapsedColumn, BarColumn, TimeRemainingColumn
 from compresslab.config.config import Config
 from compresslab.utils.registry import OptimizerRegistry, SchedulerRegistry, CompoundRegistry, TrainerRegistry
 from compresslab.dataset.data import Dataset, ImageDataset
@@ -122,7 +123,21 @@ class CompressAITrainer(_baseTrainer):
 
         self.run = run
 
+        self.progress = Progress(
+            "[i blue]{task.description}[/][b magenta]{task.fields[progress]}", 
+            TimeElapsedColumn(), 
+            BarColumn(None), 
+            TimeRemainingColumn(), 
+            "{task.fields[suffix]}", 
+            refresh_per_second=6, 
+            transient=True, 
+            disable=False, expand=True)
+        self.progress.start()
+        self.trainingBar = self.progress.add_task("", start=False, progress="[----/----]", suffix='.' * 10)
+        
+
     def train(self):
+        self._beforeRun()
         for epoch in range(self.config.Train.Epoch):
             for idx, images in enumerate(self.trainloader):
                 self.optimizer.zero_grad()
@@ -146,7 +161,8 @@ class CompressAITrainer(_baseTrainer):
                     print(out["loss"].item(), out["aux_loss"].item(), out["bpp_loss"].item(), out["log"]["psnr"])
 
                 #TODO: log: PSNR, SSIM, etc.
-
+                self._step += 1
+                self._afterStep(psnr=out["log"]["psnr"])
             # if epoch % self.config.Train.ValInterval == 0:
             #     self.val()
 
@@ -163,3 +179,23 @@ class CompressAITrainer(_baseTrainer):
 
     def log(self):
         pass
+
+    def _beforeRun(self):
+        self._step = 0
+        self.progress.start_task(self.trainingBar)
+        self.progress.update(
+            self.trainingBar, 
+            total=len(self.trainloader)*self.config.Train.Epoch,
+            completed=self._step,
+            progress=f"[{self._step}/{len(self.trainloader)*self.config.Train.Epoch}]"
+            )
+
+    def _beforeStep(self):
+        pass
+
+    def _afterStep(self, **kwargs):
+        # task = self.progress.get_task
+        self.progress.update(
+            self.trainingBar, 
+            advance=1, 
+            progress=f"[{self._step}/{len(self.trainloader)*self.config.Train.Epoch:4d}]", suffix=f"D = [b green]{kwargs['psnr']:2.2f}[/]dB")

@@ -19,7 +19,7 @@ import compresslab.utils.registry
 def main(configPath: Path):
 
     # Logging level setting.
-    loggingLevel = logging.DEBUG
+    loggingLevel = logging.INFO
     logging.basicConfig(level=loggingLevel)
 
     config = Config.deserialize(yaml.full_load(configPath.read_text()))

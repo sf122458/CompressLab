@@ -10,10 +10,11 @@ model:
 train:
   trainer: CompressAI
   batchsize: 16
-  epoch: 100
+  epoch: 1
   valinterval: 5
   trainset: 
-    path: data/Kodak
+    path: data/subset_8000_processed
+    # path: data/Kodak
     transform: 
       RandomCrop: 
         size: 256
