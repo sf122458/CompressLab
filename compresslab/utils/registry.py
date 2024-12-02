@@ -1,5 +1,5 @@
 """
-    With the help of registry, we can dynamically load the instance according to the configuration in yaml files.
+    With the help of registry, we can dynamically load the instance from the configuration in .yaml files.
 """
 
 from typing import Type, Generic, TypeVar, Dict, Union, List
@@ -116,7 +116,19 @@ class Registry(Generic[T]):
             k: v['cls'].__module__ + '.' + v['cls'].__name__ + ' from ' + v['path'] for k, v in cls._map.items()
         })
 
-
+"""
+Modules need to be registered.
+Example:
+    ```python
+        ModelRegistry.register("class_key")(class_name)
+    ```
+        or
+    ```python
+        @ModelRegistry.register("class_key")
+        class class_name:
+            ...
+    ```
+"""
 class ModelRegistry(Registry[Type["torch.nn.Module"]]):
     pass
 

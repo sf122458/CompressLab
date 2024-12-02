@@ -20,13 +20,12 @@ class _baseTrainer:
 
 import torch.nn as nn
 import torch
-from compressai.models import CompressionModel
 
 class _baseCompound(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.model: CompressionModel = None
+        self.model: nn.Module = None
         self.loss = None
     
     def train(self, mode: bool=True):

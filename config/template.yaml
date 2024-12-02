@@ -14,7 +14,6 @@ train:
   valinterval: 5
   trainset: 
     path: data/subset_8000_processed
-    # path: data/Kodak
     transform: 
       RandomCrop: 
         size: 256
@@ -32,9 +31,10 @@ train:
 log:
   key: None
   params:
-    project: ${net}
-    name: ${}
-    dir: ${train.output}
+    project: CompressAI
+    name: FactorizedPrior
+    dir: output/CompressAI/FactorizedPrior
+
 env:
   WANDB_API_KEY: None
   CUDA_VISIBLE_DEVICES: None

@@ -214,7 +214,7 @@ class Config:
     def ENV(self) -> ENV:
         return self.env
     
-    def serialize(self):
+    def serialize(self) -> Dict[str, Any]:
         return ConfigSchema().dump(self)
     
     @staticmethod

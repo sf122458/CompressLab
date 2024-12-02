@@ -2,10 +2,10 @@ import yaml
 import inspect
 from pathlib import Path
 
-
 from compresslab.config import Config
-import compresslab.utils.log as log
+import compresslab.utils.log
 import os
+import glob
 import logging
 import compresslab.utils
 from compresslab.utils.ddp import ddpTraining
@@ -16,7 +16,7 @@ import argparse
 import compresslab.nn
 import compresslab.loss
 import compresslab.optim
-import compresslab.train.trainer
+import compresslab.train
 import compresslab.utils.registry
 
 def main(configPath: Path):
@@ -24,16 +24,18 @@ def main(configPath: Path):
     config = Config.deserialize(yaml.full_load(configPath.read_text()))
 
     # If the output ckpt exist, resume training.
-    if os.path.exists(os.path.join(config.Train.TrainSet.Path, 'latest', 'saved.ckpt')):
-        resume = os.path.join(os.path.join(config.Train.SaveDir))
-        # ckpt = torch.load(resume, "cpu")
-        logging.info(f"Restore from the checkpoint {resume}")
-        # resume = Path(resume)
-    else:
+
+    ckpt_list = glob.glob(os.path.join(config.Train.Output, 'ckpt', '*.ckpt'))
+    os.makedirs(os.path.join(config.Train.Output, 'ckpt'), exist_ok=True)
+    
+    if len(ckpt_list) == 0:
         resume = None
         logging.info("Start training from the beginning.")
+    else:
+        resume = sorted(ckpt_list)[-1]
+        logging.info(f"Restore from the checkpoint {resume}")
+        # resume = Path(resume)
 
-    
     ddpTraining(config, resume)
 
 
@@ -51,7 +53,6 @@ if __name__ == "__main__":
             print(registry)
             print(getattr(compresslab.utils.registry, registry).summary())
             print('-'*150)
-
     else:
         if args.config is None:
             raise ValueError("Please provide a config file.")

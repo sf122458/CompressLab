@@ -17,9 +17,7 @@ from compresslab.config import Config
 from compresslab.utils.base import  _baseCompound
 from compresslab.loss import LossFn
 from compresslab.utils.registry import ModelRegistry, CompoundRegistry
-# from compressai
 from compressai.models import *
-# from compressai.models import CompressionModel
 
 @CompoundRegistry.register("CompressAI")
 class Compound(_baseCompound):
@@ -29,13 +27,11 @@ class Compound(_baseCompound):
         
         self.model = ModelRegistry.get(config.Model.Net.Key)(**config.Model.Net.Params)
         assert issubclass(self.model.__class__, CompressionModel), "Model should be a subclass of `CompressModel`."
-        # self.loss = LossRegistry.get(config.Train.Loss.keys())()
         self.loss = LossFn(config)
 
-
-    def train(self, mode: bool=True):
-        self.model.train(mode)
-        raise NotImplementedError
+    # def train(self, mode: bool=True):
+    #     self.model.train(mode)
+    #     raise NotImplementedError
     
     def forward(self, x: torch.Tensor):
         """
@@ -68,6 +64,7 @@ class Compound(_baseCompound):
                 "log":
                 {
                     "psnr": 10 * torch.log10(1 / distortion_loss).item(),
+                    "bpp": bpp_loss
                 },
                 "x_hat": out["x_hat"],
                 "likelihoods": out["likelihoods"],
