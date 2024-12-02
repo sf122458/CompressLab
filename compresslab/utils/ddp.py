@@ -11,6 +11,7 @@ from compresslab.utils.registry import TrainerRegistry
 def ddpTraining(
         config: Config, 
         resume,  # TODO: checkpoint restore
+        args
     ):
 
     # TODO: DDP Settings
@@ -39,7 +40,8 @@ def ddpTraining(
     
     trainer = TrainerRegistry.get(config.train.Trainer if config.train.Trainer is not None else "Default")(config=config, run=run, resume=resume)
 
-    trainer.train()
-
+    if not args.test_only:
+        trainer.train()
+    trainer.test()
 
     logging.info("Finish training.")

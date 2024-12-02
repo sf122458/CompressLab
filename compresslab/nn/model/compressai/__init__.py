@@ -25,7 +25,7 @@ class Compound(_baseCompound):
         super().__init__()
         self.config = config
         
-        self.model = ModelRegistry.get(config.Model.Net.Key)(**config.Model.Net.Params)
+        self.model: CompressionModel = ModelRegistry.get(config.Model.Net.Key)(**config.Model.Net.Params)
         assert issubclass(self.model.__class__, CompressionModel), "Model should be a subclass of `CompressModel`."
         self.loss = LossFn(config)
 
@@ -74,9 +74,15 @@ class Compound(_baseCompound):
             }
     
     def compress(self, x: torch.Tensor) -> Dict[str, Any]:
+        """
+            return: {"strings": [y_strings], "shape": y.size()[-2:]} | {"strings": [y_strings, z_strings], "shape": z.size()[-2:]}
+        """
         return self.model.compress(x)
     
-    def decompress(self, string: bytes, shape) -> Dict[str, torch.Tensor]:
+    def decompress(self, string: bytes, shape: torch.Size) -> Dict[str, torch.Tensor]:
+        """
+            return: {"x_hat": x_hat}
+        """
         return self.model.decompress(string, shape)
 
 

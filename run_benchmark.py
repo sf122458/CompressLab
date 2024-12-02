@@ -19,9 +19,10 @@ import compresslab.optim
 import compresslab.train
 import compresslab.utils.registry
 
-def main(configPath: Path):
-
-    config = Config.deserialize(yaml.full_load(configPath.read_text()))
+def main(args):
+    if args.config is None:
+            raise ValueError("Please provide a config file.")
+    config = Config.deserialize(yaml.full_load(args.config.read_text()))
 
     # If the output ckpt exist, resume training.
 
@@ -36,13 +37,14 @@ def main(configPath: Path):
         logging.info(f"Restore from the checkpoint {resume}")
         # resume = Path(resume)
 
-    ddpTraining(config, resume)
+    ddpTraining(config, resume, args)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='test')
     parser.add_argument('--config', required=False, type=str,help ='Config file path.', default=None)
     parser.add_argument('--list', action="store_true", help='List all available models.')
+    parser.add_argument('--test_only', action="store_true", help='Test only.')
     args = parser.parse_args()
     if args.list:
         registry_name = [clsname for (clsname, _) in inspect.getmembers(compresslab.utils.registry, inspect.isclass) 
@@ -54,6 +56,4 @@ if __name__ == "__main__":
             print(getattr(compresslab.utils.registry, registry).summary())
             print('-'*150)
     else:
-        if args.config is None:
-            raise ValueError("Please provide a config file.")
-        main(configPath=Path(args.config))
+        main(args=args)

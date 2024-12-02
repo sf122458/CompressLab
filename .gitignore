@@ -1,5 +1,6 @@
 __pycache__/
 .vscode/
 data/
+!compresslab/data/
 compresslab.egg-info/
 build/

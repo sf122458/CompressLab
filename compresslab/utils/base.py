@@ -8,6 +8,9 @@ class _baseTrainer:
     
     def validate(self):
         raise NotImplementedError
+    
+    def test(self):
+        raise NotImplementedError
 
     def log(self):
         raise NotImplementedError
