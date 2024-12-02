@@ -22,7 +22,7 @@ import compresslab.utils.registry
 def main(args):
     if args.config is None:
             raise ValueError("Please provide a config file.")
-    config = Config.deserialize(yaml.full_load(args.config.read_text()))
+    config = Config.deserialize(yaml.full_load(Path(args.config).read_text()))
 
     # If the output ckpt exist, resume training.
 
