@@ -257,7 +257,8 @@ class CompressAITrainer(Trainer):
 
 
     def _afterStep(self, log: Dict[str, Any], **kwargs):
-        self.run.log(log, **kwargs)
+        if isinstance(self.run, Run):
+            self.run.log(log, **kwargs)
         self._step += 1
         self.progress.update(
             self.trainingBar, 
