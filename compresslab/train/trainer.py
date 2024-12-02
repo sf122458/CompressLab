@@ -126,16 +126,44 @@ class Trainer(_baseTrainer):
             progress=f"[{self._step}/{len(self.trainloader)*self.config.Train.Epoch:4d}]", 
                 suffix=f"Bpp = [b green]{kwargs['bpp']:1.4f}, D = [b green]{kwargs['psnr']:2.2f}[/]dB")
 
-    def _paramCalc(self):
-        # TODO: params calculation
-        pass
 
 # CompressAI models need to consider loss of nn models and aux loss of entropy models
 class CompressAITrainer(Trainer):
     def __init__(self, config: Config, run: Union[Run], resume: str=None):
-        super().__init__(config, run, resume=None)
+        logging.info("Initialize Trainer.")
+        # TODO: DDP
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        logging.info(f"Use {self.device}.")
+        
+        self.config = config
 
-        del self.compound, self.optimizer, self.scheduler
+        self.trainloader = DataLoader(
+            Dataset(config.Train.TrainSet.Path, config.Train.TrainSet.Transform),
+            batch_size=config.Train.BatchSize,
+            shuffle=True,
+            num_workers=config.ENV.NUM_WORKERS if config.ENV.NUM_WORKERS is not None else 0
+        )
+
+        self.valloader = DataLoader(
+            Dataset(config.Train.ValSet.Path, config.Train.ValSet.Transform),
+            # batch_size=config.Train.BatchSize,
+            batch_size=1,
+            shuffle=False,
+            num_workers=config.ENV.NUM_WORKERS if config.ENV.NUM_WORKERS is not None else 0
+        )
+
+        self.run = run
+        self.progress = Progress(
+            "[i blue]{task.description}[/][b magenta]{task.fields[progress]}", 
+            TimeElapsedColumn(), 
+            BarColumn(None), 
+            TimeRemainingColumn(), 
+            "{task.fields[suffix]}", 
+            refresh_per_second=6, 
+            transient=True, 
+            disable=False, expand=True)
+        self.progress.start()
+        self.trainingBar = self.progress.add_task("", start=False, progress="[----/----]", suffix='.' * 10)
 
         self.compound = CompoundRegistry.get(config.Model.Compound)(config).to(self.device)
 

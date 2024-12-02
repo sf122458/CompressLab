@@ -2,17 +2,12 @@
 ### Introduction
 This is a framework for the training of Pytorch models, especially for models used in compression.
 
-
-<!-- `registry` is used to dynamically initialize all classes from the config in `yaml` files. See `utils/registry.py` for more information.  -->
-
-
 The config of all experiments can be set in `config/*.yaml`. Please refer to `config/template.yaml` for detailed information.
 
 ### Requirements
 
 ```bash
 conda create -n compresslab python=3.7
-pip install requirements.txt
 pip install .
 ```
 

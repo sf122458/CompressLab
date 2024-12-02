@@ -113,7 +113,7 @@ class Registry(Generic[T]):
         """Get registry summary.
         """
         return pPrint({
-            k: v['cls'].__module__ + '.' + v['cls'].__name__ + ' from ' + v['path'] for k, v in cls._map.items()
+            k: v['cls'].__module__ + '.' + v['cls'].__name__ + ' registered in ' + v['path'] for k, v in cls._map.items()
         })
 
 """

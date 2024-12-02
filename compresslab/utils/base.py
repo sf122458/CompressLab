@@ -20,6 +20,8 @@ class _baseTrainer:
 
 import torch.nn as nn
 import torch
+import thop
+import logging
 
 class _baseCompound(nn.Module):
     def __init__(self):
@@ -27,6 +29,12 @@ class _baseCompound(nn.Module):
 
         self.model: nn.Module = None
         self.loss = None
+
+    def _paramsCalc(self, input=None):
+        tensor = input if input is not None else torch.randn(1, 3, 256, 256)
+        flops, params = thop.profile(self.model, inputs=(tensor, ), report_missing=True)
+        logging.info(f"FLOPs: {flops}, Params: {params}")
+
     
     def train(self, mode: bool=True):
         raise NotImplementedError
