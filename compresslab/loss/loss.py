@@ -33,7 +33,7 @@ class LossFn(nn.Module):
 @LossRegistry.register("MSE")
 class MSELoss(nn.Module):
     def __init__(self):
-        super(MSELoss, self).__init__()
+        super().__init__()
 
     def forward(self, x, y):
         return torch.mean((x - y) ** 2)
@@ -41,7 +41,7 @@ class MSELoss(nn.Module):
 @LossRegistry.register("L1")
 class L1Loss(nn.Module):
     def __init__(self):
-        super(L1Loss, self).__init__()
+        super().__init__()
 
     def forward(self, x, y):
         return torch.mean(torch.abs(x - y))
@@ -49,7 +49,7 @@ class L1Loss(nn.Module):
 @LossRegistry.register("SSIM")
 class SSIMLoss(nn.Module):
     def __init__(self):
-        super(SSIMLoss, self).__init__()
+        super().__init__()
 
     def forward(self, x, y):
         return 1 - torch.mean(torch.nn.functional.ssim(x, y))
@@ -57,7 +57,7 @@ class SSIMLoss(nn.Module):
 @LossRegistry.register("MSSSIM")
 class MSSSIMLoss(nn.Module):
     def __init__(self):
-        super(MSSSIMLoss, self).__init__()
+        super().__init__()
 
     def forward(self, x, y):
         return 1 - torch.mean(torch.nn.functional.msssim(x, y))
@@ -65,7 +65,7 @@ class MSSSIMLoss(nn.Module):
 @LossRegistry.register("SmoothL1")
 class SmoothL1Loss(nn.Module):
     def __init__(self):
-        super(SmoothL1Loss, self).__init__()
+        super().__init__()
 
     def forward(self, x, y):
         return torch.mean(torch.nn.functional.smooth_l1_loss(x, y))
@@ -73,7 +73,7 @@ class SmoothL1Loss(nn.Module):
 @LossRegistry.register("CrossEntropy")
 class CrossEntropyLoss(nn.Module):
     def __init__(self):
-        super(CrossEntropyLoss, self).__init__()
+        super().__init__()
 
     def forward(self, x, y):
         return torch.nn.functional.cross_entropy(x, y)
