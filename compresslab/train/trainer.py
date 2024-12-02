@@ -115,7 +115,7 @@ class Trainer(_baseTrainer):
             progress=f"[{self._step}/{len(self.trainloader)*self.config.Train.Epoch}]"
             )
         
-        self._paramCalc()
+        self.compound._paramsCalc()
 
 
     def _afterStep(self, **kwargs):

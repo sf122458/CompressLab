@@ -34,7 +34,7 @@ class _baseCompound(nn.Module):
         self.loss = None
 
     def _paramsCalc(self, input=None):
-        tensor = input if input is not None else torch.randn(1, 3, 256, 256)
+        tensor = input if input is not None else torch.randn(1, 3, 256, 256).to(next(self.model.parameters()).device)
         flops, params = thop.profile(self.model, inputs=(tensor, ), report_missing=True)
         logging.info(f"FLOPs: {flops}, Params: {params}")
 
