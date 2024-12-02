@@ -38,7 +38,8 @@ python run_benchmark.py --list
 - [x] Loss function interface.
 - [x] Dataset implementation.
 - [ ] Trainer interface.
-- [ ] 
+- [ ] Progress bar.
+- [ ] CompressAI Vbr models.
 - [ ] Breakpoint training.
 - [ ] Wandb and Tensorboard. What to record in trainer.
 - [ ] DDP training.

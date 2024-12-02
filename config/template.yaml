@@ -10,7 +10,7 @@ model:
 train:
   trainer: CompressAI
   batchsize: 16
-  epoch: 1
+  epoch: 50
   valinterval: 5
   trainset: 
     path: data/subset_8000_processed

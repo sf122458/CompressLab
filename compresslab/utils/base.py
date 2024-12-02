@@ -6,7 +6,7 @@ class _baseTrainer:
     def train(self):
         raise NotImplementedError
     
-    def val(self):
+    def validate(self):
         raise NotImplementedError
 
     def log(self):

@@ -1,9 +1,12 @@
 import yaml
 import inspect
 from pathlib import Path
-import logging
-from compresslab.config.config import Config
+
+
+from compresslab.config import Config
+import compresslab.utils.log as log
 import os
+import logging
 import compresslab.utils
 from compresslab.utils.ddp import ddpTraining
 from compresslab.utils.registry import *
@@ -17,10 +20,6 @@ import compresslab.train.trainer
 import compresslab.utils.registry
 
 def main(configPath: Path):
-
-    # Logging level setting.
-    loggingLevel = logging.INFO
-    logging.basicConfig(level=loggingLevel)
 
     config = Config.deserialize(yaml.full_load(configPath.read_text()))
 
@@ -44,12 +43,14 @@ if __name__ == "__main__":
     parser.add_argument('--list', action="store_true", help='List all available models.')
     args = parser.parse_args()
     if args.list:
-        registry_name = [clsname for (clsname, _) in inspect.getmembers(compresslab.utils.registry, inspect.isclass)]
+        registry_name = [clsname for (clsname, _) in inspect.getmembers(compresslab.utils.registry, inspect.isclass) 
+                         if issubclass(getattr(compresslab.utils.registry, clsname), Registry)]
         for registry in registry_name:
             if registry == "Registry":
                 continue
             print(registry)
             print(getattr(compresslab.utils.registry, registry).summary())
+            print('-'*150)
 
     else:
         if args.config is None:

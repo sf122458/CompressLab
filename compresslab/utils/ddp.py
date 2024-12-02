@@ -5,7 +5,7 @@ import logging
 from tensorboardX import SummaryWriter
 import datetime
 
-from compresslab.config.config import Config
+from compresslab.config import Config
 # from cbench.train.trainer import *
 from compresslab.utils.registry import TrainerRegistry
 
@@ -13,9 +13,6 @@ def ddpTraining(
         config: Config, 
         resume  # TODO: checkpoint restore
     ):
-    pass
-
-    # should register all modules here?
 
     # TODO: DDP Settings
     if resume is not None:
@@ -44,7 +41,7 @@ def ddpTraining(
     # trainer = ImageCompressionTrainer(config, 
     #                   log=run)
     logging.debug(config.Train.Trainer)
-    trainer = TrainerRegistry.get(config.train.Trainer if config.train.Trainer is not None else "Default")(config=config, run=run)
+    trainer = TrainerRegistry.get(config.train.Trainer if config.train.Trainer is not None else "Default")(config=config, run=run, resume=resume)
 
     trainer.train()
 
