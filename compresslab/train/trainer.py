@@ -37,14 +37,14 @@ class Trainer(_baseTrainer):
         self.config = config
 
         self.trainloader = DataLoader(
-            Dataset(config.Train.TrainSet.Path, config.Train.TrainSet.Transform),
+            ImageDataset(config.Train.TrainSet.Path, config.Train.TrainSet.Transform),
             batch_size=config.Train.BatchSize,
             shuffle=True,
             num_workers=config.ENV.NUM_WORKERS if config.ENV.NUM_WORKERS is not None else 0
         )
 
         self.valloader = DataLoader(
-            Dataset(config.Train.ValSet.Path, config.Train.ValSet.Transform),
+            ImageDataset(config.Train.ValSet.Path, config.Train.ValSet.Transform),
             # batch_size=config.Train.BatchSize,
             batch_size=1,
             shuffle=False,
@@ -138,14 +138,14 @@ class CompressAITrainer(Trainer):
         self.config = config
 
         self.trainloader = DataLoader(
-            Dataset(config.Train.TrainSet.Path, config.Train.TrainSet.Transform),
+            ImageDataset(config.Train.TrainSet.Path, config.Train.TrainSet.Transform),
             batch_size=config.Train.BatchSize,
             shuffle=True,
             num_workers=config.ENV.NUM_WORKERS if config.ENV.NUM_WORKERS is not None else 0
         )
 
         self.valloader = DataLoader(
-            Dataset(config.Train.ValSet.Path, config.Train.ValSet.Transform),
+            ImageDataset(config.Train.ValSet.Path, config.Train.ValSet.Transform),
             # batch_size=config.Train.BatchSize,
             batch_size=1,
             shuffle=False,

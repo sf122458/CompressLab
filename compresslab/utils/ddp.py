@@ -23,7 +23,7 @@ def ddpTraining(
     run = None
     if config.Log.Key.upper() == "WANDB":
         logging.info("Use WANDB.")
-        wandb.login(config.env.WANDB_API_KEY)
+        wandb.login(key=config.env.WANDB_API_KEY)
         config.Log.Params["name"] = config.Log.Params["name"] + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         run = wandb.init(
             config={k:v for k, v in config.serialize().items() if k == 'model' or k == 'train'},
