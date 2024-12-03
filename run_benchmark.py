@@ -25,20 +25,25 @@ def main(args):
     config = Config.deserialize(yaml.full_load(Path(args.config).read_text()))
 
     # If the output ckpt exist, resume training.
-
-    ckpt_list = glob.glob(os.path.join(config.Train.Output, 'ckpt', '*.ckpt'))
+    config.Train.output = os.path.join(config.Train.Output, get_exp_name(config))
     os.makedirs(os.path.join(config.Train.Output, 'ckpt'), exist_ok=True)
+
+    if not os.path.exists(os.path.join(config.Train.output, 'config.yaml')):
+        os.system(f"cp {args.config} {config.Train.output}/config.yaml")
     
+    ckpt_list = glob.glob(os.path.join(config.Train.Output, 'ckpt', '*.ckpt'))
     if len(ckpt_list) == 0:
         resume = None
         logging.info("Start training from the beginning.")
     else:
         resume = sorted(ckpt_list)[-1]
         logging.info(f"Restore from the checkpoint {resume}")
-        # resume = Path(resume)
 
     ddpTraining(config, resume, args)
 
+def get_exp_name(config: Config):
+    loss_setting = "_".join([f"{k}_{v}" for k, v in config.Train.Loss.items()])
+    return f"{config.Model.Net.Key}_{loss_setting}"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='test')

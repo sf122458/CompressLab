@@ -4,3 +4,4 @@ data/
 !compresslab/data/
 compresslab.egg-info/
 build/
+output/

@@ -18,6 +18,7 @@ import logging
 import torch
 import datetime
 from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from rich.progress import Progress, TimeElapsedColumn, BarColumn, TimeRemainingColumn
 from typing import Dict, Any, Union
 from wandb.sdk.wandb_run import Run
@@ -106,6 +107,7 @@ class Trainer(_baseTrainer):
                 out = self.compound(images)
 
     def _beforeRun(self):
+        self.compound._paramsCalc()
         self._step = 0
         self.progress.start_task(self.trainingBar)
         self.progress.update(
@@ -115,8 +117,6 @@ class Trainer(_baseTrainer):
             progress=f"[{self._step}/{len(self.trainloader)*self.config.Train.Epoch}]"
             )
         
-        self.compound._paramsCalc()
-
 
     def _afterStep(self, **kwargs):
         self._step += 1
@@ -172,13 +172,14 @@ class CompressAITrainer(Trainer):
 
         self.optimizer = OptimizerRegistry.get(config.Train.Optim.Key)(parameters, **config.Train.Optim.Params)
         self.aux_optimizer = OptimizerRegistry.get(config.Train.Optim.Key)(aux_parameters, **config.Train.Optim.Params)
-        self.scheduler = SchedulerRegistry.get(config.Train.Schdr.Key)(self.optimizer, **config.Train.Schdr.Params) if config.Train.Schdr is not None else None
+        self.scheduler = SchedulerRegistry.get(config.Train.Schdr.Key)(optimizer=self.optimizer, **config.Train.Schdr.Params) if config.Train.Schdr is not None else None
+        assert isinstance(self.scheduler, ReduceLROnPlateau)
         self.start_epoch = 0
 
         if resume is not None:
-            # ckpt = torch.load(resume, "cpu")
+            ckpt = torch.load(resume, self.device)
             ckpt = torch.load(resume)
-            self.compound.load_state_dict(ckpt["net"])
+            self.compound.model.load_state_dict(ckpt["model"])
             self.optimizer.load_state_dict(ckpt["optimizer"])
             self.aux_optimizer.load_state_dict(ckpt["aux_optimizer"])
             if self.scheduler is not None:
@@ -201,20 +202,25 @@ class CompressAITrainer(Trainer):
                 out["loss"].backward()
                 
                 self.optimizer.step()
-                if self.scheduler is not None:
-                    self.scheduler.step()
+                
                 
                 out["aux_loss"].backward()
                 self.aux_optimizer.step()
 
+                # if self.scheduler is not None:
+                #     self.scheduler.step()
+
                 #TODO: log: PSNR, SSIM, etc.
                 
                 self._afterStep(log=out["log"])
+            
+            if self.scheduler is not None:
+                self.scheduler.step(self.validate())
 
             
             if (epoch + 1) % self.config.Train.ValInterval == 0 or epoch == self.config.Train.Epoch - 1:
                 checkpoint = {
-                    "net": self.compound.state_dict(),
+                    "model": self.compound.model.state_dict(),
                     "optimizer": self.optimizer.state_dict(),
                     "aux_optimizer": self.aux_optimizer.state_dict(),
                     "lr_scheduler": self.scheduler.state_dict() if self.scheduler is not None else None,
@@ -229,23 +235,25 @@ class CompressAITrainer(Trainer):
                     # if len(ckpt_list) > 0:
                     #     os.remove(os.path.join(ckpt_path, ckpt_list[0]))
                 
-                self.validate()
 
     @torch.no_grad()
     def validate(self):
         bpp = 0
         psnr = 0
+        loss = 0
         with torch.no_grad():
             for images in self.valloader:
                 images = images.to(self.device)
                 out = self.compound(images)
-
+                loss += out["loss"]
                 bpp += out["log"]["bpp"]
                 psnr += out["log"]["psnr"]
 
         bpp /= len(self.valloader)
         psnr /= len(self.valloader)
+        loss /= len(self.valloader)
         logging.info(f"Epoch {self.epoch}, validation result: Bpp = {bpp:1.4f}, PSNR = {psnr:2.2f}dB")
+        return loss
 
     @torch.no_grad()
     def test(self):

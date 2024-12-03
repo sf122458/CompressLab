@@ -20,11 +20,14 @@ python run_benchmark.py --config config/template.yaml
 ```
 to start training.
 
+To resume training from the checkpoint, you can use the original `.yaml` file or the copied `.yaml` file in the output path and run the same command mentioned above.
+
+
 Run the following command to list all registered modules.
 ```bash
 python run_benchmark.py --list
 ```
-
+This will list all registered modules and show where they are registered. You can add other modules following the instruction in `compresslab/utils/registry.py`.
 
 
 ### TODO

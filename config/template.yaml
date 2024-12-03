@@ -27,6 +27,10 @@ train:
     key: Adam
     params:
       lr: 1.0e-4
+  schdr:
+    key: ReduceLROnPlateu
+    params:
+      mode: min
 
 log:
   key: None

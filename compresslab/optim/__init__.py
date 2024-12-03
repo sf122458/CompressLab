@@ -23,3 +23,5 @@ SchedulerRegistry.register("MultiStepLR")(lr_scheduler.MultiStepLR)
 SchedulerRegistry.register("ExponentialLR")(lr_scheduler.ExponentialLR)
 
 SchedulerRegistry.register("CosineAnnealingLR")(lr_scheduler.CosineAnnealingLR)
+
+SchedulerRegistry.register("ReduceLROnPlateau")(lr_scheduler.ReduceLROnPlateau)
