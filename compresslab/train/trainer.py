@@ -167,11 +167,12 @@ class CompressAITrainer(Trainer):
 
         self.compound = CompoundRegistry.get(config.Model.Compound)(config).to(self.device)
 
-        parameters = set(p for n, p in self.compound.model.named_parameters() if not n.endswith(".quantiles"))
-        aux_parameters = set(p for n, p in self.compound.model.named_parameters() if n.endswith(".quantiles"))
+        parameters = set(p for n, p in self.compound.model.named_parameters() if p.requires_grad and not n.endswith(".quantiles"))
+        aux_parameters = set(p for n, p in self.compound.model.named_parameters() if p.requires_grad and n.endswith(".quantiles"))
+
 
         self.optimizer = OptimizerRegistry.get(config.Train.Optim.Key)(parameters, **config.Train.Optim.Params)
-        self.aux_optimizer = OptimizerRegistry.get(config.Train.Optim.Key)(aux_parameters, **config.Train.Optim.Params)
+        self.aux_optimizer = OptimizerRegistry.get(config.Train.Optim.Key)(aux_parameters, lr=1e-3)
         self.scheduler = SchedulerRegistry.get(config.Train.Schdr.Key)(optimizer=self.optimizer, **config.Train.Schdr.Params) if config.Train.Schdr is not None else None
         assert isinstance(self.scheduler, ReduceLROnPlateau)
         self.start_epoch = 0
@@ -185,6 +186,9 @@ class CompressAITrainer(Trainer):
             if self.scheduler is not None:
                 self.scheduler.load_state_dict(ckpt["lr_scheduler"])
             self.start_epoch = ckpt["next_epoch"]
+
+        self.clip_max_norm = 1.0
+        self.compound.model.train()
 
 
     def train(self):
@@ -200,6 +204,8 @@ class CompressAITrainer(Trainer):
                 
                 # optimizer step
                 out["loss"].backward()
+                if self.clip_max_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(self.compound.model.parameters(), self.clip_max_norm)
                 
                 self.optimizer.step()
                 
@@ -241,6 +247,7 @@ class CompressAITrainer(Trainer):
         bpp = 0
         psnr = 0
         loss = 0
+        self.compound.model.eval()
         with torch.no_grad():
             for images in self.valloader:
                 images = images.to(self.device)
@@ -252,7 +259,8 @@ class CompressAITrainer(Trainer):
         bpp /= len(self.valloader)
         psnr /= len(self.valloader)
         loss /= len(self.valloader)
-        logging.info(f"Epoch {self.epoch}, validation result: Bpp = {bpp:1.4f}, PSNR = {psnr:2.2f}dB")
+        logging.info(f"Epoch {self.epoch}, validation result: Loss = {loss:.4f}, Bpp = {bpp:1.4f}, PSNR = {psnr:2.2f}dB")
+        self.compound.model.train()
         return loss
 
     @torch.no_grad()

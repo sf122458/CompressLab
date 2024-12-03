@@ -3,6 +3,7 @@ from compresslab.config import Config
 import torch
 import torch.nn as nn
 import logging
+from pytorch_msssim import ssim, ms_ssim
 
 class LossFn(nn.Module):
     def __init__(self, config: Config):
@@ -24,10 +25,10 @@ class LossFn(nn.Module):
                     logging.warning(f"Loss function {type} is not implemented. Skip this loss function.")
             
 
-    def forward(self, x, xHat, **kwargs):
+    def forward(self, xHat, x, **kwargs):
         loss = 0
         for l, lmbda in zip(self.loss, self.lmbda):
-            loss += l(x, xHat) * lmbda
+            loss += l(xHat, x) * lmbda
         return loss
 
 
@@ -53,7 +54,7 @@ class SSIMLoss(nn.Module):
         super().__init__()
 
     def forward(self, x, y):
-        return 1 - torch.mean(torch.nn.functional.ssim(x, y))
+        return 1 - torch.mean(ssim(x, y))
     
 @LossRegistry.register("MSSSIM")
 class MSSSIMLoss(nn.Module):
@@ -61,7 +62,7 @@ class MSSSIMLoss(nn.Module):
         super().__init__()
 
     def forward(self, x, y):
-        return 1 - torch.mean(torch.nn.functional.msssim(x, y))
+        return 1 - torch.mean(ms_ssim(x, y))
     
 @LossRegistry.register("SmoothL1")
 class SmoothL1Loss(nn.Module):

@@ -47,14 +47,14 @@ class Compound(_baseCompound):
         N, _, H, W = x.size()
         out = self.model(x)
 
-        loss = self.loss(out["x_hat"], x)
+        distortion_loss = self.loss(out["x_hat"], x)
         bpp_loss = \
             sum(
                 torch.log(likelihoods).sum() / (-math.log(2) * N * H * W)
                 for likelihoods in out["likelihoods"].values()
             )
         
-        loss += bpp_loss * self.config.Train.Loss["bpp"]
+        loss = distortion_loss + bpp_loss * self.config.Train.Loss["bpp"]
 
         aux_loss = self.model.aux_loss()
 
