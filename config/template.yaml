@@ -19,7 +19,7 @@ train:
         size: 256
   valset: 
     path: data/Kodak
-  output: output/CompressAI/FactorizedPrior
+  output: output/CompressAI
   loss:
     MSE: 1
     bpp: 1
@@ -28,7 +28,7 @@ train:
     params:
       lr: 1.0e-4
   schdr:
-    key: ReduceLROnPlateu
+    key: ReduceLROnPlateau
     params:
       mode: min
 
@@ -37,7 +37,6 @@ log:
   params:
     project: CompressAI
     name: FactorizedPrior
-    dir: output/CompressAI/FactorizedPrior
 
 env:
   WANDB_API_KEY: None

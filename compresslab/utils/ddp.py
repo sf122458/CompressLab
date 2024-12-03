@@ -28,6 +28,7 @@ def ddpTraining(
             config.Log.Params["name"] = config.Log.Params["name"] + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
             run = wandb.init(
                 config={k:v for k, v in config.serialize().items() if k == 'model' or k == 'train'},
+                dir=config.Train.Output,
                 **config.Log.Params
             )
         elif config.Log.Key.upper() == "TENSORBOARD":
