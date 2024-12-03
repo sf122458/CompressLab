@@ -16,9 +16,10 @@ class LossFn(nn.Module):
                 loss_fn = LossRegistry.get(type)()
                 self.loss.append(loss_fn)
                 self.lmbda.append(lmbda)
+                logging.info(f"Register loss function: {type} with lambda: {lmbda}")
             except:
                 if type.upper() == "BPP":
-                    logging.info(f"Find bpp loss. Please check the compound has implemented the bpp loss calculation.")
+                    logging.info(f"Find bpp loss with lambda: {lmbda}. Please check the compound has implemented the bpp loss calculation.")
                 else:
                     logging.warning(f"Loss function {type} is not implemented. Skip this loss function.")
             
@@ -36,7 +37,7 @@ class MSELoss(nn.Module):
         super().__init__()
 
     def forward(self, x, y):
-        return torch.mean((x - y) ** 2)
+        return torch.nn.functional.mse_loss(x, y)
     
 @LossRegistry.register("L1")
 class L1Loss(nn.Module):
@@ -44,7 +45,7 @@ class L1Loss(nn.Module):
         super().__init__()
 
     def forward(self, x, y):
-        return torch.mean(torch.abs(x - y))
+        return torch.nn.functional.l1_loss(x, y)
     
 @LossRegistry.register("SSIM")
 class SSIMLoss(nn.Module):
@@ -68,7 +69,7 @@ class SmoothL1Loss(nn.Module):
         super().__init__()
 
     def forward(self, x, y):
-        return torch.mean(torch.nn.functional.smooth_l1_loss(x, y))
+        return torch.nn.functional.smooth_l1_loss(x, y)
     
 @LossRegistry.register("CrossEntropy")
 class CrossEntropyLoss(nn.Module):
