@@ -179,7 +179,6 @@ class CompressAITrainer(Trainer):
 
         if resume is not None:
             ckpt = torch.load(resume, self.device)
-            ckpt = torch.load(resume)
             self.compound.model.load_state_dict(ckpt["model"])
             self.optimizer.load_state_dict(ckpt["optimizer"])
             self.aux_optimizer.load_state_dict(ckpt["aux_optimizer"])
@@ -236,12 +235,8 @@ class CompressAITrainer(Trainer):
                 # whether to overwrite
                 time = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
                 torch.save(checkpoint, os.path.join(self.config.Train.Output, 
-                                                    f"ckpt/epoch_{epoch}_{time}.ckpt"))
-                    
-                    # if len(ckpt_list) > 0:
-                    #     os.remove(os.path.join(ckpt_path, ckpt_list[0]))
+                                                    f"ckpt/epoch_{epoch:0>3}_{time}.ckpt"))
                 
-
     @torch.no_grad()
     def validate(self):
         bpp = 0

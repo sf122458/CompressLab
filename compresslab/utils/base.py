@@ -25,6 +25,7 @@ import torch.nn as nn
 import torch
 import thop
 import logging
+from copy import deepcopy
 
 class _baseCompound(nn.Module):
     def __init__(self):
@@ -35,8 +36,10 @@ class _baseCompound(nn.Module):
 
     def _paramsCalc(self, input=None):
         tensor = input if input is not None else torch.randn(1, 3, 256, 256).to(next(self.model.parameters()).device)
-        flops, params = thop.profile(self.model, inputs=(tensor, ), report_missing=True)
+        # thop will add total_params and total_ops to the model, so we need to deepcopy the model to avoid changing the original model
+        flops, params = thop.profile(deepcopy(self.model), inputs=(tensor, ), report_missing=True)
         logging.info(f"FLOPs: {flops}, Params: {params}")
+        
 
     
     def train(self, mode: bool=True):
