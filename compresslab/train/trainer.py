@@ -71,7 +71,7 @@ class Trainer(_baseTrainer):
 
     def train(self):
         self._beforeRun()
-        for epoch in range(self.config.Train.Epoch):
+        for _ in range(self.start_epoch, self.config.Train.Epoch):
             for images in self.trainloader:
                 images = images.to(self.device)
                 # rewrite here if the output of the compound is different
@@ -86,7 +86,7 @@ class Trainer(_baseTrainer):
 
                 #TODO: log: PSNR, SSIM, etc.
 
-            if epoch % self.config.Train.ValInterval == 0:
+            if self.epoch % self.config.Train.ValInterval == 0:
                 self.validate()
 
     def validate(self):
@@ -98,6 +98,7 @@ class Trainer(_baseTrainer):
     def _beforeRun(self):
         self.compound._paramsCalc()
         self._step = 0
+        self.epoch = self.start_epoch
         self.progress = Progress(
             "[i blue]{task.description}[/][b magenta]{task.fields[progress]}", 
             TimeElapsedColumn(), 
@@ -112,9 +113,9 @@ class Trainer(_baseTrainer):
         self.progress.start_task(self.trainingBar)
         self.progress.update(
             self.trainingBar, 
-            total=len(self.trainloader)*self.config.Train.Epoch,
+            total=len(self.trainloader)*(self.config.Train.Epoch-self.start_epoch),
             completed=self._step,
-            progress=f"[{self._step}/{len(self.trainloader)*self.config.Train.Epoch}]"
+            progress=f"[{self._step}/{len(self.trainloader)*(self.config.Train.Epoch-self.start_epoch):4d}]"
             )
         
 
@@ -123,7 +124,7 @@ class Trainer(_baseTrainer):
         self.progress.update(
             self.trainingBar, 
             advance=1, 
-            progress=f"[{self._step}/{len(self.trainloader)*self.config.Train.Epoch:4d}]", 
+            progress=f"[{self._step}/{len(self.trainloader)*(self.config.Train.Epoch-self.start_epoch):4d}]", 
                 suffix=f"Bpp = [b green]{kwargs['bpp']:1.4f}, D = [b green]{kwargs['psnr']:2.2f}[/]dB")
 
 
@@ -156,8 +157,9 @@ class CompressAITrainer(Trainer):
 
         self.compound = CompoundRegistry.get(config.Model.Compound)(config).to(self.device)
 
-        parameters = set(p for n, p in self.compound.model.named_parameters() if p.requires_grad and not n.endswith(".quantiles"))
-        aux_parameters = set(p for n, p in self.compound.model.named_parameters() if p.requires_grad and n.endswith(".quantiles"))
+        # DO NOT use set like the compressai implementation, which will mess up the optimizer. USE LIST.
+        parameters = [p for n, p in self.compound.model.named_parameters() if p.requires_grad and not n.endswith(".quantiles")]
+        aux_parameters = [p for n, p in self.compound.model.named_parameters() if p.requires_grad and n.endswith(".quantiles")]
 
 
         self.optimizer = OptimizerRegistry.get(config.Train.Optim.Key)(parameters, **config.Train.Optim.Params)
@@ -181,8 +183,8 @@ class CompressAITrainer(Trainer):
 
     def train(self):
         self._beforeRun()
-        for epoch in range(self.start_epoch, self.config.Train.Epoch):
-            self.epoch = epoch
+        for _ in range(self.start_epoch, self.config.Train.Epoch):
+            self.epoch += 1
             for idx, images in enumerate(self.trainloader):
                 self.optimizer.zero_grad()
                 self.aux_optimizer.zero_grad()
@@ -212,19 +214,22 @@ class CompressAITrainer(Trainer):
                 self.scheduler.step(self.validate())
 
             
-            if (epoch + 1) % self.config.Train.ValInterval == 0 or epoch == self.config.Train.Epoch - 1:
+            if (self.epoch + 1) % self.config.Train.ValInterval == 0 or self.epoch == self.config.Train.Epoch - 1:
                 checkpoint = {
                     "model": self.compound.model.state_dict(),
                     "optimizer": self.optimizer.state_dict(),
                     "aux_optimizer": self.aux_optimizer.state_dict(),
                     "lr_scheduler": self.scheduler.state_dict() if self.scheduler is not None else None,
-                    "next_epoch": epoch + 1
+                    "next_epoch": self.epoch + 1
                 }
 
                 # whether to overwrite
                 time = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+                ckpt_name = f"ckpt/epoch_{self.epoch:0>3}_{time}.ckpt"
                 torch.save(checkpoint, os.path.join(self.config.Train.Output, 
-                                                    f"ckpt/epoch_{epoch:0>3}_{time}.ckpt"))
+                                                    ckpt_name))
+                
+                logging.info(f"Save checkpoint {ckpt_name}.")
                 
     @torch.no_grad()
     def validate(self):
@@ -263,8 +268,8 @@ class CompressAITrainer(Trainer):
         self.progress.update(
             self.trainingBar, 
             advance=1, 
-            progress=f"[{self._step}/{len(self.trainloader)*self.config.Train.Epoch:4d}]",
-            suffix=f"Bpp = [b green]{log['bpp']:1.4f}, D = [b green]{log['psnr']:2.2f}[/]dB")
+            progress=f"[{self._step}/{len(self.trainloader)*(self.config.Train.Epoch-self.start_epoch):4d}]",
+            suffix=f"[b green]Bpp = {log['bpp']:1.4f}, D = {log['psnr']:2.2f}[/]dB")
 
 
     
