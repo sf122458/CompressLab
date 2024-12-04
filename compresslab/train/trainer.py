@@ -53,17 +53,6 @@ class Trainer(_baseTrainer):
         )
 
         self.run = run
-        self.progress = Progress(
-            "[i blue]{task.description}[/][b magenta]{task.fields[progress]}", 
-            TimeElapsedColumn(), 
-            BarColumn(None), 
-            TimeRemainingColumn(), 
-            "{task.fields[suffix]}", 
-            refresh_per_second=6, 
-            transient=True, 
-            disable=False, expand=True)
-        self.progress.start()
-        self.trainingBar = self.progress.add_task("", start=False, progress="[----/----]", suffix='.' * 10)
 
         self.compound = CompoundRegistry.get(config.Model.Compound)(config).to(self.device)
         self.optimizer = OptimizerRegistry.get(config.Train.Optim.Key)(self.compound.model.parameters(), **config.Train.Optim.Params)
@@ -109,6 +98,17 @@ class Trainer(_baseTrainer):
     def _beforeRun(self):
         self.compound._paramsCalc()
         self._step = 0
+        self.progress = Progress(
+            "[i blue]{task.description}[/][b magenta]{task.fields[progress]}", 
+            TimeElapsedColumn(), 
+            BarColumn(None), 
+            TimeRemainingColumn(), 
+            "{task.fields[suffix]}", 
+            refresh_per_second=6, 
+            transient=True, 
+            disable=False, expand=True)
+        self.progress.start()
+        self.trainingBar = self.progress.add_task("", start=False, progress="[----/----]", suffix='.' * 10)
         self.progress.start_task(self.trainingBar)
         self.progress.update(
             self.trainingBar, 
@@ -153,17 +153,6 @@ class CompressAITrainer(Trainer):
         )
 
         self.run = run
-        self.progress = Progress(
-            "[i blue]{task.description}[/][b magenta]{task.fields[progress]}", 
-            TimeElapsedColumn(), 
-            BarColumn(None), 
-            TimeRemainingColumn(), 
-            "{task.fields[suffix]}", 
-            refresh_per_second=6, 
-            transient=True, 
-            disable=False, expand=True)
-        self.progress.start()
-        self.trainingBar = self.progress.add_task("", start=False, progress="[----/----]", suffix='.' * 10)
 
         self.compound = CompoundRegistry.get(config.Model.Compound)(config).to(self.device)
 

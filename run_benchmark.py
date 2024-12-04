@@ -28,8 +28,7 @@ def main(args):
     config.Train.output = os.path.join(config.Train.Output, get_exp_name(config))
     os.makedirs(os.path.join(config.Train.Output, 'ckpt'), exist_ok=True)
 
-    if not os.path.exists(os.path.join(config.Train.output, 'config.yaml')):
-        os.system(f"cp {args.config} {config.Train.output}/config.yaml")
+    os.system(f"cp {args.config} {config.Train.output}/config.yaml")
     
     ckpt_list = glob.glob(os.path.join(config.Train.Output, 'ckpt', '*.ckpt'))
     if len(ckpt_list) == 0:
