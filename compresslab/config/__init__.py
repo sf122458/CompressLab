@@ -102,6 +102,7 @@ class Train:
     valinterval: int
     trainset: Dataset
     valset: Dataset
+    expname: str=None
     output: str
     loss: Dict[str, Any]
     optim: General
@@ -127,6 +128,10 @@ class Train:
     @property
     def ValSet(self) -> Dataset:
         return self.valset
+    
+    @property
+    def ExpName(self) -> str:
+        return self.expname
     
     @property
     def Output(self) -> str:
@@ -156,6 +161,7 @@ class TrainSchema(Schema):
     valinterval = fields.Int(required=True, description="Validation interval")
     trainset = fields.Nested(DatasetSchema(), required=True)
     valset = fields.Nested(DatasetSchema(), required=True)
+    expname = fields.Str(required=False)
     output = fields.Str(required=True)
     loss = fields.Dict(required=True)
     optim = fields.Nested(GeneralSchema(), required=True)

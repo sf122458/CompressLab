@@ -42,7 +42,10 @@ def main(args):
 
 def get_exp_name(config: Config):
     loss_setting = "_".join([f"{k}_{v}" for k, v in config.Train.Loss.items()])
-    return f"{config.Model.Net.Key}_{loss_setting}"
+    if config.Train.ExpName is not None:
+        return f"{config.Train.ExpName}_{loss_setting}"
+    else:
+        return f"{config.Model.Net.Key}_{loss_setting}"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='test')

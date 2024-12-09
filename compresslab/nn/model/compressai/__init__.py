@@ -28,12 +28,8 @@ class Compound(_baseCompound):
         self.model: CompressionModel = ModelRegistry.get(config.Model.Net.Key)(**config.Model.Net.Params)
         assert issubclass(self.model.__class__, CompressionModel), "Model should be a subclass of `CompressModel`."
         self.loss = LossFn(config)
-
-    # def train(self, mode: bool=True):
-    #     self.model.train(mode)
-    #     raise NotImplementedError
     
-    def forward(self, x: torch.Tensor):
+    def __call__(self, x: torch.Tensor):
         """
         In CompressAI implementation, the output follows the format:
             {
