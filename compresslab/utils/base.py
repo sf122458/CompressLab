@@ -16,11 +16,7 @@ class _baseTrainer(_Trainer):
         logging.info("Initialize the trainer...")
         # TODO: DDP
 
-        # WANDB or Tensorboard
-        if not args.test_only:
-            self._set_logger(config, **kwargs)
-        else:
-            logging.info("Test only. Logging service is disabled.")
+        
 
         self.config = config
         self.start_epoch = 0
@@ -30,6 +26,12 @@ class _baseTrainer(_Trainer):
         self._set_modules(**kwargs)
         self._load_ckpt(**kwargs)
         self.epoch = self.start_epoch
+
+        # WANDB or Tensorboard
+        if not args.test_only:
+            self._set_logger(config, **kwargs)
+        else:
+            logging.info("Test only. Logging service is disabled.")
 
     def _set_logger(self, config: Config, model_name, **kwargs):
         self.run = None
@@ -41,7 +43,6 @@ class _baseTrainer(_Trainer):
             self.run = wandb.init(
                 config={k:v for k, v in config.serialize().items() if k == 'model' or k == 'train'},
                 dir=os.path.join(config.Train.Output, model_name),
-                project=config.Log.Params["project"] if config.Log.Params["project"] is not None else config.Model.Compound,
                 name=model_name,
                 **config.Log.Params
             )
@@ -76,9 +77,9 @@ class _baseTrainer(_Trainer):
                         if self.config.Train.Schdr is not None else None
 
     def _load_ckpt(self, model_name, **kwargs):
-        ckpt_path = os.path.join(self.config.Train.Output, model_name, 'ckpt')
-        os.makedirs(ckpt_path, exist_ok=True)
-        ckpt_list = glob.glob(os.path.join(ckpt_path, '*.ckpt'))
+        self.ckpt_path = os.path.join(self.config.Train.Output, model_name, 'ckpt')
+        os.makedirs(self.ckpt_path, exist_ok=True)
+        ckpt_list = glob.glob(os.path.join(self.ckpt_path, '*.ckpt'))
         if len(ckpt_list) == 0:
             logging.info("No checkpoint found. Start training from the beginning.")
             return
@@ -96,7 +97,7 @@ class _baseTrainer(_Trainer):
         checkpoint = {
             "model": self.compound.model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
-            "lr_scheduler": self.scheduler.state_dict() if self.scheduler is not None else None,
+            "scheduler": self.scheduler.state_dict() if self.scheduler is not None else None,
             "next_epoch": self.epoch + 1
         }
 
@@ -105,9 +106,9 @@ class _baseTrainer(_Trainer):
             checkpoint.update(add)
 
         # whether to overwrite
-        ckpt_list = [] if not overwrite else glob.glob(os.path.join(self.config.Train.Output, 'ckpt', '*.ckpt'))
-        ckpt_name = f"ckpt/epoch_{self.epoch:0>3}_step_{self._step}.ckpt"
-        torch.save(checkpoint, os.path.join(self.config.Train.Output, ckpt_name))
+        ckpt_list = [] if not overwrite else glob.glob(os.path.join(self.ckpt_path, '*.ckpt'))
+        ckpt_name = f"epoch_{self.epoch:0>3}_step_{self._step}.ckpt"
+        torch.save(checkpoint, os.path.join(self.ckpt_path, ckpt_name))
         if len(ckpt_list) > 0:
             for ckpt in ckpt_list:
                 os.remove(ckpt)
@@ -115,6 +116,7 @@ class _baseTrainer(_Trainer):
 
         
     def _beforeRun(self):
+        self.device = self.compound.device
         self.progress = Progress(
             "[i blue]{task.description}[/][b magenta]{task.fields[progress]}", 
             TimeElapsedColumn(), 
@@ -150,6 +152,11 @@ class _baseTrainer(_Trainer):
             self.validate()
             self._save_ckpt()
         self.epoch += 1
+
+    def _afterRun(self):
+        self.progress.stop()
+        if isinstance(self.run, Run):
+            self.run.finish()
 
 
     def train(self):

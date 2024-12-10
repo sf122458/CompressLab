@@ -13,6 +13,7 @@ def ddpTraining(
         args
     ):
 
+    os.makedirs(config.Train.output, exist_ok=True)
     os.system(f"cp {args.config} {config.Train.output}/config.yaml")
 
     for model_name, v in config.Model.Net.items():
@@ -21,8 +22,8 @@ def ddpTraining(
         trainer = TrainerRegistry.get(config.train.Trainer if config.train.Trainer is not None else "Default")(
             config=config, 
             args=args, 
-            model_key=v.Key, 
-            model_params=v.Params, 
+            model_key=v['key'], 
+            model_params=v['params'], 
             model_name=model_name)
 
         if not args.test_only:

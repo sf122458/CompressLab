@@ -23,7 +23,7 @@ def main(args):
     if args.config is None:
             raise ValueError("Please provide a config file.")
     config = Config.deserialize(yaml.full_load(Path(args.config).read_text()))
-    config.Train.Output = os.path.join('output', config.Train.Output)
+    config.Train.output = os.path.join('output', config.Train.Output)
 
 
     ddpTraining(config, args)

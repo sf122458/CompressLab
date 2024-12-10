@@ -26,6 +26,7 @@ from compresslab.utils.registry import OptimizerRegistry, SchedulerRegistry, Com
 from compresslab.data.dataset import Dataset, ImageDataset
 from compresslab.utils.base import _baseTrainer
 from torchvision.utils import save_image
+import glob
 
 # Default trainer
 class Trainer(_baseTrainer):
@@ -66,32 +67,40 @@ class Trainer(_baseTrainer):
 
 # CompressAI models need to consider loss of nn models and aux loss of entropy models
 class CompressAITrainer(_baseTrainer):
-    def __init__(self, config: Config, run: Union[Run], resume: str=None):
-        super().__init__(config, run, resume)
+    def __init__(self, config: Config, args, **kwargs):
+        super().__init__(config, args, **kwargs)
 
         self.clip_max_norm = 1.0
         self.compound.model.train()
 
-    def _set_modules(self):
+    def _set_modules(self, **kwargs):
+        self.compound = CompoundRegistry.get(self.config.Model.Compound)(config=self.config, **kwargs)
+
         # DO NOT use set like the compressai implementation, which will mess up the optimizer. USE LIST.
         parameters = [p for n, p in self.compound.model.named_parameters() if p.requires_grad and not n.endswith(".quantiles")]
         aux_parameters = [p for n, p in self.compound.model.named_parameters() if p.requires_grad and n.endswith(".quantiles")]
-
-        self.compound = CompoundRegistry.get(self.config.Model.Compound)(self.config)
         self.optimizer = OptimizerRegistry.get(self.config.Train.Optim.Key)(parameters, **self.config.Train.Optim.Params)
         self.aux_optimizer = OptimizerRegistry.get(self.config.Train.Optim.Key)(aux_parameters, lr=1e-3)
         self.scheduler = SchedulerRegistry.get(self.config.Train.Schdr.Key)(optimizer=self.optimizer, **self.config.Train.Schdr.Params)\
               if self.config.Train.Schdr is not None else None
         assert isinstance(self.scheduler, ReduceLROnPlateau)
 
-    def _load_ckpt(self, resume):
-        ckpt = torch.load(resume, self.device, map_location=self.device)
-        self.compound.model.load_state_dict(ckpt["model"])
-        self.optimizer.load_state_dict(ckpt["optimizer"])
-        self.aux_optimizer.load_state_dict(ckpt["aux_optimizer"])
-        if self.scheduler is not None:
-            self.scheduler.load_state_dict(ckpt["lr_scheduler"])
-        self.start_epoch = ckpt["next_epoch"]
+    def _load_ckpt(self, model_name, **kwargs):
+        self.ckpt_path = os.path.join(self.config.Train.Output, model_name, 'ckpt')
+        os.makedirs(self.ckpt_path, exist_ok=True)
+        ckpt_list = glob.glob(os.path.join(self.ckpt_path, '*.ckpt'))
+        if len(ckpt_list) == 0:
+            logging.info("No checkpoint found. Start training from the beginning.")
+            return
+        else:
+            resume = sorted(ckpt_list)[-1]
+            logging.info(f"Resume from {resume}")
+            ckpt = torch.load(resume)
+            self.compound.model.load_state_dict(ckpt["model"])
+            self.optimizer.load_state_dict(ckpt["optimizer"])
+            if self.scheduler is not None:
+                self.scheduler.load_state_dict(ckpt["scheduler"])
+            self.start_epoch = ckpt["next_epoch"] + 1
 
 
     def train(self):
@@ -115,6 +124,7 @@ class CompressAITrainer(_baseTrainer):
                 
                 self._afterStep(log=out["log"])
             self._afterEpoch()
+        self._afterRun()
 
                 
     @torch.no_grad()

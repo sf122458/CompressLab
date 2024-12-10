@@ -21,8 +21,8 @@ from compressai.models import *
 
 @CompoundRegistry.register("CompressAI")
 class Compound(_baseCompound):
-    def __init__(self, config: Config):
-        super().__init__(config=config)
+    def __init__(self, config: Config, **kwargs):
+        super().__init__(config=config, **kwargs)
         assert issubclass(self.model.__class__, CompressionModel), "Model should be a subclass of `CompressModel`."
     
     def __call__(self, x: torch.Tensor):
