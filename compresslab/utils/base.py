@@ -1,6 +1,6 @@
 from compresslab.config import Config
-from compresslab.utils.registry import OptimizerRegistry, SchedulerRegistry, CompoundRegistry, ModelRegistry, LossRegistry
-from compresslab.data.dataset import Dataset, ImageDataset
+from compresslab.utils.registry import OptimizerRegistry, SchedulerRegistry, CompoundRegistry, ModelRegistry, LossRegistry, _Trainer, _Compound
+from compresslab.data.dataset import ImageDataset
 from torch.utils.data import DataLoader
 from rich.progress import Progress, TimeElapsedColumn, BarColumn, TimeRemainingColumn
 from typing import Dict, Any, Union
@@ -8,27 +8,53 @@ from wandb.sdk.wandb_run import Run
 import datetime
 import os
 import glob
+import wandb
+from tensorboardX import SummaryWriter
 
-class _baseTrainer:
-    def __init__(self, config: Config, run, resume: str=None):
+class _baseTrainer(_Trainer):
+    def __init__(self, config: Config, args, **kwargs):
         logging.info("Initialize the trainer...")
         # TODO: DDP
-        # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # logging.info(f"Using device: {self.device}")
+
+        # WANDB or Tensorboard
+        if not args.test_only:
+            self._set_logger(config, **kwargs)
+        else:
+            logging.info("Test only. Logging service is disabled.")
 
         self.config = config
-        self.run = run
-
         self.start_epoch = 0
         self._step = 0
 
-        self._set_dataloader()
-        self._set_modules()
-        if resume is not None:
-            self._load_ckpt(resume)
+        self._set_dataloader(**kwargs)
+        self._set_modules(**kwargs)
+        self._load_ckpt(**kwargs)
         self.epoch = self.start_epoch
 
-    def _set_dataloader(self):
+    def _set_logger(self, config: Config, model_name, **kwargs):
+        self.run = None
+        if config.Log.Key.upper() == "WANDB":
+            logging.info("Use WANDB.")
+            wandb.login(key=config.env.WANDB_API_KEY)
+            # config.Log.Params["name"] = config.Log.Params["name"] + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+            # NOTE
+            self.run = wandb.init(
+                config={k:v for k, v in config.serialize().items() if k == 'model' or k == 'train'},
+                dir=os.path.join(config.Train.Output, model_name),
+                project=config.Log.Params["project"] if config.Log.Params["project"] is not None else config.Model.Compound,
+                name=model_name,
+                **config.Log.Params
+            )
+        elif config.Log.Key.upper() == "TENSORBOARD":
+            logging.info("Use Tensorboard.")
+            # TODO: Tensorboard
+            self.run = SummaryWriter(config.Log.Params)
+            raise NotImplementedError
+        else:
+            logging.warning("Logging service is disabled.")
+
+
+    def _set_dataloader(self, **kwargs):
         self.trainloader = DataLoader(
             ImageDataset(self.config.Train.TrainSet.Path, self.config.Train.TrainSet.Transform),
             batch_size=self.config.Train.BatchSize,
@@ -38,25 +64,33 @@ class _baseTrainer:
 
         self.valloader = DataLoader(
             ImageDataset(self.config.Train.ValSet.Path, self.config.Train.ValSet.Transform),
-            # batch_size=config.Train.BatchSize,
             batch_size=1,
             shuffle=False,
             num_workers=self.config.ENV.NUM_WORKERS if self.config.ENV.NUM_WORKERS is not None else 0
         )
 
-    def _set_modules(self):
-        self.compound = CompoundRegistry.get(self.config.Model.Compound)(self.config)
+    def _set_modules(self, **kwargs):
+        self.compound = CompoundRegistry.get(self.config.Model.Compound)(self.config, **kwargs)
         self.optimizer = OptimizerRegistry.get(self.config.Train.Optim.Key)(self.compound.model.parameters(), **self.config.Train.Optim.Params)
         self.scheduler = SchedulerRegistry.get(self.config.Train.Schdr.Key)(self.optimizer, **self.config.Train.Schdr.Params)\
                         if self.config.Train.Schdr is not None else None
 
-    def _load_ckpt(self, resume: str):
-        ckpt = torch.load(resume)
-        self.compound.model.load_state_dict(ckpt["model"])
-        self.optimizer.load_state_dict(ckpt["optimizer"])
-        if self.scheduler is not None:
-            self.scheduler.load_state_dict(ckpt["scheduler"])
-        self.start_epoch = ckpt["epoch"] + 1
+    def _load_ckpt(self, model_name, **kwargs):
+        ckpt_path = os.path.join(self.config.Train.Output, model_name, 'ckpt')
+        os.makedirs(ckpt_path, exist_ok=True)
+        ckpt_list = glob.glob(os.path.join(ckpt_path, '*.ckpt'))
+        if len(ckpt_list) == 0:
+            logging.info("No checkpoint found. Start training from the beginning.")
+            return
+        else:
+            resume = sorted(ckpt_list)[-1]
+            logging.info(f"Resume from {resume}")
+            ckpt = torch.load(resume)
+            self.compound.model.load_state_dict(ckpt["model"])
+            self.optimizer.load_state_dict(ckpt["optimizer"])
+            if self.scheduler is not None:
+                self.scheduler.load_state_dict(ckpt["scheduler"])
+            self.start_epoch = ckpt["epoch"] + 1
 
     def _save_ckpt(self, add: Dict[str, Any]=None, overwrite=True):
         checkpoint = {
@@ -67,6 +101,7 @@ class _baseTrainer:
         }
 
         if add is not None:
+            assert isinstance(add, dict), r"Additional information should be a dictionary in the form of {ckpt_name: state_dict}."
             checkpoint.update(add)
 
         # whether to overwrite
@@ -100,10 +135,10 @@ class _baseTrainer:
             )
 
     def _afterStep(self, log: Dict[str, Any], suffix: str, step_interval=10, **kwargs):
+        self._step += 1
         if isinstance(self.run, Run) and self._step % step_interval == 0:
             self.run.log(log, step=self._step, **kwargs)
 
-        self._step += 1
         self.progress.update(
             self.trainingBar, 
             advance=1, 
@@ -140,13 +175,14 @@ import logging
 from copy import deepcopy
 from compresslab.loss import LossFn
 
-class _baseCompound:
-    def __init__(self, config: Config):
+class _baseCompound(_Compound):
+    def __init__(self, config: Config, model_key, model_params, **kwargs):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logging.info(f"Using device: {self.device}")
         self.config = config
-        self.model = ModelRegistry.get(config.Model.Net.Key)(**config.Model.Net.Params).to(self.device)
+        self.model = ModelRegistry.get(model_key)(**model_params).to(self.device)
         self.loss = LossFn(config)
+        self._paramsCalc()
 
     def _paramsCalc(self, input=None):
         tensor = input if input is not None else torch.randn(1, 3, 256, 256).to(next(self.model.parameters()).device)

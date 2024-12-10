@@ -4,48 +4,29 @@ import wandb
 import logging
 from tensorboardX import SummaryWriter
 import datetime
-
+import os, glob
 from compresslab.config import Config
 from compresslab.utils.registry import TrainerRegistry
 
 def ddpTraining(
         config: Config, 
-        resume,  # TODO: checkpoint restore
         args
     ):
 
-    # TODO: DDP Settings
-    if resume is not None:
-        # raise NotImplementedError
-        logging.warning("DDP load is not implemented!")
+    os.system(f"cp {args.config} {config.Train.output}/config.yaml")
 
-    # WANDB or Tensorboard
-    run = None
-    if not args.test_only:
-        if config.Log.Key.upper() == "WANDB":
-            logging.info("Use WANDB.")
-            wandb.login(key=config.env.WANDB_API_KEY)
-            config.Log.Params["name"] = config.Log.Params["name"] + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-            run = wandb.init(
-                config={k:v for k, v in config.serialize().items() if k == 'model' or k == 'train'},
-                dir=config.Train.Output,
-                **config.Log.Params
-            )
-        elif config.Log.Key.upper() == "TENSORBOARD":
-            logging.info("Use Tensorboard.")
-            # TODO: Tensorboard
-            run = SummaryWriter(config.Log.Params)
-            raise NotImplementedError
-        else:
-            logging.warning("Logging service is disabled.")
-    else:
-        logging.info("Test only. Logging service is disabled.")
-    
-    
-    trainer = TrainerRegistry.get(config.train.Trainer if config.train.Trainer is not None else "Default")(config=config, run=run, resume=resume)
+    for model_name, v in config.Model.Net.items():
+        assert isinstance(v, Dict), "Model parameters should be a dictionary."
+        # print(f"Training {name}...")
+        trainer = TrainerRegistry.get(config.train.Trainer if config.train.Trainer is not None else "Default")(
+            config=config, 
+            args=args, 
+            model_key=v.Key, 
+            model_params=v.Params, 
+            model_name=model_name)
 
-    if not args.test_only:
-        trainer.train()
-    trainer.test()
+        if not args.test_only:
+            trainer.train()
+        trainer.test()
 
     logging.info("Finish training.")

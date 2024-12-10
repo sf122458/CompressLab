@@ -118,7 +118,7 @@ class Registry(Generic[T]):
 
 class _Compound:
     def __init__(self):
-        raise NotImplementedError
+        self.model: torch.nn.Module = None
 
     def _paramsCalc(self, input=None):
         raise NotImplementedError

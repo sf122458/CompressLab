@@ -23,29 +23,11 @@ def main(args):
     if args.config is None:
             raise ValueError("Please provide a config file.")
     config = Config.deserialize(yaml.full_load(Path(args.config).read_text()))
+    config.Train.Output = os.path.join('output', config.Train.Output)
 
-    # If the output ckpt exist, resume training.
-    config.Train.output = os.path.join(config.Train.Output, get_exp_name(config))
-    os.makedirs(os.path.join(config.Train.Output, 'ckpt'), exist_ok=True)
 
-    os.system(f"cp {args.config} {config.Train.output}/config.yaml")
-    
-    ckpt_list = glob.glob(os.path.join(config.Train.Output, 'ckpt', '*.ckpt'))
-    if len(ckpt_list) == 0:
-        resume = None
-        logging.info("Start training from the beginning.")
-    else:
-        resume = sorted(ckpt_list)[-1]
-        logging.info(f"Restore from the checkpoint {resume}")
+    ddpTraining(config, args)
 
-    ddpTraining(config, resume, args)
-
-def get_exp_name(config: Config):
-    loss_setting = "_".join([f"{k}_{v}" for k, v in config.Train.Loss.items()])
-    if config.Train.ExpName is not None:
-        return f"{config.Train.ExpName}_{loss_setting}"
-    else:
-        return f"{config.Model.Net.Key}_{loss_setting}"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='test')

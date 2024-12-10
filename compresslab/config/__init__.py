@@ -23,14 +23,15 @@ class General:
 @dataclass
 class Model:
     compound: str
-    net: General
+    # net: General
+    net: Dict[str, General]
 
     @property
     def Compound(self) -> str:
         return self.compound
     
     @property
-    def Net(self) -> General:
+    def Net(self) -> Dict[str, General]:
         return self.net
 
 
@@ -57,10 +58,7 @@ class Log:
     
 @dataclass
 class ENV:
-    # WANDB_ENABLE: bool
     WANDB_API_KEY: str=None
-    # WANDB_PROJECT: str=None
-    # WANDB_NAME: str=None
 
     CUDA_VISIBLE_DEVICES: str=None
     NUM_WORKERS: int=None
@@ -79,7 +77,8 @@ class ModelSchema(Schema):
     class Meta:
         unknown = RAISE
     compound = fields.Str(required=True, description="")
-    net = fields.Nested(GeneralSchema(), required=True)
+    # net = fields.Nested(GeneralSchema(), required=True)
+    net = fields.Dict(required=True, description="")
 
     @post_load
     def _(self, data, **kwargs):
@@ -102,7 +101,6 @@ class Train:
     valinterval: int
     trainset: Dataset
     valset: Dataset
-    expname: str=None
     output: str
     loss: Dict[str, Any]
     optim: General
@@ -128,10 +126,6 @@ class Train:
     @property
     def ValSet(self) -> Dataset:
         return self.valset
-    
-    @property
-    def ExpName(self) -> str:
-        return self.expname
     
     @property
     def Output(self) -> str:
@@ -161,7 +155,6 @@ class TrainSchema(Schema):
     valinterval = fields.Int(required=True, description="Validation interval")
     trainset = fields.Nested(DatasetSchema(), required=True)
     valset = fields.Nested(DatasetSchema(), required=True)
-    expname = fields.Str(required=False)
     output = fields.Str(required=True)
     loss = fields.Dict(required=True)
     optim = fields.Nested(GeneralSchema(), required=True)
