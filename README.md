@@ -14,6 +14,17 @@ pip install .
 
 ### How to use
 
+```
+output
+├─Expname
+    ├─Model1
+        ├─ckpt
+        ├─wandb
+    ├─Model2
+    ...
+    ├─config.yaml
+```
+
 Run
 ```bash
 python run_benchmark.py --config config/template.yaml

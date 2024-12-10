@@ -1,11 +1,18 @@
 # Template of Compressai FactorizedPrior
 model:
   compound: CompressAI
-  net: 
-    key: FactorizedPrior
-    params:
-      N: 128
-      M: 192
+  net:
+    balle2017:
+      key: FactorizedPrior
+      params:
+        N: 128
+        M: 192
+
+    minnen2018:
+      key: MeanScaleHyperprior
+      params:
+        N: 128
+        M: 192
 
 train:
   trainer: CompressAI
@@ -19,7 +26,7 @@ train:
         size: 256
   valset: 
     path: data/Kodak
-  output: output/CompressAI
+  output: CompressAI
   loss:
     MSE: 1
     bpp: 1
@@ -36,7 +43,7 @@ log:
   key: None
   params:
     project: CompressAI
-    name: FactorizedPrior
+    # name: FactorizedPrior
 
 env:
   WANDB_API_KEY: None

@@ -11,7 +11,6 @@ from io import StringIO
 import re
 import os
 import inspect
-from compresslab.utils.base import _baseTrainer, _baseCompound
 
 
 # from the implementation in vlutils
@@ -116,6 +115,61 @@ class Registry(Generic[T]):
             k: v['cls'].__module__ + '.' + v['cls'].__name__ + ' registered in ' + v['path'] for k, v in cls._map.items()
         })
 
+
+class _Compound:
+    def __init__(self):
+        raise NotImplementedError
+
+    def _paramsCalc(self, input=None):
+        raise NotImplementedError
+        
+    def __call__(self, x: torch.Tensor):
+        """
+        Need to implement:
+            Return should be a dictionary with the following keys
+                - loss: total loss value
+                - log: benchmark required to be recorded, e.g. PSNR, SSIM, etc.
+            and other keys according to the task, such as x_hat, likelihoods, etc in image compression.
+        """
+        raise NotImplementedError
+    
+class _Trainer:
+    def __init__(self, config, **kwargs):
+        raise NotImplementedError
+
+    def _set_dataloader(self, **kwargs):
+        raise NotImplementedError
+
+    def _set_modules(self, model_key, model_params, **kwargs):
+        raise NotImplementedError
+
+    def _load_ckpt(self):
+        raise NotImplementedError
+
+    def _save_ckpt(self):
+        raise NotImplementedError
+
+        
+    def _beforeRun(self):
+        raise NotImplementedError
+
+    def _afterStep(self):
+        raise NotImplementedError
+
+    def _afterEpoch(self):
+        raise NotImplementedError
+
+
+    def train(self):
+        raise NotImplementedError
+    
+    def validate(self):
+        raise NotImplementedError
+    
+    def test(self):
+        raise NotImplementedError
+
+
 """
 Modules need to be registered.
 Example:
@@ -132,7 +186,7 @@ Example:
 class ModelRegistry(Registry[Type["torch.nn.Module"]]):
     pass
 
-class CompoundRegistry(Registry[Type["_baseCompound"]]):
+class CompoundRegistry(Registry[Type["_Compound"]]):
     pass
 
 class OptimizerRegistry(Registry[Type["torch.optim.Optimizer"]]):
@@ -144,7 +198,7 @@ class SchedulerRegistry(Registry[Type["torch.optim.lr_scheduler._LRScheduler"]])
 class LossRegistry(Registry[Type["torch.nn.Module"]]):
     pass
 
-class TrainerRegistry(Registry[Type["_baseTrainer"]]):
+class TrainerRegistry(Registry[Type["_Trainer"]]):
     pass
 
 class TransformRegistry(Registry):
