@@ -8,7 +8,7 @@ import os
 import time
 from collections import defaultdict, deque, OrderedDict
 from typing import List, Optional, Tuple
-
+import functools
 import torch
 import torch.distributed as dist
 
@@ -30,6 +30,11 @@ class SmoothedValue:
         self.deque.append(value)
         self.count += n
         self.total += value * n
+
+    def reset(self):
+        self.deque.clear()
+        self.total = 0.0
+        self.count = 0
 
     def synchronize_between_processes(self):
         """
@@ -67,11 +72,43 @@ class SmoothedValue:
             median=self.median, avg=self.avg, global_avg=self.global_avg, max=self.max, value=self.value
         )
 
+class TorchCUDATimeProfiler:
+    def __init__(self, meter: SmoothedValue, skip_synchronize=False, include_cpu_time=True) -> None:
+        self.meter = meter
+        self.skip_synchronize = skip_synchronize
+        self.include_cpu_time = include_cpu_time
+        self.start_event = torch.cuda.Event(enable_timing=True)
+        self.end_event = torch.cuda.Event(enable_timing=True)
+
+    @staticmethod
+    def start_profile(meter):
+        return TorchCUDATimeProfiler(meter)
+
+    def __enter__(self):
+        if self.include_cpu_time:
+            self.start_time = time.time()
+        else:
+            self.start_event.record()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self.include_cpu_time:
+            if not self.skip_synchronize:
+                torch.cuda.synchronize()
+            end_time = time.time()
+            self.meter.update((end_time - self.start_time) * 1000)
+        else:
+            self.end_event.record()
+            # synchronize is required for cuda event!
+            torch.cuda.synchronize()
+            self.meter.update(self.start_event.elapsed_time(self.end_event))
+
 
 class MetricLogger:
-    def __init__(self, delimiter="\t"):
-        self.meters = defaultdict(SmoothedValue)
+    def __init__(self, delimiter="\t", meter_default_config=dict(), profiler_class=TorchCUDATimeProfiler):
+        self.default_meter_constructor = functools.partial(SmoothedValue, **meter_default_config)
+        self.meters = defaultdict(self.default_meter_constructor)
         self.delimiter = delimiter
+        self.profiler_class = profiler_class
 
     def update(self, **kwargs):
         for k, v in kwargs.items():
@@ -79,6 +116,13 @@ class MetricLogger:
                 v = v.item()
             assert isinstance(v, (float, int))
             self.meters[k].update(v)
+
+    def reset(self):
+        for _, meter in self.meters.items():
+            meter.reset()
+
+    def clear(self):
+        self.meters = defaultdict(self.default_meter_constructor)
 
     def get_global_average(self):
         metric_dict = dict()
@@ -94,6 +138,7 @@ class MetricLogger:
         profiler_class = self.profiler_class if profiler_class is None else profiler_class
         return profiler_class(self.meters[name])
 
+    # FIXME: 
     def __getattr__(self, attr):
         if attr in self.meters:
             return self.meters[attr]
@@ -495,32 +540,3 @@ def set_weight_decay(
 #         end_time = time.time()
 #         self.meter.update((end_time - self.start_time) * 1000)
 
-class TorchCUDATimeProfiler:
-    def __init__(self, meter: SmoothedValue, skip_synchronize=False, include_cpu_time=True) -> None:
-        self.meter = meter
-        self.skip_synchronize = skip_synchronize
-        self.include_cpu_time = include_cpu_time
-        self.start_event = torch.cuda.Event(enable_timing=True)
-        self.end_event = torch.cuda.Event(enable_timing=True)
-
-    @staticmethod
-    def start_profile(meter):
-        return TorchCUDATimeProfiler(meter)
-
-    def __enter__(self):
-        if self.include_cpu_time:
-            self.start_time = time.time()
-        else:
-            self.start_event.record()
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if self.include_cpu_time:
-            if not self.skip_synchronize:
-                torch.cuda.synchronize()
-            end_time = time.time()
-            self.meter.update((end_time - self.start_time) * 1000)
-        else:
-            self.end_event.record()
-            # synchronize is required for cuda event!
-            torch.cuda.synchronize()
-            self.meter.update(self.start_event.elapsed_time(self.end_event))
