@@ -4,3 +4,5 @@ from compresslab.utils.registry import TransformRegistry
 TransformRegistry.register("ToTensor")(transforms.ToTensor)
 
 TransformRegistry.register("RandomCrop")(transforms.RandomCrop)
+
+TransformRegistry.register("CenterCrop")(transforms.CenterCrop)

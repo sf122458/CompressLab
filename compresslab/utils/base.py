@@ -16,8 +16,6 @@ class _baseTrainer(_Trainer):
         logging.info("Initialize the trainer...")
         # TODO: DDP
 
-        
-
         self.config = config
         self.start_epoch = 0
         self._step = 0

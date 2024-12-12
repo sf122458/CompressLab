@@ -45,7 +45,7 @@ class Trainer(_baseTrainer):
                 if self.scheduler is not None:
                     self.scheduler.step()
 
-                self._afterStep(log=out["log"])
+                self._afterStep(**out)
             self._afterEpoch()
 
     def validate(self):
@@ -98,6 +98,7 @@ class CompressAITrainer(_baseTrainer):
             ckpt = torch.load(resume)
             self.compound.model.load_state_dict(ckpt["model"])
             self.optimizer.load_state_dict(ckpt["optimizer"])
+            self.aux_optimizer.load_state_dict(ckpt["aux_optimizer"])
             if self.scheduler is not None:
                 self.scheduler.load_state_dict(ckpt["scheduler"])
             self.start_epoch = ckpt["next_epoch"] + 1
@@ -122,7 +123,7 @@ class CompressAITrainer(_baseTrainer):
                 out["aux_loss"].backward()
                 self.aux_optimizer.step()
                 
-                self._afterStep(log=out["log"])
+                self._afterStep(**out)
             self._afterEpoch()
         self._afterRun()
 

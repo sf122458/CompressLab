@@ -5,3 +5,4 @@ data/
 compresslab.egg-info/
 build/
 output/
+compresslab/config/config.py
