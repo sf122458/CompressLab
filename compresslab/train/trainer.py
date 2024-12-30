@@ -163,7 +163,7 @@ class CompressAITrainer(_baseTrainer):
     def _afterEpoch(self):
         if self.scheduler is not None:
             self.scheduler.step(self.validate())
-        if (self.epoch + 1) % self.config.Train.ValInterval == 0 or self.epoch == self.config.Train.Epoch - 1:
+        if (self.epoch + 1) % self.config.Train.Valinterval == 0 or self.epoch == self.config.Train.Epoch - 1:
             self.validate()
             self._save_ckpt(add={"aux_optimizer": self.aux_optimizer.state_dict()})
         self.epoch += 1

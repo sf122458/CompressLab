@@ -14,7 +14,6 @@ def ddpTraining(
 
     for model_name, v in config.Model.Net.items():
         assert isinstance(v, Dict), "Model parameters should be a dictionary."
-        # print(f"Training {name}...")
         trainer = TrainerRegistry.get(config.Train.Trainer if config.Train.Trainer is not None else "Default")(
             config=config,
             model_key=v['key'], 

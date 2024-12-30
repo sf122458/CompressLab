@@ -11,7 +11,7 @@ from io import StringIO
 import re
 import os
 import inspect
-
+from torch.utils.data import Dataset
 
 # from the implementation in vlutils
 def _alignYAML(str, pad=0, aligned_colons=False):
@@ -205,5 +205,5 @@ class TrainerRegistry(Registry[Type["_Trainer"]]):
 class TransformRegistry(Registry):
     pass
 
-# class LayerRegistry(Registry[Type["torch.nn.Module"]]):
-#     pass
+class DataRegistry(Registry[Type["Dataset"]]):
+    pass

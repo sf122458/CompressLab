@@ -1,18 +1,18 @@
 from compresslab.config import Config
-from compresslab.utils.registry import OptimizerRegistry, SchedulerRegistry, CompoundRegistry, ModelRegistry, LossRegistry, _Trainer, _Compound
+from compresslab.utils.registry import OptimizerRegistry, SchedulerRegistry, CompoundRegistry, ModelRegistry, LossRegistry, _Trainer, _Compound, DataRegistry
 from compresslab.data.dataset import ImageDataset
 from torch.utils.data import DataLoader
 from rich.progress import Progress, TimeElapsedColumn, BarColumn, TimeRemainingColumn
 from typing import Dict, Any, Union
 from wandb.sdk.wandb_run import Run
 import datetime
-import os
+import os, logging
 import glob
 import wandb
 from tensorboardX import SummaryWriter
 
 class _baseTrainer(_Trainer):
-    def __init__(self, config: Config, args, **kwargs):
+    def __init__(self, config: Config, **kwargs):
         logging.info("Initialize the trainer...")
         # TODO: DDP
 
@@ -26,46 +26,57 @@ class _baseTrainer(_Trainer):
         self.epoch = self.start_epoch
 
         # WANDB or Tensorboard
-        if not args.test_only:
+        if not config.Parser.Testonly:
             self._set_logger(config, **kwargs)
         else:
             logging.info("Test only. Logging service is disabled.")
 
     def _set_logger(self, config: Config, model_name, **kwargs):
         self.run = None
-        if config.Log.Key.upper() == "WANDB":
+        if config.Train.Log.Key.upper() == "WANDB":
             logging.info("Use WANDB.")
-            wandb.login(key=config.env.WANDB_API_KEY)
+            wandb.login(key=config.Env.WANDB_API_KEY)
             # config.Log.Params["name"] = config.Log.Params["name"] + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
             # NOTE
             self.run = wandb.init(
-                config={k:v for k, v in config.serialize().items() if k == 'model' or k == 'train'},
                 dir=os.path.join(config.Train.Output, model_name),
                 name=model_name,
-                **config.Log.Params
+                **config.Train.Log.Params
             )
-        elif config.Log.Key.upper() == "TENSORBOARD":
+        elif config.Train.Log.Key.upper() == "TENSORBOARD":
             logging.info("Use Tensorboard.")
             # TODO: Tensorboard
-            self.run = SummaryWriter(config.Log.Params)
+            self.run = SummaryWriter(config.Train.Log.Params)
             raise NotImplementedError
         else:
             logging.warning("Logging service is disabled.")
 
 
     def _set_dataloader(self, **kwargs):
+        # self.trainloader = DataLoader(
+        #     ImageDataset(self.config.Train.TrainSet.Path, self.config.Train.TrainSet.Transform),
+        #     batch_size=self.config.Train.BatchSize,
+        #     shuffle=True,
+        #     num_workers=self.config.ENV.NUM_WORKERS if self.config.ENV.NUM_WORKERS is not None else 0
+        # )
+
+        # self.valloader = DataLoader(
+        #     ImageDataset(self.config.Train.ValSet.Path, self.config.Train.ValSet.Transform),
+        #     batch_size=1,
+        #     shuffle=False,
+        #     num_workers=self.config.ENV.NUM_WORKERS if self.config.ENV.NUM_WORKERS is not None else 0
+        # )
+
         self.trainloader = DataLoader(
-            ImageDataset(self.config.Train.TrainSet.Path, self.config.Train.TrainSet.Transform),
-            batch_size=self.config.Train.BatchSize,
+            DataRegistry.get(self.config.Train.Trainset.Key)(**self.config.Train.Trainset.Params),
+            batch_size=self.config.Train.Batchsize,
             shuffle=True,
-            num_workers=self.config.ENV.NUM_WORKERS if self.config.ENV.NUM_WORKERS is not None else 0
         )
 
         self.valloader = DataLoader(
-            ImageDataset(self.config.Train.ValSet.Path, self.config.Train.ValSet.Transform),
+            DataRegistry.get(self.config.Train.Valset.Key)(**self.config.Train.Valset.Params),
             batch_size=1,
             shuffle=False,
-            num_workers=self.config.ENV.NUM_WORKERS if self.config.ENV.NUM_WORKERS is not None else 0
         )
 
     def _set_modules(self, **kwargs):
@@ -146,7 +157,7 @@ class _baseTrainer(_Trainer):
                 suffix=suffix)
 
     def _afterEpoch(self):
-        if (self.epoch + 1) % self.config.Train.ValInterval == 0 or self.epoch == self.config.Train.Epoch - 1:
+        if (self.epoch + 1) % self.config.Train.Valinterval == 0 or self.epoch == self.config.Train.Epoch - 1:
             self.validate()
             self._save_ckpt()
         self.epoch += 1

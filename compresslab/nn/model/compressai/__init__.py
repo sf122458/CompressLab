@@ -46,7 +46,7 @@ class Compound(_baseCompound):
                 for likelihoods in out["likelihoods"].values()
             )
         
-        loss = distortion_loss + bpp_loss * self.config.Train.Loss["bpp"]
+        loss = distortion_loss + bpp_loss * self.config.Model.Loss["bpp"]
 
         aux_loss = self.model.aux_loss()
 

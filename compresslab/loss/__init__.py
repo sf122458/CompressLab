@@ -5,8 +5,8 @@ class LossFn(nn.Module):
     def __init__(self, config: Config):
         super().__init__()
         self.loss = []
-        logging.debug(config.Train.Loss)
-        for type, params in config.Train.Loss.items():
+        logging.debug(config.Model.Loss)
+        for type, params in config.Model.Loss.items():
             try:
                 loss_fn = LossRegistry.get(type)(**params)
                 self.loss.append(loss_fn)

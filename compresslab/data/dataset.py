@@ -5,12 +5,15 @@ import torchvision.transforms as transforms
 from typing import Dict, List, Any
 
 from compresslab.utils.registry import TransformRegistry
+from compresslab.utils.registry import DataRegistry
 import logging
 
+@DataRegistry.register("ImageDataset")
 class ImageDataset(Dataset):
     def __init__(self,
                  path: str,
-                 transform: Dict[str, Any]=None):
+                 transform: Dict[str, Any]=None,
+                 **kwargs):
         
         self.path = path
         logging.debug("Transform: ")

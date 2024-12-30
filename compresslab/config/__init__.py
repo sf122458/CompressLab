@@ -251,9 +251,19 @@ class ParserClass(BaseModel):
     Testonly: bool = False
     Config: str = None
 
+class EnvClass(BaseModel):
+    WANDB_API_KEY: Optional[str] = None
+    CUDA_VISIBLE_DEVICES: Optional[str] = None
 
 class Config(BaseModel):
     Model: ModelClass
     Train: TrainClass
-    Env: Dict[str, Any]
+    Env: EnvClass
     Parser: Optional[ParserClass] = ParserClass()
+
+if __name__ == "__main__":
+    info = yaml.full_load(Path("/home/gpu-4/lyx/compress_lab/config/t2.yaml").read_text())
+    print(info['Train'])
+    info = json.dumps(info)
+    config = Config.model_validate_json(info)
+    config.Parser.Testonly = True
