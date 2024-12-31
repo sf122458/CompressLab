@@ -10,11 +10,11 @@ class _baseLoss(nn.Module):
         super().__init__()
         self.weight = weight
 
-    def _forward(self):
+    def _forward(self, x, y):
         raise NotImplementedError
 
-    def forward(self):
-        return self._forward() * self.weight
+    def forward(self, x, y):
+        return self._forward(x, y) * self.weight
 
 @LossRegistry.register("MSE")
 class MSELoss(_baseLoss):

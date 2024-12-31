@@ -123,7 +123,7 @@ class CompressAITrainer(_baseTrainer):
                 out["aux_loss"].backward()
                 self.aux_optimizer.step()
                 
-                self._afterStep(**out)
+                self._afterStep(out["log"])
             self._afterEpoch()
         self._afterRun()
 
@@ -157,7 +157,7 @@ class CompressAITrainer(_baseTrainer):
         pass
 
     def _afterStep(self, log: Dict[str, Any], **kwargs):
-        suffix = f"[b green]Bpp = {log['bpp']:1.4f}, D = {log['psnr']:2.2f}[/]dB"
+        suffix = f"[b green]Bpp = {log['bpp']:1.4f}, D = {log['psnr']:2.2f}dB"
         super()._afterStep(log=log, suffix=suffix, **kwargs)
 
     def _afterEpoch(self):

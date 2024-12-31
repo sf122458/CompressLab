@@ -50,7 +50,6 @@ train:
     key: None
     params:
       project: CompressAI
-    # name: FactorizedPrior
 
 env:
   WANDB_API_KEY: None

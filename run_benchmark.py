@@ -23,10 +23,8 @@ import compresslab.utils.registry
 def main(args):
     if args.config is None:
             raise ValueError("Please provide a config file.")
-    # config = Config.deserialize(yaml.full_load(Path(args.config).read_text()))
-    # config.Train.output = os.path.join('output', config.Train.Output)
 
-    config = Config.model_validate_json(json.dumps(yaml.full_load(Path("/home/gpu-4/lyx/compress_lab/config/t2.yaml").read_text())))
+    config = Config.model_validate_json(json.dumps(yaml.full_load(Path(args.config).read_text())))
     config.Parser.Config = args.config
     if args.test_only:
         config.Parser.Testonly = True
