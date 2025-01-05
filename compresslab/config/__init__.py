@@ -230,10 +230,14 @@ class General(BaseModel):
     Key: str
     Params: Dict[str, Any]
 
+class ModelSetting(BaseModel):
+    Key: str
+    Params: Dict[str, Any]
+    Loss: Dict[str, Any]
+
 class ModelClass(BaseModel):
     Compound: str
-    Net: Dict[str, General]
-    Loss: Dict[str, Dict[str, Any]]
+    Net: Dict[str, ModelSetting]
 
 class TrainClass(BaseModel):
     Trainer: str

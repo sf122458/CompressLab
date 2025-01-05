@@ -1,56 +1,60 @@
 # Template of Compressai FactorizedPrior
-model:
-  compound: CompressAI
-  net:  # dict
+Model:
+  Compound: CompressAI
+  Net:  # dict
     balle2017:
-      key: FactorizedPrior
-      params:
+      Key: FactorizedPrior
+      Params:
         N: 128
         M: 192
+      Loss: # dict
+        MSE: 
+          weight: 800
+        bpp: 
+          weight: 1
 
     minnen2018:
-      key: MeanScaleHyperprior
-      params:
+      Key: MeanScaleHyperprior
+      Params:
         N: 128
         M: 192
+      Loss: # dict
+        MSE: 
+          weight: 800
+        bpp: 
+          weight: 1
 
-  loss: # dict
-    MSE: 
-      weight: 1
-    bpp: 
-      weight: 1
+Train:
+  Trainer: CompressAI
+  Batchsize: 16
+  Epoch: 100
+  Valinterval: 1
+  Output: output/Compress
 
-train:
-  trainer: CompressAI
-  batchsize: 16
-  epoch: 50
-  valinterval: 5
-  output: CompressAI
-
-  trainset: 
-    key: ImageDataset
-    params:
+  Trainset: 
+    Key: ImageDataset
+    Params:
       path: data/subset_8000_processed
       transform: # dict
         RandomCrop: 
           size: 256
-  valset: 
-    key: ImageDataset
-    params:
+  Valset: 
+    Key: ImageDataset
+    Params:
       path: data/Kodak
-  optim: 
-    key: Adam
-    params:
+  Optim: 
+    Key: Adam
+    Params:
       lr: 1.0e-4
-  schdr:
-    key: ReduceLROnPlateau
-    params:
+  Schdr:
+    Key: ReduceLROnPlateau
+    Params:
       mode: min
-  log:
-    key: None
-    params:
+  Log:
+    Key: None
+    Params:
       project: CompressAI
 
-env:
+Env:
   WANDB_API_KEY: None
   CUDA_VISIBLE_DEVICES: None

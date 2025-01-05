@@ -1,12 +1,13 @@
 from .loss import *
+from typing import Dict, Any
 
 # default loss for image reconstruction, its input should be xHat and x
 class LossFn(nn.Module):
-    def __init__(self, config: Config):
+    def __init__(self, loss_config: Dict[str, Any]):
         super().__init__()
         self.loss = []
-        logging.debug(config.Model.Loss)
-        for type, params in config.Model.Loss.items():
+        logging.debug(loss_config)
+        for type, params in loss_config.items():
             try:
                 loss_fn = LossRegistry.get(type)(**params)
                 self.loss.append(loss_fn)

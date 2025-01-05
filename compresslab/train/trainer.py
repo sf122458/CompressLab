@@ -67,8 +67,8 @@ class Trainer(_baseTrainer):
 
 # CompressAI models need to consider loss of nn models and aux loss of entropy models
 class CompressAITrainer(_baseTrainer):
-    def __init__(self, config: Config, args, **kwargs):
-        super().__init__(config, args, **kwargs)
+    def __init__(self, config: Config, **kwargs):
+        super().__init__(config, **kwargs)
 
         self.clip_max_norm = 1.0
         self.compound.model.train()

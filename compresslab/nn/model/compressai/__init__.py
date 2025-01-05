@@ -24,6 +24,7 @@ class Compound(_baseCompound):
     def __init__(self, config: Config, **kwargs):
         super().__init__(config=config, **kwargs)
         assert issubclass(self.model.__class__, CompressionModel), "Model should be a subclass of `CompressModel`."
+        self.bpp_weight = kwargs["loss_config"]["bpp"]["weight"]
     
     def __call__(self, x: torch.Tensor):
         """
@@ -46,7 +47,7 @@ class Compound(_baseCompound):
                 for likelihoods in out["likelihoods"].values()
             )
         
-        loss = distortion_loss + bpp_loss * self.config.Model.Loss["bpp"]
+        loss = distortion_loss + bpp_loss * self.bpp_weight
 
         aux_loss = self.model.aux_loss()
 

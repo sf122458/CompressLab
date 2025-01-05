@@ -192,12 +192,12 @@ from copy import deepcopy
 from compresslab.loss import LossFn
 
 class _baseCompound(_Compound):
-    def __init__(self, config: Config, model_key, model_params, **kwargs):
+    def __init__(self, config: Config, model_key, model_params, loss_config, **kwargs):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logging.info(f"Using device: {self.device}")
         self.config = config
         self.model = ModelRegistry.get(model_key)(**model_params).to(self.device)
-        self.loss = LossFn(config)
+        self.loss = LossFn(loss_config)
         self._paramsCalc()
 
     def _paramsCalc(self, input=None):

@@ -5,4 +5,7 @@ data/
 compresslab.egg-info/
 build/
 output/
-compresslab/config/config.py
+# compresslab/config/config.py
+*.ipynb
+*.pkl
+demo.py
