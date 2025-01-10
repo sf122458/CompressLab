@@ -83,7 +83,7 @@ class CompressAITrainer(_baseTrainer):
         self.aux_optimizer = OptimizerRegistry.get(self.config.Train.Optim.Key)(aux_parameters, lr=1e-3)
         self.scheduler = SchedulerRegistry.get(self.config.Train.Schdr.Key)(optimizer=self.optimizer, **self.config.Train.Schdr.Params)\
               if self.config.Train.Schdr is not None else None
-        assert isinstance(self.scheduler, ReduceLROnPlateau)
+        assert isinstance(self.scheduler, (ReduceLROnPlateau, None)), "Only ReduceLROnPlateau scheduler is supported."
 
     def _load_ckpt(self, model_name, **kwargs):
         self.ckpt_path = os.path.join(self.config.Train.Output, model_name, 'ckpt')
@@ -107,6 +107,7 @@ class CompressAITrainer(_baseTrainer):
     def train(self):
         self._beforeRun()
         for _ in range(self.start_epoch, self.config.Train.Epoch):
+            self.compound.model.train()
             for _, images in enumerate(self.trainloader):
                 self.optimizer.zero_grad()
                 self.aux_optimizer.zero_grad()
@@ -146,7 +147,6 @@ class CompressAITrainer(_baseTrainer):
         psnr /= len(self.valloader)
         loss /= len(self.valloader)
         logging.info(f"Epoch {self.epoch}, validation result: Loss = {loss:.4f}, Bpp = {bpp:1.4f}, PSNR = {psnr:2.2f}dB")
-        self.compound.model.train()
         return loss
 
     @torch.no_grad()
