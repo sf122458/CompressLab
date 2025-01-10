@@ -136,7 +136,7 @@ class CompressAITrainer(_baseTrainer):
         self.compound.model.eval()
         with torch.no_grad():
             for images in self.valloader:
-                images = images.to(self.device)
+                images = images.to(self.compound.device)
                 out = self.compound(images)
                 loss += out["loss"]
                 bpp += out["log"]["bpp"]
@@ -154,7 +154,7 @@ class CompressAITrainer(_baseTrainer):
         # TODO: Record decompressed images
         # TODO: Speed test
         # TODO: 
-        pass
+        self.validate()
 
     def _afterStep(self, log: Dict[str, Any], **kwargs):
         suffix = f"[b green]Bpp = {log['bpp']:1.4f}, D = {log['psnr']:2.2f}dB"

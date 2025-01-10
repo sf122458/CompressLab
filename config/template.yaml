@@ -27,7 +27,7 @@ Model:
 Train:
   Trainer: CompressAI
   Batchsize: 16
-  Epoch: 100
+  Epoch: 200
   Valinterval: 1
   Output: output/Compress
 
