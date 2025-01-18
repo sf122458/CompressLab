@@ -47,9 +47,12 @@ This will list all registered modules and show where they are registered. You ca
 - [x] Loss function interface.
 - [x] Dataset implementation.
 - [x] Progress bar.
-- [ ] Trainer interface.
-- [ ] CompressAI Vbr models.
-- [ ] Breakpoint training.
-- [ ] Wandb and Tensorboard. What to record in trainer.
+- [x] Trainer interface.
+- [x] Breakpoint training.
+- [ ] CompressAI Vbr model.
+- [ ] VQ-VAE model.
+- [ ] Video compression model: DVC, etc.
+- [ ] Wandb and Tensorboard.
 - [ ] DDP training.
 - [ ] Notes for `.yaml` files.
+- [ ] Metrics: speed, BD-rate, etc.

@@ -17,6 +17,7 @@ class _baseTrainer(_Trainer):
         # TODO: DDP
 
         self.config = config
+        self.__dict__.update(kwargs)
         self.start_epoch = 0
         self._step = 0
 
@@ -31,7 +32,8 @@ class _baseTrainer(_Trainer):
         else:
             logging.info("Test only. Logging service is disabled.")
 
-    def _set_logger(self, config: Config, model_name, **kwargs):
+    def _set_logger(self, config: Config, **kwargs):
+        assert getattr(self, "model_name", None) is not None, "Model name should be set before logging."
         self.run = None
         if config.Train.Log.Key.upper() == "WANDB":
             logging.info("Use WANDB.")
@@ -39,8 +41,8 @@ class _baseTrainer(_Trainer):
             # config.Log.Params["name"] = config.Log.Params["name"] + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
             # NOTE
             self.run = wandb.init(
-                dir=os.path.join(config.Train.Output, model_name),
-                name=model_name,
+                dir=os.path.join(config.Train.Output, self.model_name),
+                name=self.model_name,
                 **config.Train.Log.Params
             )
         elif config.Train.Log.Key.upper() == "TENSORBOARD":
@@ -53,20 +55,6 @@ class _baseTrainer(_Trainer):
 
 
     def _set_dataloader(self, **kwargs):
-        # self.trainloader = DataLoader(
-        #     ImageDataset(self.config.Train.TrainSet.Path, self.config.Train.TrainSet.Transform),
-        #     batch_size=self.config.Train.BatchSize,
-        #     shuffle=True,
-        #     num_workers=self.config.ENV.NUM_WORKERS if self.config.ENV.NUM_WORKERS is not None else 0
-        # )
-
-        # self.valloader = DataLoader(
-        #     ImageDataset(self.config.Train.ValSet.Path, self.config.Train.ValSet.Transform),
-        #     batch_size=1,
-        #     shuffle=False,
-        #     num_workers=self.config.ENV.NUM_WORKERS if self.config.ENV.NUM_WORKERS is not None else 0
-        # )
-
         self.trainloader = DataLoader(
             DataRegistry.get(self.config.Train.Trainset.Key)(**self.config.Train.Trainset.Params),
             batch_size=self.config.Train.Batchsize,
@@ -85,8 +73,9 @@ class _baseTrainer(_Trainer):
         self.scheduler = SchedulerRegistry.get(self.config.Train.Schdr.Key)(self.optimizer, **self.config.Train.Schdr.Params)\
                         if self.config.Train.Schdr is not None else None
 
-    def _load_ckpt(self, model_name, **kwargs):
-        self.ckpt_path = os.path.join(self.config.Train.Output, model_name, 'ckpt')
+    def _load_ckpt(self, **kwargs):
+        assert getattr(self, "model_name", None) is not None, "Model name should be set before loading checkpoint."
+        self.ckpt_path = os.path.join(self.config.Train.Output, self.model_name, 'ckpt')
         os.makedirs(self.ckpt_path, exist_ok=True)
         ckpt_list = glob.glob(os.path.join(self.ckpt_path, '*.ckpt'))
         if len(ckpt_list) == 0:

@@ -147,14 +147,21 @@ class CompressAITrainer(_baseTrainer):
         psnr /= len(self.valloader)
         loss /= len(self.valloader)
         logging.info(f"Epoch {self.epoch}, validation result: Loss = {loss:.4f}, Bpp = {bpp:1.4f}, PSNR = {psnr:2.2f}dB")
-        return loss
+        return dict(
+            loss=loss,
+            bpp=bpp,
+            psnr=psnr
+        )
 
     @torch.no_grad()
     def test(self):
         # TODO: Record decompressed images
         # TODO: Speed test
         # TODO: 
-        self.validate()
+        out = self.validate()
+        with open(os.path.join(self.config.Train.Output, 'result.txt'), 'a') as f:
+            f.write(f"Model: {self.model_name} Bpp = {out['bpp']:1.4f}, PSNR = {out['psnr']:2.2f}dB\n")
+            f.close()
 
     def _afterStep(self, log: Dict[str, Any], **kwargs):
         suffix = f"[b green]Bpp = {log['bpp']:1.4f}, D = {log['psnr']:2.2f}dB"
@@ -162,7 +169,7 @@ class CompressAITrainer(_baseTrainer):
 
     def _afterEpoch(self):
         if self.scheduler is not None:
-            self.scheduler.step(self.validate())
+            self.scheduler.step(self.validate()["loss"])
         if (self.epoch + 1) % self.config.Train.Valinterval == 0 or self.epoch == self.config.Train.Epoch - 1:
             self.validate()
             self._save_ckpt(add={"aux_optimizer": self.aux_optimizer.state_dict()})
