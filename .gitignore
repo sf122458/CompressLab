@@ -9,3 +9,5 @@ output/
 *.ipynb
 *.pkl
 demo.py
+*.yaml
+*.yml
