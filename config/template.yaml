@@ -1,0 +1,30 @@
+Global:
+  lmbda: &lmbda 1625
+
+
+Model:
+  - Key: FactorizedPrior
+    Params:
+      N: 128
+      M: 192
+      lmbda: *lmbda
+
+  - Key: MeanScaleHyperprior
+    Params:
+      N: 128
+      M: 192
+      lmbda: *lmbda
+
+Data:
+  Key: BasicImageDataModule
+  Params:
+    train_data_dir: data/subset_8000_processed
+    test_data_dir: data/Kodak
+    batch_size: 8
+
+Train:
+  Epoch: 100
+  Valinterval: 5
+
+Env:
+  Devices: [1, 2]
