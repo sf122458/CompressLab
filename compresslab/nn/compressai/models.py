@@ -1,5 +1,4 @@
-from compresslab.nn.compressai.module import CompressAILightningModule
-
+from compressai.models import CompressionModel
 from compressai.entropy_models import EntropyBottleneck, GaussianConditional
 from compressai.models.utils import conv, deconv
 from compressai.layers import GDN, MaskedConv2d, conv1x1, conv3x3, ResidualBlock, ResidualBlockWithStride, ResidualBlockUpsample, subpel_conv3x3, AttentionBlock
@@ -31,7 +30,7 @@ import torch.nn.functional as F
 from torch import Tensor
 import types
 
-class FactorizedPrior(CompressAILightningModule):
+class FactorizedPrior(CompressionModel):
     def __init__(self, N, M, **kwargs):
         super().__init__(**kwargs)
 
@@ -83,7 +82,7 @@ class FactorizedPrior(CompressAILightningModule):
         x_hat = self.g_s(y_hat).clamp_(0, 1)
         return {"x_hat": x_hat}
    
-class ScaleHyperprior(CompressAILightningModule):
+class ScaleHyperprior(CompressionModel):
     r"""Scale Hyperprior model from J. Balle, D. Minnen, S. Singh, S.J. Hwang,
     N. Johnston: `"Variational Image Compression with a Scale Hyperprior"
     <https://arxiv.org/abs/1802.01436>`_ Int. Conf. on Learning Representations
@@ -699,7 +698,7 @@ class Cheng2020Attention(Cheng2020Anchor):
             subpel_conv3x3(N, 3, 2),
         )
 
-class SimpleVAECompressionModel(CompressAILightningModule):
+class SimpleVAECompressionModel(CompressionModel):
     """Simple VAE model with arbitrary latent codec.
 
     .. code-block:: none

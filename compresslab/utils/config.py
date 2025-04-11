@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 import yaml, json
 from pydantic_yaml import parse_yaml_file_as
 from pathlib import Path
@@ -7,6 +7,12 @@ from pathlib import Path
 class General(BaseModel):
     Key: str
     Params: Dict[str, Any]
+
+class ModelSetting(BaseModel):
+    Key: str
+    Params: Dict[str, Any]
+    Lmbda: Union[float, List[float]]
+    Lr: float = 1e-4
 
 class TrainClass(BaseModel):
     Epoch: int
@@ -21,7 +27,7 @@ class EnvClass(BaseModel):
 
 class Config(BaseModel):
     Global: Optional[Dict[str, Any]] = None
-    Model: List[General]
+    Model: List[ModelSetting]
     Data: General
     Train: TrainClass
     Env: EnvClass

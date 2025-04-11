@@ -8,11 +8,12 @@ from compresslab.utils.config import Config
 from compresslab.utils.registry import Registry, DataRegistry, ModelRegistry
 from lightning import Trainer
 import torch
-from lightning.pytorch.callbacks import ModelCheckpoint, RichProgressBar
+from lightning.pytorch.callbacks import ModelCheckpoint, RichProgressBar, ModelSummary
 from argparse import Namespace
 import compresslab.nn
 import compresslab.data
 from pydantic_yaml import parse_yaml_file_as
+from compresslab.nn.compressai.module import CompressAILightningModule
 
 class Args(Namespace):
     config: str = None
@@ -37,9 +38,16 @@ def main(args: Args):
 
 
         for model in config.Model:
-            modelmodule = ModelRegistry.get(model.Key)(**model.Params)
+            compressmodel = ModelRegistry.get(model.Key)(**model.Params)
 
-            out_dir = os.path.join(config.Train.Output, model.Key)
+            modelmodule = CompressAILightningModule(compressmodel, lmbda=model.Lmbda, lr=model.Lr)
+
+            exp_dir = os.path.join(config.Train.Output, Path(args.config).stem)
+            os.makedirs(exp_dir, exist_ok=True)
+
+            os.system(f"cp {args.config} {exp_dir}/config.yaml")
+
+            out_dir = os.path.join(exp_dir, model.Key)
 
             trainer = Trainer(
                 accelerator="gpu" if torch.cuda.is_available() else "cpu",
@@ -54,6 +62,9 @@ def main(args: Args):
                         dirpath=os.path.join(out_dir, "checkpoints"),
                         every_n_epochs=config.Train.Valinterval,
                         save_last=True,
+                    ),
+                    ModelSummary(
+                        max_depth=2,
                     )
                 ],
                 logger=True,
