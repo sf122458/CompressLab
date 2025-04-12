@@ -14,6 +14,9 @@ import compresslab.nn
 import compresslab.data
 from pydantic_yaml import parse_yaml_file_as
 from compresslab.nn.compressai.module import CompressAILightningModule
+import compresslab.utils.registry
+import importlib.util
+import lightning as L
 
 class Args(Namespace):
     config: str = None
@@ -22,7 +25,6 @@ class Args(Namespace):
 
 def main(args: Args):
     if args.list:
-        import compresslab.utils.registry
         registry_name = [clsname for (clsname, _) in inspect.getmembers(compresslab.utils.registry, inspect.isclass) 
                          if issubclass(getattr(compresslab.utils.registry, clsname), Registry) if clsname != "Registry"]
         for registry in registry_name:
@@ -40,7 +42,28 @@ def main(args: Args):
         for model in config.Model:
             compressmodel = ModelRegistry.get(model.Key)(**model.Params)
 
-            modelmodule = CompressAILightningModule(compressmodel, lmbda=model.Lmbda, lr=model.Lr)
+            model_path = Path(getattr(compresslab.utils.registry, "ModelRegistry")._map.get(model.Key)["path"])
+
+            module_file = model_path.parent / "module.py"
+            if not module_file.exists():
+                raise FileNotFoundError(f"module.py not found in {model_path.parent}")
+
+            module_spec = importlib.util.spec_from_file_location("module", module_file)
+            module = importlib.util.module_from_spec(module_spec)
+            module_spec.loader.exec_module(module)
+
+            lightning_classes = [
+                cls for name, cls in inspect.getmembers(module, inspect.isclass)
+                if issubclass(cls, L.LightningModule)
+            ]
+
+            if not lightning_classes:
+                raise ValueError(f"No class found in {module_file}")
+
+            assert len(lightning_classes) == 1, f"Multiple LightningModule classes found in {module_file}"
+            LightningModule = lightning_classes[0]  # Assuming the first match is the desired class
+            
+            modelmodule = LightningModule(compressmodel, lmbda=model.Lmbda, lr=model.Lr)
 
             exp_dir = os.path.join(config.Train.Output, Path(args.config).stem)
             os.makedirs(exp_dir, exist_ok=True)
