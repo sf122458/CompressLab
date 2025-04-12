@@ -25,3 +25,9 @@ Run
 python run.py --config config/your_config.yaml
 ```
 to train a model with the specified configuration file.
+
+
+### TODO
+- [ ] BD-Rate calculation and plot.
+- [ ] Implementations on compress and decompress.
+- [ ] Benchmark test, such as speed, model size, etc.
