@@ -8,7 +8,7 @@ from compresslab.utils.config import Config
 from compresslab.utils.registry import Registry, DataRegistry, ModelRegistry
 from lightning import Trainer
 import torch
-from lightning.pytorch.callbacks import ModelCheckpoint, RichProgressBar, ModelSummary
+from lightning.pytorch.callbacks import ModelCheckpoint, RichProgressBar, RichModelSummary
 from argparse import Namespace
 import compresslab.nn
 import compresslab.data
@@ -86,7 +86,7 @@ def main(args: Args):
                         every_n_epochs=config.Train.Valinterval,
                         save_last=True,
                     ),
-                    ModelSummary(
+                    RichModelSummary(
                         max_depth=2,
                     )
                 ],
