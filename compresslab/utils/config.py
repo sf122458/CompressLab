@@ -31,8 +31,3 @@ class Config(BaseModel):
     Data: General
     Train: TrainClass
     Env: EnvClass
-
-
-if __name__ == "__main__":
-    config = parse_yaml_file_as(Config, "/home/gpu-4/lyx/Lightning/config/template.yaml")
-    print(config)
