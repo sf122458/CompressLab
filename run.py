@@ -6,6 +6,7 @@ import os
 import torch
 from compresslab.utils.config import Config
 from compresslab.utils.registry import Registry, DataRegistry, ModelRegistry
+from compresslab.utils.benchmark import Benchmark
 import lightning as L
 from lightning import Trainer
 from lightning.pytorch.loggers import TensorBoardLogger, CSVLogger
@@ -91,6 +92,7 @@ def main(args: Args):
                     )
                 ],
                 logger=TensorBoardLogger(save_dir=out_dir),
+                deterministic=True # NOTE: this is important for reproducibility, otherwise the entropy decoding may fail
             )
             if not args.test_only:
                 trainer.fit(modelmodule, datamodule, ckpt_path="last")
@@ -98,7 +100,7 @@ def main(args: Args):
             trainer.test(modelmodule, datamodule, ckpt_path="last")
 
             if config.Train.Benchmark:
-                pass
+                benchmark = Benchmark(exp_dir)
 
         logging.info("Finish training.")
     

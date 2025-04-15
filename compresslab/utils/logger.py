@@ -3,6 +3,7 @@ import csv
 import torch
 import time
 import contextlib
+import pickle
 
 class MetricLogger():
     """
@@ -45,7 +46,7 @@ class MetricLogger():
     
     def save(self):
         """
-        Save the metrics to a CSV file.
+        Save the metrics to a CSV file and a pkl file(used in benchmark test).
         """
         # Compute the average of all lists in the metrics
         for name, metrics in self.metrics.items():
@@ -65,6 +66,10 @@ class MetricLogger():
                 for key in headers[1:]:
                     row.append(f"{metrics[key]:.6f}" if key in metrics else "")
                 writer.writerow(row)
+                
+        # Save the metrics as a pickle file
+        with open(f"{self.save_dir}/metrics.pkl", "wb") as pkl_file:
+            pickle.dump(self.metrics, pkl_file)
 
 
     @contextlib.contextmanager

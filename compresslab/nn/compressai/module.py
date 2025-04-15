@@ -100,10 +100,11 @@ class CompressAILightningModule(L.LightningModule):
                 out_decompress = model_instance.decompress(out_compress["strings"], out_compress["shape"])
             distortion_loss = torch.nn.functional.mse_loss(out_decompress["x_hat"], batch)
             psnr = 10 * torch.log10(1 / distortion_loss).item()
-            bpp = sum(len(strings[0]) for strings in out_compress["strings"]) / np.prod(batch.shape[-2:])
+            bpp = sum(len(strings[0]) for strings in out_compress["strings"]) / np.prod(batch.shape[-2:]) * 8
             self.metric.log(model_name, 
-                            {"bpp":bpp, 
-                             "psnr":psnr
+                            {
+                                "bpp":bpp, 
+                                "psnr":psnr
                              })
 
     def on_test_end(self):
