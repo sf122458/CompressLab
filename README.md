@@ -1,6 +1,6 @@
 # CompressLab
 
-This repository is based on further encapsulation of [PyTorch Lightning](https://lightning.ai).
+A PyTorch-based framework for image compression research and development.
 
 ### Installation
 
@@ -10,7 +10,6 @@ conda activate compresslab
 pip install -r requirements.txt
 ```
 
-
 ### How to use
 
 Run
@@ -18,7 +17,6 @@ Run
 python run.py --list
 ```
 to check all registered modules.
-
 
 Run
 ```shell
@@ -29,5 +27,20 @@ to train a model with the specified configuration file.
 
 ### TODO
 - [ ] BD-Rate calculation and plot.
-- [ ] Implementations on compress and decompress.
+- [x] Implementations on compress and decompress.
 - [ ] Benchmark test, such as speed, model size, etc.
+
+
+### Support models
+- All models implemented in CompressAI.
+- MLIC
+- DVC(debugging)
+
+
+### Acknowledgement
+This repository is based on the following projects:
+- [PyTorch Lightning](https://lightning.ai)
+- [CompressAI](https://github.com/InterDigitalInc/CompressAI)
+- [MLIC++](https://github.com/JiangWeibeta/MLIC)
+- [DVC-Pytorch](https://github.com/binzzheng/DVC-PyTorch)
+- [PytorchVideoCompression](https://github.com/ZhihaoHu/PyTorchVideoCompression)

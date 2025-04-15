@@ -1,5 +1,6 @@
 from compresslab.utils.registry import ModelRegistry
-from .models import *
+from .compressai_impl.models import *
+from .mlic.models import MLICPlusPlus
 
 for model in [
     FactorizedPrior,
@@ -10,6 +11,7 @@ for model in [
     Cheng2020Anchor,
     Cheng2020AnchorCheckerboard,
     Elic2022Official,
-    Elic2022Chandelier
+    Elic2022Chandelier,
+    MLICPlusPlus
 ]:
     ModelRegistry.register(model.__name__)(model)

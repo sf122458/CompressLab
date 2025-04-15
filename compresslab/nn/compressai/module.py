@@ -54,6 +54,7 @@ class CompressAILightningModule(L.LightningModule):
 
             torch.nn.utils.clip_grad_norm_(model_instance.parameters(), 1.0)
 
+            # show metrics of the first model on the progress bar
             if model_name == "codec_0" or model_name == "codec":
                 self.log_dict({"loss": loss, 
                         "bpp": bpp_loss,
