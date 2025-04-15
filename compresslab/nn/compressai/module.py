@@ -1,9 +1,10 @@
 import lightning as L
 from compressai.models import CompressionModel
-from compressai.entropy_models import EntropyBottleneck, GaussianConditional
+from compresslab.utils.logger import MetricLogger
 import torch
 import math
 import torch.nn as nn
+import numpy as np
 from copy import deepcopy
 
 class CompressAILightningModule(L.LightningModule):
@@ -19,7 +20,8 @@ class CompressAILightningModule(L.LightningModule):
         self.lmbda = lmbda
         self.lr = lr
 
-        self.model_wrapper: nn.ModuleDict[str, CompressionModel] = nn.ModuleDict([])
+        self.model_wrapper: nn.ModuleDict[str, CompressionModel] = nn.ModuleDict({})
+        
 
         if isinstance(self.lmbda, list):
             for idx in range(len(self.lmbda)):
@@ -29,11 +31,6 @@ class CompressAILightningModule(L.LightningModule):
             self.lmbda = [lmbda]
             self.model_wrapper["codec"] = model
     
-    def compress(self, x):
-        raise NotImplementedError("Compress function is not implemented.")
-    
-    def decompress(self, x):
-        raise NotImplementedError("Decompress function is not implemented.")
 
     def training_step(self, batch, batch_idx):
         optimizer, aux_optimizer = self.optimizers()
@@ -66,7 +63,7 @@ class CompressAILightningModule(L.LightningModule):
                 f"train/{model_name}.loss": loss,
                 f"train/{model_name}.bpp": bpp_loss,
                 f"train/{model_name}.psnr": psnr,
-            }, on_epoch=True, logger=True, sync_dist=True, on_step=False)
+            }, on_epoch=False, logger=True, sync_dist=True, on_step=True)
 
         optimizer.step()
         aux_optimizer.step()
@@ -89,13 +86,28 @@ class CompressAILightningModule(L.LightningModule):
                 f"val/{model_name}.bpp": bpp_loss,
                 f"val/{model_name}.psnr": psnr
             }, on_step=False, on_epoch=True, logger=True, sync_dist=True)
-        
-    # def on_validation_epoch_end(self):
-    #     return super().on_validation_epoch_end()
+
+    def on_test_start(self):
+        self.metric = MetricLogger(save_dir=self.trainer.default_root_dir)
+        for model_name, model_instance in self.model_wrapper.items():
+            model_instance.update()
 
     def test_step(self, batch, batch_idx):
-        self.compress(batch)
+        for model_name, model_instance in self.model_wrapper.items():
+            with self.metric.timer(model_name, "time_compress") as timer:
+                out_compress = model_instance.compress(batch)
+            with self.metric.timer(model_name, "time_decompress") as timer:
+                out_decompress = model_instance.decompress(out_compress["strings"], out_compress["shape"])
+            distortion_loss = torch.nn.functional.mse_loss(out_decompress["x_hat"], batch)
+            psnr = 10 * torch.log10(1 / distortion_loss).item()
+            bpp = sum(len(strings[0]) for strings in out_compress["strings"]) / np.prod(batch.shape[-2:])
+            self.metric.log(model_name, 
+                            {"bpp":bpp, 
+                             "psnr":psnr
+                             })
 
+    def on_test_end(self):
+        self.metric.save()
 
     def configure_optimizers(self):
         parameters = []
@@ -103,7 +115,6 @@ class CompressAILightningModule(L.LightningModule):
         for model_name, model_instance in self.model_wrapper.items():
             parameters += [p for n, p in model_instance.named_parameters() if p.requires_grad and not n.endswith(".quantiles")]
             aux_parameters += [p for n, p in model_instance.named_parameters() if p.requires_grad and n.endswith(".quantiles")]
-        # TODO
         optimizer = torch.optim.Adam(parameters, lr=self.lr)
         aux_optimizer = torch.optim.Adam(aux_parameters, lr=1e-3)
         return optimizer, aux_optimizer

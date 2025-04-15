@@ -18,7 +18,7 @@ class TrainClass(BaseModel):
     Epoch: int
     Valinterval: int
     Output: str = "output"
-    Logger: Optional[General] = None
+    Benchmark: Optional[General] = None
 
 
 class EnvClass(BaseModel):

@@ -1,22 +1,22 @@
-import yaml, json
 import inspect
 from pathlib import Path
 import argparse
 import logging
 import os
+import torch
 from compresslab.utils.config import Config
 from compresslab.utils.registry import Registry, DataRegistry, ModelRegistry
+import lightning as L
 from lightning import Trainer
-import torch
+from lightning.pytorch.loggers import TensorBoardLogger, CSVLogger
 from lightning.pytorch.callbacks import ModelCheckpoint, RichProgressBar, RichModelSummary
 from argparse import Namespace
 import compresslab.nn
 import compresslab.data
 from pydantic_yaml import parse_yaml_file_as
-from compresslab.nn.compressai.module import CompressAILightningModule
 import compresslab.utils.registry
 import importlib.util
-import lightning as L
+
 
 class Args(Namespace):
     config: str = None
@@ -90,12 +90,15 @@ def main(args: Args):
                         max_depth=2,
                     )
                 ],
-                logger=True,
+                logger=TensorBoardLogger(save_dir=out_dir),
             )
             if not args.test_only:
                 trainer.fit(modelmodule, datamodule, ckpt_path="last")
             
-            # trainer.test(modelmodule, datamodule, ckpt_path="last")
+            trainer.test(modelmodule, datamodule, ckpt_path="last")
+
+            if config.Train.Benchmark:
+                pass
 
         logging.info("Finish training.")
     
