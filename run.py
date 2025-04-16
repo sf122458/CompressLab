@@ -76,7 +76,7 @@ def main(args: Args):
             trainer = Trainer(
                 accelerator="gpu" if torch.cuda.is_available() else "cpu",
                 devices=config.Env.Devices,
-                strategy="ddp",
+                strategy="ddp_find_unused_parameters_true",
                 max_epochs=config.Train.Epoch,
                 check_val_every_n_epoch=config.Train.Valinterval,
                 default_root_dir=out_dir,
@@ -99,9 +99,9 @@ def main(args: Args):
             
             trainer.test(modelmodule, datamodule, ckpt_path="last")
 
-            if config.Train.Benchmark:
-                benchmark = Benchmark(exp_dir)
-
+        
+        Benchmark(exp_dir, config.Train.Benchmark)
+        
         logging.info("Finish training.")
     
 

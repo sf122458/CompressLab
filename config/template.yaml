@@ -24,6 +24,10 @@ Data:
 Train:
   Epoch: 100
   Valinterval: 5
+  Benchmark: 
+    - Key: BD_RATE
+    - Key: BD_CURVE
+
 
 Env:
-  Devices: [0]
+  Devices: [0,1]

@@ -3,8 +3,11 @@ from pathlib import Path
 import os
 import pickle
 import csv
-from typing import List, Union
+from typing import List, Union, Optional
 from dataclasses import dataclass
+from compresslab.utils.config import General
+import logging
+import matplotlib.pyplot as plt
 
 @dataclass
 class BenchmarkTestItem:
@@ -13,9 +16,11 @@ class BenchmarkTestItem:
 class Benchmark:
     """
     Benchmark:
-        1.calculate BD-Rate for lossy compression
+        1. calculate BD-Rate for lossy compression
+        2. plot BD-Rate curve
     """
 
+    # from CompressAI
     bd_rate_baseline = dict(
         JPEG=dict(
             bpp=[0.22115325927734372,
@@ -60,35 +65,67 @@ class Benchmark:
     )
 
 
-    def __init__(self, exp_dir: Path, 
-                 test_item: Union[BenchmarkTestItem, List[BenchmarkTestItem]] = BenchmarkTestItem.BD_RATE,
-                 baseline=None):
+    def __init__(self, 
+                 exp_dir: Path,
+                 config: Optional[Union[General, List[General]]] = None,
+                 ):
+        """
+        Args:
+            exp_dir (Path): Directory to save the benchmark files.
+            config (General): Benchmark test items defined in the yaml config file.
+        """
+        
+        if config is None:
+            return
+
         self.exp_dir = exp_dir
+        if not isinstance(config, list):
+            self.config = [config]
+        else:
+            self.config = config
 
         self.exp_metrics = {}
-
+        # load all metrics from each model directory
         for root, _, files in os.walk(exp_dir):
             for file in files:
                 if file.endswith(".pkl"):
                     with open(os.path.join(root, file), 'rb') as f:
                         data = pickle.load(f)
                         self.exp_metrics[root.split('/')[-1]] = data
-        
-        self.baseline = baseline if baseline else "JPEG"
 
-        if test_item == BenchmarkTestItem.BD_RATE:
-            self.calc_bd_rate()
+        for item in config:
+            if item.Key == "BD_RATE":
+                self.calc_bd_rate(item.Params)
+            elif item.Key == "BD_CURVE":
+                self.plot_bd_curve(item.Params)
+            else:
+                logging.error(f"Unknown benchmark test item: {item.Key}")
 
-        # TODO: support more benchmark test items
-        for item in test_item:
-            pass
+    def plot_bd_curve(self, *args, **kwargs):
+        plt.figure()
+        for model_name, metrics in self.exp_metrics.items():
+            bpp = []
+            psnr = []
+            for metric in metrics.values(): # multi codec
+                if "bpp" in metric and "psnr" in metric:
+                    bpp.append(metric["bpp"])
+                    psnr.append(metric["psnr"])
+            plt.plot(bpp, psnr, label=model_name)
+        plt.xlabel("Bpp")
+        plt.ylabel("PSNR")
+        plt.title("BD-Rate Curve")
+        plt.legend()
+        plt.savefig(os.path.join(self.exp_dir, "bd_curve.png"))
 
-    # TODO: support more benchmark test items
-    def calc_bd_rate(self):
+
+    def calc_bd_rate(self, *args, 
+                     baseline: str="JPEG", 
+                     mode: int=1, **kwargs):
         """
         Calculate BD-Rate for lossy compression
         Args:
-            exp_dir (str): Directory to save the CSV file.
+            baseline(str): Baseline model name used in RD-Rate calculation, default is JPEG
+            mode(int): 0 compare PSNR at the same Bpp, 1 compare Bpp at the same PSNR
         """
         bd_rates = {}
         for model_name, metrics in self.exp_metrics.items():
@@ -100,7 +137,12 @@ class Benchmark:
                     psnr.append(metric["psnr"])
             
             # calculate bd-rate
-            bd_rate = self._bj_delta(self.bd_rate_baseline[self.baseline]["bpp"], self.bd_rate_baseline[self.baseline]["psnr"], bpp, psnr)
+            bd_rate = self._bj_delta(
+                self.bd_rate_baseline[baseline]["bpp"], 
+                self.bd_rate_baseline[baseline]["psnr"], 
+                bpp, psnr,
+                mode=mode
+            )
             bd_rates[model_name] = bd_rate
 
         with open(os.path.join(self.exp_dir, "metrics.csv"), "w") as f:
@@ -113,8 +155,6 @@ class Benchmark:
             for name, bd_rate in bd_rates.items():
                 row = [name, bd_rate]
                 writer.writerow(row)
-
-
 
     # https://github.com/Anserw/Bjontegaard_metric
     def _bj_delta(self, R1, PSNR1, R2, PSNR2, mode=1):

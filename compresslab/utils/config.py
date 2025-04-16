@@ -6,19 +6,19 @@ from pathlib import Path
 
 class General(BaseModel):
     Key: str
-    Params: Dict[str, Any]
+    Params: Optional[Dict[str, Any]] = None
 
 class ModelSetting(BaseModel):
     Key: str
-    Params: Dict[str, Any]
-    Lmbda: Union[float, List[float]]
+    Params: Optional[Dict[str, Any]]
     Lr: float = 1e-4
+    Lmbda: Union[float, List[float]]
 
 class TrainClass(BaseModel):
     Epoch: int
     Valinterval: int
     Output: str = "output"
-    Benchmark: bool = False
+    Benchmark: Optional[List[General]] = None
 
 
 class EnvClass(BaseModel):

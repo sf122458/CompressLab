@@ -85,8 +85,9 @@ class MetricLogger():
             
             yield
 
-            torch.cuda.synchronize()
+            
             end_event.record()
+            torch.cuda.synchronize()
             elapsed_time = start_event.elapsed_time(end_event)
         else:
             start_time = time.time()
