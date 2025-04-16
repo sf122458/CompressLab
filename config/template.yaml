@@ -26,6 +26,9 @@ Train:
   Valinterval: 5
   Benchmark: 
     - Key: BD_RATE
+      Params:
+        mode: 1
+        baseline: "JPEG"
     - Key: BD_CURVE
 
 

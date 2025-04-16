@@ -3,6 +3,7 @@ import os
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from PIL import Image
+from compresslab.utils.registry import DataRegistry
 
 class BasicImageDataset(Dataset):
     """
@@ -29,6 +30,7 @@ class BasicImageDataset(Dataset):
         image = self.transform(image)
         return image
 
+@DataRegistry.register("BasicImageDataModule")
 class BasicImageDataModule(L.LightningDataModule):
     def __init__(self, train_data_dir: str, test_data_dir: str, batch_size: int = 32, num_workers: int = 4):
         super().__init__()
@@ -47,29 +49,29 @@ class BasicImageDataModule(L.LightningDataModule):
         ])
 
     def setup(self, stage):
-        self.data_fit = BasicImageDataset(
+        self.train_dataset = BasicImageDataset(
             self.train_data_dir, 
             transform=self.train_transform
         )
-        self.data_test = BasicImageDataset(
+        self.test_dataset = BasicImageDataset(
             self.test_data_dir, 
             transform=self.test_transform
         )
 
     def train_dataloader(self):
-        return DataLoader(self.data_fit, 
+        return DataLoader(self.train_dataset, 
                           batch_size=self.batch_size,
                           shuffle=True,
                           num_workers=self.num_workers)
     
     def val_dataloader(self):
-        return DataLoader(self.data_test,
+        return DataLoader(self.test_dataset,
                           batch_size=1,
                           shuffle=False,
                           num_workers=self.num_workers)
     
     def test_dataloader(self):
-        return DataLoader(self.data_test,
+        return DataLoader(self.test_dataset,
                           batch_size=1,
                           shuffle=False,
                           num_workers=self.num_workers)

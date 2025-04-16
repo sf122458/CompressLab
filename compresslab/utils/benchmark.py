@@ -136,25 +136,27 @@ class Benchmark:
                     bpp.append(metric["bpp"])
                     psnr.append(metric["psnr"])
             
-            # calculate bd-rate
-            bd_rate = self._bj_delta(
-                self.bd_rate_baseline[baseline]["bpp"], 
-                self.bd_rate_baseline[baseline]["psnr"], 
-                bpp, psnr,
-                mode=mode
-            )
-            bd_rates[model_name] = bd_rate
+            if len(bpp) > 0 and len(psnr) > 0:
+                # calculate bd-rate
+                bd_rate = self._bj_delta(
+                    self.bd_rate_baseline[baseline]["bpp"], 
+                    self.bd_rate_baseline[baseline]["psnr"], 
+                    bpp, psnr,
+                    mode=mode
+                )
+                bd_rates[model_name] = bd_rate
 
-        with open(os.path.join(self.exp_dir, "metrics.csv"), "w") as f:
-            # Write the header
-            headers = ["name", "bd-rate"]
-            writer = csv.writer(f)
-            writer.writerow(headers)
-            
-            # Write the data
-            for name, bd_rate in bd_rates.items():
-                row = [name, bd_rate]
-                writer.writerow(row)
+        if len(bd_rates) > 0:
+            with open(os.path.join(self.exp_dir, "metrics.csv"), "w") as f:
+                # Write the header
+                headers = ["name", "bd-rate"]
+                writer = csv.writer(f)
+                writer.writerow(headers)
+                
+                # Write the data
+                for name, bd_rate in bd_rates.items():
+                    row = [name, bd_rate]
+                    writer.writerow(row)
 
     # https://github.com/Anserw/Bjontegaard_metric
     def _bj_delta(self, R1, PSNR1, R2, PSNR2, mode=1):
