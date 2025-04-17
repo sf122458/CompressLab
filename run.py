@@ -41,7 +41,10 @@ def main(args: Args):
 
 
         for model in config.Model:
-            compressmodel = ModelRegistry.get(model.Key)(**model.Params)
+            if model.Params is None:
+                compressmodel = ModelRegistry.get(model.Key)()
+            else:
+                compressmodel = ModelRegistry.get(model.Key)(**model.Params)
 
             model_path = Path(getattr(compresslab.utils.registry, "ModelRegistry")._map.get(model.Key)["path"])
 
@@ -92,7 +95,7 @@ def main(args: Args):
                     )
                 ],
                 logger=TensorBoardLogger(save_dir=out_dir),
-                deterministic=True # NOTE: this is important for reproducibility, otherwise the entropy decoding may fail
+                deterministic="warn" # NOTE: this is important for reproducibility, otherwise the entropy decoding may fail
             )
             if not args.test_only:
                 trainer.fit(modelmodule, datamodule, ckpt_path="last")
@@ -107,8 +110,8 @@ def main(args: Args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='test')
-    parser.add_argument('--config', required=False, type=str,help ='Config file path.', default=None)
-    parser.add_argument('--list', action="store_true", help='List all available models.')
+    parser.add_argument('-c', '--config', required=False, type=str,help ='Config file path.', default=None)
+    parser.add_argument('-l', '--list', action="store_true", help='List all available models.')
     parser.add_argument('--test_only', action="store_true", help='Test only.')
     
     args = parser.parse_args()

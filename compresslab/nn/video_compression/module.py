@@ -6,6 +6,7 @@ import math
 import torch.nn as nn
 import numpy as np
 from copy import deepcopy
+from compresslab.nn.video_compression.utils import RateDistortionLoss
 
 class CompressAILightningModule(L.LightningModule):
     def __init__(self, 
@@ -22,6 +23,7 @@ class CompressAILightningModule(L.LightningModule):
 
         self.model_wrapper: nn.ModuleDict[str, CompressionModel] = nn.ModuleDict({})
         
+        self.loss_func = RateDistortionLoss()
 
         if isinstance(self.lmbda, list):
             for idx in range(len(self.lmbda)):
@@ -36,33 +38,31 @@ class CompressAILightningModule(L.LightningModule):
         optimizer, aux_optimizer = self.optimizers()
         optimizer.zero_grad()
         aux_optimizer.zero_grad()
-        x = batch
-        N, _, H, W = x.shape
+
+        d = batch
+
         for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
-            out = model_instance.forward(x)
-            distortion_loss = torch.nn.functional.mse_loss(out["x_hat"], x)
-            bpp_loss = \
-                sum(
-                    torch.log(likelihoods).sum() / (-math.log(2) * N * H * W)
-                    for likelihoods in out["likelihoods"].values()
-                )
-            psnr = 10 * torch.log10(1 / distortion_loss).item()
-            loss = lmbda * distortion_loss + bpp_loss
-            aux_loss = model_instance.aux_loss()
-            self.manual_backward(loss)
+            out = model_instance.forward(d)
+
+            out_criterion = self.loss_func.forward(out, d, lmbda)
+            aux_loss_sum = sum(aux_loss for aux_loss in model_instance.aux_loss())
+
+            self.manual_backward(out_criterion["loss"])
             torch.nn.utils.clip_grad_norm_(model_instance.parameters(), 1.0)
-            self.manual_backward(aux_loss)
+            self.manual_backward(aux_loss_sum)
 
             # show metrics of the first model on the progress bar
             if model_name == "codec_0" or model_name == "codec":
-                self.log_dict({"loss": loss, 
-                        "bpp": bpp_loss,
-                        "PSNR": psnr}, prog_bar=True, on_step=True, on_epoch=False, logger=False)
+                self.log_dict({
+                    "loss": out_criterion["loss"], 
+                    "bpp": out_criterion["bpp_loss"],
+                    "PSNR": out_criterion["psnr"]
+                }, prog_bar=True, on_step=True, on_epoch=False, logger=False)
         
             self.log_dict({
-                f"train/{model_name}.loss": loss,
-                f"train/{model_name}.bpp": bpp_loss,
-                f"train/{model_name}.psnr": psnr,
+                f"train/{model_name}.loss": out_criterion["loss"],
+                f"train/{model_name}.bpp": out_criterion["bpp_loss"],
+                f"train/{model_name}.psnr": out_criterion["psnr"]
             }, on_epoch=False, logger=True, sync_dist=True, on_step=True)
 
         optimizer.step()
@@ -71,28 +71,24 @@ class CompressAILightningModule(L.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x = batch
-        N, _, H, W = x.shape
         for model_name, model_instance in self.model_wrapper.items():
             out = model_instance.forward(x)
-            distortion_loss = torch.nn.functional.mse_loss(out["x_hat"], x)
-            psnr = 10 * torch.log10(1 / distortion_loss)
-            bpp_loss = \
-                sum(
-                    torch.log(likelihoods).sum() / (-math.log(2) * N * H * W)
-                    for likelihoods in out["likelihoods"].values()
-                )
-            
+
+            out_criterion = self.loss_func.forward(out, x)
+
             self.log_dict({
-                f"val/{model_name}.bpp": bpp_loss,
-                f"val/{model_name}.psnr": psnr
+                f"val/{model_name}.bpp": out_criterion["bpp_loss"],
+                f"val/{model_name}.psnr": out_criterion["psnr"],
             }, on_step=False, on_epoch=True, logger=True, sync_dist=True)
 
     def on_test_start(self):
+        return
         self.metric = MetricLogger(save_dir=self.trainer.default_root_dir)
         for model_name, model_instance in self.model_wrapper.items():
             model_instance.update()
 
     def test_step(self, batch, batch_idx):
+        return
         for model_name, model_instance in self.model_wrapper.items():
             with self.metric.timer(model_name, "time_compress") as timer:
                 out_compress = model_instance.compress(batch)
@@ -108,6 +104,7 @@ class CompressAILightningModule(L.LightningModule):
                              })
 
     def on_test_end(self):
+        return
         self.metric.save()
 
     def configure_optimizers(self):
@@ -120,4 +117,3 @@ class CompressAILightningModule(L.LightningModule):
         aux_optimizer = torch.optim.Adam(aux_parameters, lr=1e-3)
         return optimizer, aux_optimizer
         
-

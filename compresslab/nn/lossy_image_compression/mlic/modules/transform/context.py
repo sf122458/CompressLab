@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.init import trunc_normal_
 from .layers import MLP, build_position_index
-from compresslab.nn.compressai.mlic.utils.ckbd import *
+from compresslab.nn.lossy_image_compression.mlic.utils.ckbd import *
 
 class LocalContext(nn.Module):
     def __init__(self,

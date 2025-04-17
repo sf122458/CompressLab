@@ -5,7 +5,7 @@ import pickle
 import csv
 from typing import List, Union, Optional
 from dataclasses import dataclass
-from compresslab.utils.config import General
+from compresslab.utils.config import BenchmarkItem
 import logging
 import matplotlib.pyplot as plt
 
@@ -67,12 +67,12 @@ class Benchmark:
 
     def __init__(self, 
                  exp_dir: Path,
-                 config: Optional[Union[General, List[General]]] = None,
+                 config: Optional[Union[BenchmarkItem, List[BenchmarkItem]]] = None,
                  ):
         """
         Args:
             exp_dir (Path): Directory to save the benchmark files.
-            config (General): Benchmark test items defined in the yaml config file.
+            config (BenchmarkItem): Benchmark test items defined in the yaml config file.
         """
         
         if config is None:

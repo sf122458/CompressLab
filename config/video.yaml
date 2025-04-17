@@ -1,0 +1,19 @@
+Global:
+  lmbda: &lmbda [1625]
+
+Model:
+  - Key: ScaleSpaceFlow
+    Lmbda: *lmbda
+
+Data:
+  Key: VideoDataModule
+  Params:
+    root: data/vimeo90k
+    batch_size: 4
+
+Train:
+  Epoch: 50
+  Valinterval: 5
+
+Env:
+  Devices: [0,1,2,3]

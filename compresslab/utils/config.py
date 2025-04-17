@@ -4,21 +4,25 @@ import yaml, json
 from pydantic_yaml import parse_yaml_file_as
 from pathlib import Path
 
-class General(BaseModel):
+class DataSetting(BaseModel):
     Key: str
     Params: Optional[Dict[str, Any]] = None
 
 class ModelSetting(BaseModel):
     Key: str
-    Params: Optional[Dict[str, Any]]
+    Params: Optional[Dict[str, Any]] = None
     Lr: float = 1e-4
     Lmbda: Union[float, List[float]]
+
+class BenchmarkItem(BaseModel):
+    Key: str
+    Params: Optional[Dict[str, Any]] = None
 
 class TrainClass(BaseModel):
     Epoch: int
     Valinterval: int
     Output: str = "output"
-    Benchmark: Optional[List[General]] = None
+    Benchmark: Optional[List[BenchmarkItem]] = None
 
 
 class EnvClass(BaseModel):
@@ -28,6 +32,6 @@ class EnvClass(BaseModel):
 class Config(BaseModel):
     Global: Optional[Dict[str, Any]] = None
     Model: List[ModelSetting]
-    Data: General
+    Data: DataSetting
     Train: TrainClass
     Env: EnvClass
