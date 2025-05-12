@@ -1,18 +1,25 @@
 Global:
-  lmbda: &lmbda [117, 1625]
+  lmbda: &lmbda [0.0018, 0.0035, 0.0067, 0.0130, 0.0250, 0.0483, 0.0932, 0.1800]
+
 
 Model:
-  - Key: FactorizedPrior
+  - Name: balle2016
+    Key: FactorizedPrior
     Params:
       N: 128
       M: 192
-    Lmbda: *lmbda
+    ExtParams:
+      lmbda: *lmbda
+      distortion: mse
 
-  - Key: MeanScaleHyperprior
+  - Name: minnen2018
+    Key: MeanScaleHyperprior
     Params:
       N: 128
       M: 192
-    Lmbda: *lmbda
+    ExtParams:
+      lmbda: *lmbda
+      distortion: mse
 
 Data:
   Key: BasicImageDataModule

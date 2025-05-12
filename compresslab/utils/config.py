@@ -9,10 +9,10 @@ class DataSetting(BaseModel):
     Params: Optional[Dict[str, Any]] = None
 
 class ModelSetting(BaseModel):
+    Name: str = None
     Key: str
     Params: Optional[Dict[str, Any]] = None
-    Lr: float = 1e-4
-    Lmbda: Union[float, List[float]]
+    ExtParams: Optional[Dict[str, Any]] = None
 
 class BenchmarkItem(BaseModel):
     Key: str

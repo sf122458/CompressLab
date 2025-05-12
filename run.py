@@ -15,6 +15,9 @@ from argparse import Namespace
 import compresslab.nn
 import compresslab.data
 from pydantic_yaml import parse_yaml_file_as
+import random
+import string
+import pickle
 import compresslab.utils.registry
 import importlib.util
 
@@ -67,14 +70,33 @@ def main(args: Args):
             assert len(lightning_classes) == 1, f"Multiple LightningModule classes found in {module_file}"
             LightningModule = lightning_classes[0]  # Assuming the first match is the desired class
             
-            modelmodule = LightningModule(compressmodel, lmbda=model.Lmbda, lr=model.Lr)
+            modelmodule = LightningModule(compressmodel, ext_params=model.ExtParams)
 
             exp_dir = os.path.join(config.Train.Output, Path(args.config).stem)
             os.makedirs(exp_dir, exist_ok=True)
 
-            os.system(f"cp {args.config} {exp_dir}/config.yaml")
+            if not os.path.exists(os.path.join(exp_dir, "config.yaml")):
+                os.system(f"cp {args.config} {exp_dir}/config.yaml")
 
-            out_dir = os.path.join(exp_dir, model.Key)
+            out_dir = os.path.join(exp_dir, model.Name if model.Name is not None else model.Key) 
+
+            model_pkl_path = os.path.join(out_dir, "hparams.pkl")
+            
+            if not os.path.exists(model_pkl_path):
+                os.makedirs(out_dir, exist_ok=True)
+                with open(os.path.join(out_dir, "hparams.yaml"), "w") as f:
+                    for attr, value in vars(model).items():
+                        f.write(f"{attr}: {value}\n")
+                
+                # Save the model hyperparams as a pickle file
+                with open(model_pkl_path, "wb") as pkl_file:
+                    pickle.dump(model, pkl_file)
+            else:
+                with open(model_pkl_path, "rb") as pkl_file:
+                    hparams = pickle.load(pkl_file)
+                if hparams != model:
+                    raise ValueError(f"Model hyperparams mismatch: {hparams} vs {model}")
+                
 
             trainer = Trainer(
                 accelerator="gpu" if torch.cuda.is_available() else "cpu",
@@ -97,6 +119,7 @@ def main(args: Args):
                 logger=TensorBoardLogger(save_dir=out_dir),
                 deterministic="warn" # NOTE: this is important for reproducibility, otherwise the entropy decoding may fail
             )
+
             if not args.test_only:
                 trainer.fit(modelmodule, datamodule, ckpt_path="last")
             
