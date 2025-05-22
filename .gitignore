@@ -3,7 +3,6 @@ __pycache__
 test.py
 output*
 *.yaml
-dvc
 .vscode
 *.so
 build
