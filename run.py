@@ -15,8 +15,6 @@ from argparse import Namespace
 import compresslab.nn
 import compresslab.data
 from pydantic_yaml import parse_yaml_file_as
-import random
-import string
 import pickle
 import compresslab.utils.registry
 import importlib.util
@@ -65,7 +63,7 @@ def main(args: Args):
             ]
 
             if not lightning_classes:
-                raise ValueError(f"No class found in {module_file}")
+                raise ValueError(f"No class inherits from LightningModule found in {module_file}")
 
             assert len(lightning_classes) == 1, f"Multiple LightningModule classes found in {module_file}"
             LightningModule = lightning_classes[0]  # Assuming the first match is the desired class

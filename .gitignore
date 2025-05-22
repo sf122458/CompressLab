@@ -5,3 +5,6 @@ output*
 *.yaml
 dvc
 .vscode
+*.so
+build
+*.egg-info
