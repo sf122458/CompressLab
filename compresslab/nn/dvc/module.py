@@ -49,16 +49,25 @@ class VideoLightingModule(L.LightningModule):
                     torch.log(likelihoods).sum() / (-math.log(2) * N * H * W)
                     for likelihoods in out["likelihoods"].values()
                 )
+
+            bpp_mv = torch.log(out["likelihoods"]["mv"]).sum() / (-math.log(2) * N * H * W)
+            bpp_res = torch.log(out["likelihoods"]["res"]).sum() / (-math.log(2) * N * H * W)
             
             mse_loss = torch.nn.functional.mse_loss(out["recon_frame"], input_frame)
             warp_loss = torch.nn.functional.mse_loss(out["warp_frame"], input_frame)
             inter_loss = torch.nn.functional.mse_loss(out["prediction"], input_frame)
 
+            psnr=10 * torch.log10(1. / mse_loss)
+            warp_psnr=10 * torch.log10(1. / warp_loss)
+            inter_psnr=10 * torch.log10(1. / inter_loss)
+
             #TODO
-            if self.global_step < 500_000:
-                distortion_loss = mse_loss + warp_loss + inter_loss
-            else:
-                distortion_loss = mse_loss
+            # if self.global_step < 500_000:
+            #     distortion_loss = mse_loss + warp_loss + inter_loss
+            # else:
+            #     distortion_loss = mse_loss
+
+            distortion_loss = mse_loss + warp_loss + inter_loss
 
             loss = lmbda * distortion_loss + bpp_loss
             aux_loss = model_instance.aux_loss()
@@ -66,24 +75,61 @@ class VideoLightingModule(L.LightningModule):
             torch.nn.utils.clip_grad_norm_(model_instance.parameters(), 0.5)
             self.manual_backward(aux_loss)
 
+            if model_name == "codec_0" or model_name == "codec":
+                self.log_dict(dict(
+                    loss=loss,
+                    bpp=bpp_loss,
+                    bpp_mv=bpp_mv,
+                    bpp_res=bpp_res,
+                    psnr=psnr,
+                    warp_psnr=warp_psnr,
+                    inter_psnr=inter_psnr,
+                ), prog_bar=True, on_step=True, on_epoch=False, logger=False)
+
+            self.log_dict({
+                f"train/{model_name}.loss": loss,
+                f"train/{model_name}.bpp": bpp_loss,
+                f"train/{model_name}.bpp_mv": bpp_mv,
+                f"train/{model_name}.bpp_res": bpp_res,
+                f"train/{model_name}.psnr": psnr,
+                f"train/{model_name}.warp_psnr": warp_psnr,
+                f"train/{model_name}.inter_psnr": inter_psnr,
+            }, on_epoch=False, logger=True, sync_dist=True, on_step=True)
         
         optimizer.step()
 
 
-    def validation_step(self, batch, batch_idx):
-        input_frames, ref_frame, ref_bpp, ref_psnr, ref_msssim = batch
-        seqlen = input_frames.shape[1]
+    # def validation_step(self, batch, batch_idx):
+    #     input_frames, ref_frame, ref_bpp, ref_psnr, ref_msssim = batch
+    #     seqlen = input_frames.shape[1]
 
-        #TODO: logging
+    #     #TODO: logging
 
-        for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
-            for i in range(seqlen):
-                input_frame = input_frames[:, i, :, :, :]
-                out = model_instance.forward(input_frame, ref_frame)
+    #     for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
+    #         for i in range(seqlen):
+    #             input_frame = input_frames[:, i, :, :, :]
+    #             out = model_instance.forward(input_frame, ref_frame)
+
+    #             bpp_loss = \
+    #             sum(
+    #                 torch.log(likelihoods).sum() / (-math.log(2) * N * H * W)
+    #                 for likelihoods in out["likelihoods"].values()
+    #             )
+
+    #             bpp_mv = torch.log(out["likelihoods"]["mv"]).sum() / (-math.log(2) * N * H * W)
+    #             bpp_res = torch.log(out["likelihoods"]["res"]).sum() / (-math.log(2) * N * H * W)
+                
+    #             mse_loss = torch.nn.functional.mse_loss(out["recon_frame"], input_frame)
+    #             warp_loss = torch.nn.functional.mse_loss(out["warp_frame"], input_frame)
+    #             inter_loss = torch.nn.functional.mse_loss(out["prediction"], input_frame)
+
+    #             psnr=10 * torch.log10(1. / mse_loss)
+    #             warp_psnr=10 * torch.log10(1. / warp_loss)
+    #             inter_psnr=10 * torch.log10(1. / inter_loss)
 
 
-    def test_step(self, batch, batch_idx):
-        pass
+    # def test_step(self, batch, batch_idx):
+    #     pass
     
 
     def configure_optimizers(self):
