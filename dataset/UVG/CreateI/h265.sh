@@ -23,20 +23,20 @@ for input in ../videos_crop/*.yuv; do
 
 	ffmpeg -i out/h265/out.mkv -f image2 out/h265/img%06d.png
 
-    mkdir -p ${input%.*}/H265L$1/
-	ffmpeg -i out/h265/out.mkv -f image2 ${input%.*}/H265L$1/im%04d.png
+	filename=$(basename "$input" .yuv)
+	prefix="${filename%%_*}"
+	output_dir="../images/${prefix}/H265L$1"
+
+    mkdir -p $output_dir
+	ffmpeg -i out/h265/out.mkv -f image2 $output_dir/im%04d.png
     echo $input
 
-	CUDA_VISIBLE_DEVICES=0 python3 measure265.py $input $2 $3  >> result.txt
+	python3 measure265.py $input $2 $3 >> result.txt
 
-	rm -rf out/h265
+	rm -rf out
 
 	rm ffreport.log
-
-	rm -rf out/source
 
 	echo "-------------------"
 
 done
-
-python3 report.py
