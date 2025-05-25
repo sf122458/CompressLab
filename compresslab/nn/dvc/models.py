@@ -1,7 +1,7 @@
 # modify from https://github.com/binzzheng/DVC-PyTorch
 import torch
 import math
-from subnet import *
+from .subnet import *
 
 from compressai.models import CompressionModel
 from compressai.entropy_models import EntropyBottleneck, GaussianConditional
@@ -40,11 +40,6 @@ class DVC(CompressionModel):
         return prediction, warpframe
 
     def forward(self, input_image, referframe):
-        """
-        Args:
-            input_image: (B, 3, H, W)
-            referframe: (B, 3, H, W)
-        """
         estmv = self.opticFlow(input_image, referframe)
         mv_fea = self.mvEncoder(estmv)
 
@@ -58,7 +53,7 @@ class DVC(CompressionModel):
         recon_mv = self.mvDecoder(quant_mv)
 
         # \overline{x}
-        prediction, warpframe = self.motioncompensation(referframe, recon_mv)
+        prediction, warp_frame = self.motioncompensation(referframe, recon_mv)
         
         res = input_image - prediction
         res_fea = self.resEncoder(res)
@@ -77,6 +72,18 @@ class DVC(CompressionModel):
         recon_image = prediction + recon_res
 
         clipped_recon_image = recon_image.clamp(0., 1.)
+
+        return {
+            "recon_frame": clipped_recon_image,
+            "warp_frame": warp_frame,
+            "prediction": prediction,
+            "likelihoods": {
+                "mv": mv_likelihoods,
+                "mvprior": mvprior_likelihoods,
+                "res": res_likelihoods,
+                "resprior": resprior_likelihoods
+            },
+        }
 
         # distortion
         mse_loss = torch.mean((recon_image - input_image).pow(2))
