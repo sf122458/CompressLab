@@ -7,3 +7,4 @@ output*
 *.so
 build
 *.egg-info
+*.json
