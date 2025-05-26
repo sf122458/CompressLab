@@ -1,10 +1,13 @@
 import lightning as L
 from typing import Union, List
 from compressai.models import CompressionModel
+from compresslab.utils.logger import MetricLogger
 import torch, math
 import torch.nn as nn
 from copy import deepcopy
 from typing import Dict, Any
+import numpy as np
+from pytorch_msssim import ms_ssim
 
 class VideoLightingModule(L.LightningModule):
     def __init__(self,
@@ -99,37 +102,83 @@ class VideoLightingModule(L.LightningModule):
         optimizer.step()
 
 
-    # def validation_step(self, batch, batch_idx):
-    #     input_frames, ref_frame, ref_bpp, ref_psnr, ref_msssim = batch
-    #     seqlen = input_frames.shape[1]
+    def validation_step(self, batch, batch_idx):
+        for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
 
-    #     #TODO: logging
+            input_frames, ref_frame, ref_bpp, ref_psnr, ref_msssim = batch
+            seqlen = input_frames.shape[1]
 
-    #     for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
-    #         for i in range(seqlen):
-    #             input_frame = input_frames[:, i, :, :, :]
-    #             out = model_instance.forward(input_frame, ref_frame)
+            avg_bpp = ref_bpp
+            avg_psnr = ref_psnr
+            avg_msssim = ref_msssim
 
-    #             bpp_loss = \
-    #             sum(
-    #                 torch.log(likelihoods).sum() / (-math.log(2) * N * H * W)
-    #                 for likelihoods in out["likelihoods"].values()
-    #             )
+            for i in range(seqlen):
+                input_frame = input_frames[:, i, :, :, :]
+                with self.metric.timer(model_name, "time_compress") as timer:
+                    out_compress = model_instance.compress(input_frame, ref_frame)
 
-    #             bpp_mv = torch.log(out["likelihoods"]["mv"]).sum() / (-math.log(2) * N * H * W)
-    #             bpp_res = torch.log(out["likelihoods"]["res"]).sum() / (-math.log(2) * N * H * W)
-                
-    #             mse_loss = torch.nn.functional.mse_loss(out["recon_frame"], input_frame)
-    #             warp_loss = torch.nn.functional.mse_loss(out["warp_frame"], input_frame)
-    #             inter_loss = torch.nn.functional.mse_loss(out["prediction"], input_frame)
+                with self.metric.timer(model_name, "time_decompress") as timer:
+                    out_decompress = model_instance.decompress(ref_frame, out_compress["strings"], out_compress["shape"])
 
-    #             psnr=10 * torch.log10(1. / mse_loss)
-    #             warp_psnr=10 * torch.log10(1. / warp_loss)
-    #             inter_psnr=10 * torch.log10(1. / inter_loss)
+                recon_frame = out_decompress["recon_frame"]
+
+                bpp = sum(len(strings[0]) for strings in out_compress["strings"]) / np.prod(input_frame.shape[-2:]) * 8
+                mse_loss = torch.nn.functional.mse_loss(recon_frame, input_frame)
+                psnr = 10 * torch.log10(1. / mse_loss).item()
+                ms_ssim_loss = ms_ssim(recon_frame, input_frame, data_range=1).item()
+
+                avg_bpp += bpp
+                avg_psnr += psnr
+                avg_msssim += ms_ssim_loss
+
+                ref_frame = recon_frame
+
+            self.log_dict({
+                f"val/{model_name}.bpp": avg_bpp / (seqlen + 1),
+                f"val/{model_name}.psnr": avg_psnr / (seqlen + 1),
+                f"val/{model_name}.ms-ssim": avg_msssim / (seqlen + 1),
+            }, on_step=False, on_epoch=True, logger=True, sync_dist=True)
+
+    def on_test_start(self):
+        self.metric = MetricLogger(save_dir=self.trainer.default_root_dir)
+        for model_name, model_instance in self.model_wrapper.items():
+            model_instance.update()
 
 
-    # def test_step(self, batch, batch_idx):
-    #     pass
+    def test_step(self, batch, batch_idx):
+        for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
+            input_frames, ref_frame, ref_bpp, ref_psnr, ref_msssim = batch
+            seqlen = input_frames.shape[1]
+
+            self.metric.log(model_name, {
+                "bpp": ref_bpp,
+                "psnr": ref_psnr,
+                "ms-ssim": ref_msssim,
+            })
+
+            for i in range(seqlen):
+                input_frame = input_frames[:, i, :, :, :]
+                with self.metric.timer(model_name, "time_compress") as timer:
+                    out_compress = model_instance.compress(input_frame, ref_frame)
+
+                with self.metric.timer(model_name, "time_decompress") as timer:
+                    out_decompress = model_instance.decompress(ref_frame, out_compress["strings"], out_compress["shape"])
+
+                recon_frame = out_decompress["recon_frame"]
+
+                bpp = sum(len(strings[0]) for strings in out_compress["strings"]) / np.prod(input_frame.shape[-2:]) * 8
+                mse_loss = torch.nn.functional.mse_loss(recon_frame, input_frame)
+                psnr = 10 * torch.log10(1. / mse_loss).item()
+                ms_ssim_loss = ms_ssim(recon_frame, input_frame, data_range=1).item()
+
+                ref_frame = recon_frame
+
+                self.metric.log(model_name,{
+                    "bpp": bpp,
+                    "psnr": psnr,
+                    "ms-ssim": ms_ssim_loss,
+                })
+
     
 
     def configure_optimizers(self):

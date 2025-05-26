@@ -184,5 +184,5 @@ class DVC(CompressionModel):
         
         recon_frame = prediction + recon_res
         recon_frame = recon_frame.clamp(0., 1.)
-        return {"x_hat": recon_frame}
+        return {"recon_frame": recon_frame}
     
