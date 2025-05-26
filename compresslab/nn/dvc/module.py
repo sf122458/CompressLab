@@ -101,6 +101,9 @@ class VideoLightingModule(L.LightningModule):
         
         optimizer.step()
 
+    def on_validation_start(self):
+        for model_name, model_instance in self.model_wrapper.items():
+            model_instance.update()
 
     def validation_step(self, batch, batch_idx):
         for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
@@ -114,11 +117,9 @@ class VideoLightingModule(L.LightningModule):
 
             for i in range(seqlen):
                 input_frame = input_frames[:, i, :, :, :]
-                with self.metric.timer(model_name, "time_compress") as timer:
-                    out_compress = model_instance.compress(input_frame, ref_frame)
+                out_compress = model_instance.compress(input_frame, ref_frame)
 
-                with self.metric.timer(model_name, "time_decompress") as timer:
-                    out_decompress = model_instance.decompress(ref_frame, out_compress["strings"], out_compress["shape"])
+                out_decompress = model_instance.decompress(ref_frame, out_compress["strings"], out_compress["shape"])
 
                 recon_frame = out_decompress["recon_frame"]
 
@@ -178,6 +179,9 @@ class VideoLightingModule(L.LightningModule):
                     "psnr": psnr,
                     "ms-ssim": ms_ssim_loss,
                 })
+
+    def on_test_end(self):
+        self.metric.save()
 
     
 
