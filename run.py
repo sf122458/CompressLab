@@ -65,8 +65,11 @@ def main(args: Args):
             if not lightning_classes:
                 raise ValueError(f"No class inherits from LightningModule found in {module_file}")
 
-            assert len(lightning_classes) == 1, f"Multiple LightningModule classes found in {module_file}"
-            LightningModule = lightning_classes[0]  # Assuming the first match is the desired class
+            if not hasattr(compressmodel, "trainer_cls"):
+                assert len(lightning_classes) == 1, f"The model doesn't have an annotation about its trainer, but multiple trainers found in {module_file}"
+                LightningModule = lightning_classes[0]  # Assuming the first match is the desired class
+            else:
+                LightningModule = getattr(module, compressmodel.trainer_cls)
             
             modelmodule = LightningModule(compressmodel, ext_params=model.ExtParams)
 
