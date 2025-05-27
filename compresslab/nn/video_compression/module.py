@@ -6,7 +6,7 @@ import math
 import torch.nn as nn
 import numpy as np
 from copy import deepcopy
-from compresslab.nn.video_compression.utils import RateDistortionLoss
+from compresslab.nn.video_compression.compressai_impl.utils import RateDistortionLoss
 
 class CompressAILightningModule(L.LightningModule):
     def __init__(self, 

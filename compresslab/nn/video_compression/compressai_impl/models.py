@@ -15,7 +15,9 @@ from compressai.ops import quantize_ste
 from compressai.models.base import CompressionModel
 from compressai.models.utils import conv, deconv, gaussian_blur, gaussian_kernel2d, meshgrid2d
 
+from compresslab.utils.anno import Trainer
 
+@Trainer("CompressAILightningModule")
 class ScaleSpaceFlow(CompressionModel):
     r"""Google's first end-to-end optimized video compression from E.
     Agustsson, D. Minnen, N. Johnston, J. Balle, S. J. Hwang, G. Toderici: `"Scale-space flow for end-to-end

@@ -10,8 +10,7 @@ from compressai.models import EntropyBottleneck
 from compressai.ans import BufferedRansEncoder, RansDecoder
 from .utils.func import update_registered_buffers, get_scale_table
 from .utils.ckbd import *
-from .modules.transform import *
-
+from .transform import *
 
 class MLICPlusPlus(CompressionModel):
     def __init__(self, N=192, M=320, slice_num=10, context_window=5, **kwargs):
