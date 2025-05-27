@@ -7,7 +7,9 @@ from compressai.models import CompressionModel
 from compressai.entropy_models import EntropyBottleneck, GaussianConditional
 from compressai.models.utils import update_registered_buffers
 
+from compresslab.utils.anno import Trainer
 
+@Trainer("DVCLightingModule")
 class DVC(CompressionModel):
     def __init__(self, 
                  out_channel_N=64, 

@@ -1,4 +1,4 @@
-from .models import ScaleSpaceFlow
+from .compressai_impl.models import ScaleSpaceFlow
 from compresslab.utils.registry import ModelRegistry
 
 for model in [

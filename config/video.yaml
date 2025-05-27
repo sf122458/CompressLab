@@ -3,12 +3,13 @@ Global:
 
 Model:
   - Key: ScaleSpaceFlow
-    Lmbda: *lmbda
+    ExtParams:
+      lmbda: *lmbda
 
 Data:
-  Key: VideoDataModule
+  Key: CompressAIVideoDataModule
   Params:
-    root: data/vimeo90k
+    root: data/vimeo_setuplet
     batch_size: 4
 
 Train:
@@ -16,4 +17,4 @@ Train:
   Valinterval: 5
 
 Env:
-  Devices: [0,1,2,3]
+  Devices: [0]
