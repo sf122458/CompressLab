@@ -31,7 +31,7 @@ class BasicImageDataset(Dataset):
         image = self.transform(image)
         return image
 
-@DataRegistry.register("BasicImageDataModule")
+@DataRegistry.register("BasicImageDataModule", define_path=__file__)
 class BasicImageDataModule(L.LightningDataModule):
     def __init__(self, train_data_dir: str, test_data_dir: str, batch_size: int = 32, num_workers: int = 4):
         super().__init__()
@@ -142,7 +142,7 @@ class Vimeo90kDataset(Dataset):
         list_suffix = {"train": "trainlist", "valid": "testlist"}[split]
         return f"{tuplet_prefix}_{list_suffix}.txt"
     
-@DataRegistry.register("Vimeo90kDataModule")
+@DataRegistry.register("Vimeo90kDataModule", define_path=__file__)
 class Vimeo90kDataModule(L.LightningDataModule):
     def __init__(self, root: str, batch_size: int = 32, num_workers: int = 4):
         super().__init__()

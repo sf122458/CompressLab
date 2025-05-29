@@ -1,7 +1,7 @@
 # modify from https://github.com/binzzheng/DVC-PyTorch
 import torch
 import math
-from .subnet import *
+from compresslab.nn.video_compression.dvc.subnet import *
 
 from compressai.models import CompressionModel
 from compressai.entropy_models import EntropyBottleneck, GaussianConditional
@@ -49,43 +49,23 @@ class DVC(CompressionModel):
         quant_mvprior, mvprior_likelihoods = self.entropy_hyper_mv(mv_prior)
         recon_mv_sigma = self.mvpriorDecoder(quant_mvprior)
 
-        quant_mv = self.entropy_bottleneck_mv.quantize(
-                mv_fea, "noise" if self.training else "dequantize")
-        _, mv_likelihoods = self.entropy_bottleneck_mv(mv_fea, recon_mv_sigma)
+        quant_mv, mv_likelihoods = self.entropy_bottleneck_mv(mv_fea, recon_mv_sigma)
         recon_mv = self.mvDecoder(quant_mv)
 
-        # \overline{x}
         prediction, warp_frame = self.motioncompensation(referframe, recon_mv)
         
         res = input_image - prediction
         res_fea = self.resEncoder(res)
-
-        batch_size = res_fea.size()[0]
-
         res_prior = self.respriorEncoder(res_fea)
         quant_resprior, resprior_likelihoods = self.entropy_hyper_res(res_prior)
         recon_res_sigma = self.respriorDecoder(quant_resprior)
 
-        quant_res = self.entropy_bottleneck_res.quantize(
-            res_fea, "noise" if self.training else "dequantize")
-        _, res_likelihoods = self.entropy_bottleneck_res(res_fea, recon_res_sigma)
+        quant_res, res_likelihoods = self.entropy_bottleneck_res(res_fea, recon_res_sigma)
 
         recon_res = self.resDecoder(quant_res)
         recon_image = prediction + recon_res
 
         clipped_recon_image = recon_image.clamp(0., 1.)
-
-        # return {
-        #     "recon_frame": clipped_recon_image,
-        #     "warp_frame": warp_frame,
-        #     "prediction": prediction,
-        #     "likelihoods": {
-        #         "mv": mv_likelihoods,
-        #         "mvprior": mvprior_likelihoods,
-        #         "res": res_likelihoods,
-        #         "resprior": resprior_likelihoods
-        #     },
-        # }
 
         return {
             "recon_frame": clipped_recon_image,

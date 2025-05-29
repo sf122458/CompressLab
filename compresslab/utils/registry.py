@@ -79,7 +79,7 @@ class Registry(Generic[T]):
         cls._map: Dict[str, T] = dict()
 
     @classmethod
-    def register(cls, key):
+    def register(cls, key, define_path = None):
         """Decorator for register anything into registry.
 
         Args:
@@ -87,7 +87,7 @@ class Registry(Generic[T]):
         """
         if isinstance(key, str):
             def insert(value):
-                cls._map[key] = {"cls": value, "path": inspect.stack()[1].filename}
+                cls._map[key] = {"cls": value, "register_path": inspect.stack()[1].filename, "define_path": define_path}
             return insert
         else:
             cls._map[key.__name__] = key
@@ -116,12 +116,12 @@ class Registry(Generic[T]):
         table = Table(title=cls.__name__)
 
         table.add_column("Name", justify="left", style="cyan", no_wrap=True)
-        table.add_column("Registered Path", justify="left", style="green")
+        table.add_column("Definition Path", justify="left", style="green")
 
         for k, v in cls._map.items():
             table.add_row(
                 k,
-                v['path'],
+                v['define_path'],
             )
 
         console = Console()

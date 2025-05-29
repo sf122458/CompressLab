@@ -3,7 +3,6 @@ from compressai.entropy_models import EntropyBottleneck, GaussianConditional
 from compressai.models.utils import conv, deconv
 from compressai.layers import GDN, MaskedConv2d, conv1x1, conv3x3, ResidualBlock, ResidualBlockWithStride, ResidualBlockUpsample, subpel_conv3x3, AttentionBlock
 from compressai.latent_codecs import (
-    LatentCodec,
     ChannelGroupsLatentCodec,
     CheckerboardLatentCodec,
     GaussianConditionalLatentCodec,
@@ -23,6 +22,8 @@ from compressai.layers import (
     subpel_conv3x3,
 )
 from compressai.ans import BufferedRansEncoder, RansDecoder
+from compressai.models import SimpleVAECompressionModel
+from compressai.models.sensetime import ResidualBottleneckBlock
 import torch.nn as nn
 import torch
 import warnings
@@ -698,83 +699,6 @@ class Cheng2020Attention(Cheng2020Anchor):
             subpel_conv3x3(N, 3, 2),
         )
 
-class SimpleVAECompressionModel(CompressionModel):
-    """Simple VAE model with arbitrary latent codec.
-
-    .. code-block:: none
-
-               ┌───┐  y  ┌────┐ y_hat ┌───┐
-        x ──►──┤g_a├──►──┤ lc ├───►───┤g_s├──►── x_hat
-               └───┘     └────┘       └───┘
-    """
-
-    g_a: nn.Module
-    g_s: nn.Module
-    latent_codec: LatentCodec
-
-    def __getitem__(self, key: str) -> LatentCodec:
-        return self.latent_codec[key]
-
-    def forward(self, x):
-        y = self.g_a(x)
-        y_out = self.latent_codec(y)
-        y_hat = y_out["y_hat"]
-        x_hat = self.g_s(y_hat)
-        return {
-            "x_hat": x_hat,
-            "likelihoods": y_out["likelihoods"],
-        }
-
-    def compress(self, x):
-        y = self.g_a(x)
-        outputs = self.latent_codec.compress(y)
-        return outputs
-
-    def decompress(self, *args, **kwargs):
-        y_out = self.latent_codec.decompress(*args, **kwargs)
-        y_hat = y_out["y_hat"]
-        x_hat = self.g_s(y_hat).clamp_(0, 1)
-        return {
-            "x_hat": x_hat,
-        }
-
-class ResidualBottleneckBlock(nn.Module):
-    """Residual bottleneck block.
-
-    Introduced by [He2016], this block sandwiches a 3x3 convolution
-    between two 1x1 convolutions which reduce and then restore the
-    number of channels. This reduces the number of parameters required.
-
-    [He2016]: `"Deep Residual Learning for Image Recognition"
-    <https://arxiv.org/abs/1512.03385>`_, by Kaiming He, Xiangyu Zhang,
-    Shaoqing Ren, and Jian Sun, CVPR 2016.
-
-    Args:
-        in_ch (int): Number of input channels
-        out_ch (int): Number of output channels
-    """
-
-    def __init__(self, in_ch: int, out_ch: int):
-        super().__init__()
-        mid_ch = min(in_ch, out_ch) // 2
-        self.conv1 = conv1x1(in_ch, mid_ch)
-        self.relu1 = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(mid_ch, mid_ch)
-        self.relu2 = nn.ReLU(inplace=True)
-        self.conv3 = conv1x1(mid_ch, out_ch)
-        self.skip = conv1x1(in_ch, out_ch) if in_ch != out_ch else nn.Identity()
-
-    def forward(self, x: Tensor) -> Tensor:
-        identity = self.skip(x)
-
-        out = x
-        out = self.conv1(out)
-        out = self.relu1(out)
-        out = self.conv2(out)
-        out = self.relu2(out)
-        out = self.conv3(out)
-
-        return out + identity
 
 class Cheng2020AnchorCheckerboard(SimpleVAECompressionModel):
     """Cheng2020 anchor model with checkerboard context model.

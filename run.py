@@ -47,7 +47,7 @@ def main(args: Args):
             else:
                 compressmodel = ModelRegistry.get(model.Key)(**model.Params)
 
-            model_path = Path(getattr(compresslab.utils.registry, "ModelRegistry")._map.get(model.Key)["path"])
+            model_path = Path(getattr(compresslab.utils.registry, "ModelRegistry")._map.get(model.Key)["register_path"])
 
             module_file = model_path.parent / "module.py"
             if not module_file.exists():

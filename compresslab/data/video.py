@@ -353,7 +353,7 @@ class HEVCDataset(Dataset):
 
 
 
-@DataRegistry.register("CompressAIVideoDataModule")
+@DataRegistry.register("CompressAIVideoDataModule", define_path=__file__)
 class CompressAIVideoDataModule(L.LightningDataModule):
     def __init__(self,
                  root: str,
@@ -405,7 +405,7 @@ class CompressAIVideoDataModule(L.LightningDataModule):
                           num_workers=self.num_workers)
     
 
-@DataRegistry.register("DVCDataModule")
+@DataRegistry.register("DVCDataModule", define_path=__file__)
 class DVCDataModule(L.LightningDataModule):
     def __init__(self,
                  train_data_dir: str = "data/vimeo_setuplet/sequences/",
