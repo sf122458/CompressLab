@@ -186,59 +186,61 @@ class UVGDataset(Dataset):
     """Dataset for UVG sequences. Usually used for evaluation.
     """
     def __init__(self, root: str,
-                 lmbda: int = 1024,
-                 test_full: bool = False):
+                 test_full: bool = False
+                 ):
 
         folders = ["Beauty", "Bosphorus", "HoneyBee", "Jockey", "ReadySteadyGo", "ShakeNDry", "YachtRide"]
 
         self.ref = []
         self.refbpp = []
         self.input = []
-        self.hevcclass = []
 
         self.transform = transforms.ToTensor()
 
-        assert lmbda in [256, 512, 1024, 2048], "lmbda must be one of [256, 512, 1024, 2048]"
+        lmbda_list = [256, 512, 1024, 2048]
+        lmbda_to_refdir = {
+            2048: 'H265L20',
+            1024: 'H265L23',
+            512: 'H265L26',
+            256: 'H265L29'}
 
-        if lmbda == 2048:
-            refdir = 'H265L20'
-        elif lmbda == 1024:
-            refdir = 'H265L23'
-        elif lmbda == 512:
-            refdir = 'H265L26'
-        elif lmbda == 256:
-            refdir = 'H265L29'
+        self.ref = {lmbda: [] for lmbda in lmbda_list}
+        self.refbpp = {lmbda: [] for lmbda in lmbda_list}
+        self.input = {lmbda: [] for lmbda in lmbda_list}
 
-        intra_frame_bpp = self.getbpp(refdir)
+        self.transform = transforms.ToTensor()
 
-        for idx, folder in enumerate(folders):
-            seqIbpp = intra_frame_bpp[idx]
-            img_list = os.listdir(os.path.join(root, folder))
+        for lmbda in lmbda_list:
+            refdir = lmbda_to_refdir[lmbda]
+            intra_frame_bpp = self.getbpp(refdir)
 
-            cnt = 0
-            for img in img_list:
-                if img[-4:] == '.png':
-                    cnt += 1
-            
-            if test_full:
-                framerange = cnt // 12
-            else:
-                framerange = 1
-            
-            for i in range(framerange):
-                refpath = os.path.join(root, folder, refdir, "im" + str(i * 12 + 1).zfill(4) + ".png")
-                inputpath = []
-                for j in range(12):
-                    inputpath.append(os.path.join(root, folder, "im" + str(i * 12 + j + 1).zfill(3) + ".png"))
+            for idx, folder in enumerate(folders):
+                seqIbpp = intra_frame_bpp[idx]
+                img_list = os.listdir(os.path.join(root, folder))
+
+                cnt = 0
+                for img in img_list:
+                    if img[-4:] == '.png':
+                        cnt += 1
                 
-                self.ref.append(refpath)
-                self.refbpp.append(seqIbpp)
-                self.input.append(inputpath)
+                if test_full:
+                    framerange = cnt // 12
+                else:
+                    framerange = 1
+                
+                for i in range(framerange):
+                    refpath = os.path.join(root, folder, refdir, "im" + str(i * 12 + 1).zfill(4) + ".png")
+                    inputpath = []
+                    for j in range(12):
+                        inputpath.append(os.path.join(root, folder, "im" + str(i * 12 + j + 1).zfill(3) + ".png"))
+                    
+                    self.ref[lmbda].append(refpath)
+                    self.refbpp[lmbda].append(seqIbpp)
+                    self.input[lmbda].append(inputpath)
             
     def getbpp(self, ref_i_folder):
         Ibpp = None
         if ref_i_folder == 'H265L20':
-            print('use H265L20')
             Ibpp = [1.2929020996093752,
                     0.6758680826822915,
                     0.94005859375,
@@ -247,7 +249,6 @@ class UVGDataset(Dataset):
                     0.8640651041666668,
                     0.6924034016927084]
         elif ref_i_folder == 'H265L23':
-            print('use H265L23')
             Ibpp = [0.7243849283854167,
                     0.471212158203125,
                     0.5672164713541666,
@@ -256,7 +257,6 @@ class UVGDataset(Dataset):
                     0.5805125325520833,
                     0.5005953776041667]
         elif ref_i_folder == 'H265L26':
-            print('use H265L26')
             Ibpp = [0.3411645507812501,
                     0.3319017740885417,
                     0.36831477864583334,
@@ -265,7 +265,6 @@ class UVGDataset(Dataset):
                     0.40312744140625,
                     0.36251399739583334]
         elif ref_i_folder == 'H265L29':
-            print('use H265L29')
             Ibpp = [0.14195882161458334,
                     0.23096484374999998,
                     0.259547607421875,
@@ -280,29 +279,32 @@ class UVGDataset(Dataset):
         return Ibpp
     
     def __len__(self):
-        return len(self.input)
+        return len(self.input[next(iter(self.input))])
     
     def __getitem__(self, index):
-        ref_image = Image.open(self.ref[index])
-        ref_image = self.transform(ref_image)
-        h, w = ref_image.shape[1], ref_image.shape[2]
+        ref_image = {k:Image.open(self.ref[k][index]) for k in self.ref.keys()}
+        ref_image = {k:self.transform(ref_image[k]) for k in ref_image.keys()}
+        h, w = ref_image[next(iter(ref_image))].shape[1], ref_image[next(iter(ref_image))].shape[2]
         h, w = h // 64 * 64, w // 64 * 64
-        ref_image = F.center_crop(ref_image, (h, w))
-        input_images = []
-        ref_psnr = None
-        ref_msssim = None
-        for filename in self.input[index]:
-            input_image = Image.open(filename)
-            input_image = self.transform(input_image)
-            input_image = F.center_crop(input_image, (h, w))
+        ref_image = {k:F.center_crop(ref_image[k], (h, w)) for k in ref_image.keys()}
+        input_images = {k:[] for k in self.input.keys()}
+        ref_psnr = {k:None for k in self.input.keys()}
+        ref_msssim = {k:None for k in self.input.keys()}
+        for lmbda in self.input.keys():
+            for filename in self.input[lmbda][index]:
+                input_image = Image.open(filename)
+                input_image = self.transform(input_image)
+                input_image = F.center_crop(input_image, (h, w))
 
-            if ref_psnr is None:
-                ref_psnr = 10 * torch.log10(1 / ((ref_image - input_image) ** 2).mean()).item()
-                ref_msssim = ms_ssim(ref_image.unsqueeze(0), input_image.unsqueeze(0), data_range=1.0).item()
-            else:
-                input_images.append(input_image)
-
-        return torch.stack(input_images), ref_image, self.refbpp[index], ref_psnr, ref_msssim
+                if ref_psnr[lmbda] is None:
+                    ref_psnr[lmbda] = 10 * torch.log10(1 / ((ref_image[lmbda] - input_image) ** 2).mean()).item()
+                    ref_msssim[lmbda] = ms_ssim(ref_image[lmbda].unsqueeze(0), input_image.unsqueeze(0), data_range=1.0).item()
+                else:
+                    input_images[lmbda].append(input_image)
+        input_images = {k:torch.stack(input_images[k]) for k in input_images.keys()}
+        ref_image = {k:ref_image[k].unsqueeze(0) for k in ref_image.keys()}
+        ref_bpp = {k:self.refbpp[k][index] for k in self.refbpp.keys()}
+        return input_images, ref_image, ref_bpp, ref_psnr, ref_msssim
 
 #TODO
 class HEVCDataset(Dataset):
@@ -410,21 +412,21 @@ class DVCDataModule(L.LightningDataModule):
                  batch_size: int = 32,
                  num_workers: int = 4,
                  test_data_dir: str = "data/UVG/images/",
-                 lmbda: int = 1024,
                  size: int = 256):
         super().__init__()
         self.train_data_dir = train_data_dir
         self.test_data_dir = test_data_dir
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.test_lmbda = lmbda
         self.size = size
 
     def setup(self, stage=None):
         self.train_dataset = Vimeo90kDataset(rootdir=self.train_data_dir, size=self.size)
-        self.test_dataset = UVGDataset(root=self.test_data_dir, 
-                                       lmbda=self.test_lmbda,
+        self.val_dataset = UVGDataset(root=self.test_data_dir,
                                        test_full=False)
+        self.test_dataset = UVGDataset(root=self.test_data_dir,
+                                       test_full=True)
+        
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset, 
@@ -433,7 +435,7 @@ class DVCDataModule(L.LightningDataModule):
                           num_workers=self.num_workers)
     
     def val_dataloader(self):
-        return DataLoader(self.test_dataset, 
+        return DataLoader(self.val_dataset, 
                           batch_size=1,
                           shuffle=False,
                           num_workers=self.num_workers)
