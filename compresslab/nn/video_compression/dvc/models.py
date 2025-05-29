@@ -75,33 +75,30 @@ class DVC(CompressionModel):
 
         clipped_recon_image = recon_image.clamp(0., 1.)
 
+        # return {
+        #     "recon_frame": clipped_recon_image,
+        #     "warp_frame": warp_frame,
+        #     "prediction": prediction,
+        #     "likelihoods": {
+        #         "mv": mv_likelihoods,
+        #         "mvprior": mvprior_likelihoods,
+        #         "res": res_likelihoods,
+        #         "resprior": resprior_likelihoods
+        #     },
+        # }
+
         return {
             "recon_frame": clipped_recon_image,
             "warp_frame": warp_frame,
             "prediction": prediction,
             "likelihoods": {
-                "mv": mv_likelihoods,
-                "mvprior": mvprior_likelihoods,
-                "res": res_likelihoods,
-                "resprior": resprior_likelihoods
+                "y_mv": mv_likelihoods,
+                "z_mv": mvprior_likelihoods,
+                "y": res_likelihoods,
+                "z": resprior_likelihoods
             },
         }
-
-        # distortion
-        mse_loss = torch.mean((recon_image - input_image).pow(2))
-        warploss = torch.mean((warpframe - input_image).pow(2))
-        interloss = torch.mean((prediction - input_image).pow(2))
-
-        im_shape = input_image.size()
-
-        bpp_mv = torch.log(mv_likelihoods).sum() / (-math.log(2) * batch_size * im_shape[2] * im_shape[3])
-        bpp_mvprior = torch.log(mvprior_likelihoods).sum() / (-math.log(2) * batch_size * im_shape[2] * im_shape[3])
-        bpp_res = torch.log(res_likelihoods).sum() / (-math.log(2) * batch_size * im_shape[2] * im_shape[3])
-        bpp_resprior = torch.log(resprior_likelihoods).sum() / (-math.log(2) * batch_size * im_shape[2] * im_shape[3])
-        bpp = bpp_mv + bpp_mvprior + bpp_res + bpp_resprior
-
-        return clipped_recon_image, mse_loss, warploss, interloss, bpp_res, bpp_resprior, bpp_mv, bpp
-     
+    
     def load_state_dict(self, state_dict):
         update_registered_buffers(
             self.entropy_hyper_res,

@@ -8,8 +8,12 @@ import numpy as np
 from copy import deepcopy
 from compresslab.nn.video_compression.compressai_impl.utils import RateDistortionLoss
 from typing import Dict, Any
+from pytorch_msssim import ms_ssim
 
 class DVCLightingModule(L.LightningModule):
+    """
+    Support models similar to DVC, which contain motion codecs and residual/contextual codecs.
+    """
     def __init__(self,
                  model: CompressionModel,
                  ext_params: Dict[str, Any] = {}
@@ -36,10 +40,17 @@ class DVCLightingModule(L.LightningModule):
         else:
             self.lmbda = [self.lmbda]
             self.model_wrapper["codec"] = model
+    
+    def on_train_batch_start(self, batch, batch_idx):
+        if self.global_step == self.lr_decay_interval:
+            for optimizer in self.optimizers():
+                for param_group in optimizer.param_groups:
+                    param_group["lr"] *= self.lr_decay
 
     def training_step(self, batch, batch_idx):
-        optimizer = self.optimizers()
+        optimizer, aux_optimizer = self.optimizers()
         optimizer.zero_grad()
+        aux_optimizer.zero_grad()
 
         input_frame, ref_frame = batch
         N, _, H, W = input_frame.shape
@@ -47,30 +58,19 @@ class DVCLightingModule(L.LightningModule):
         for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
             out = model_instance.forward(input_frame, ref_frame)
 
-            bpp_loss = \
-                sum(
-                    torch.log(likelihoods).sum() / (-math.log(2) * N * H * W)
-                    for likelihoods in out["likelihoods"].values()
-                )
+            bpp_mv_y = torch.log(out["likelihoods"]["y_mv"]).sum() / (-math.log(2) * N * H * W)
+            bpp_y = torch.log(out["likelihoods"]["y"]).sum() / (-math.log(2) * N * H * W)
+            bpp_mv_z = torch.log(out["likelihoods"]["z_mv"]).sum() / (-math.log(2) * N * H * W)
+            bpp_z = torch.log(out["likelihoods"]["z"]).sum() / (-math.log(2) * N * H * W)
 
-            bpp_mv = torch.log(out["likelihoods"]["mv"]).sum() / (-math.log(2) * N * H * W)
-            bpp_res = torch.log(out["likelihoods"]["res"]).sum() / (-math.log(2) * N * H * W)
+            bpp_loss = bpp_mv_z + bpp_mv_y + bpp_z + bpp_y
             
             mse_loss = torch.nn.functional.mse_loss(out["recon_frame"], input_frame)
-            warp_loss = torch.nn.functional.mse_loss(out["warp_frame"], input_frame)
-            inter_loss = torch.nn.functional.mse_loss(out["prediction"], input_frame)
 
-            psnr=10 * torch.log10(1. / mse_loss)
-            warp_psnr=10 * torch.log10(1. / warp_loss)
-            inter_psnr=10 * torch.log10(1. / inter_loss)
+            psnr = 10 * torch.log10(1. / mse_loss)
 
             #TODO
-            # if self.global_step < 500_000:
-            #     distortion_loss = mse_loss + warp_loss + inter_loss
-            # else:
-            #     distortion_loss = mse_loss
-
-            distortion_loss = mse_loss + warp_loss + inter_loss
+            distortion_loss = mse_loss
 
             loss = lmbda * distortion_loss + bpp_loss
             aux_loss = model_instance.aux_loss()
@@ -82,24 +82,23 @@ class DVCLightingModule(L.LightningModule):
                 self.log_dict(dict(
                     loss=loss,
                     bpp=bpp_loss,
-                    bpp_mv=bpp_mv,
-                    bpp_res=bpp_res,
+                    bpp_mv_y=bpp_mv_y,
+                    bpp_y=bpp_y,
                     psnr=psnr,
-                    warp_psnr=warp_psnr,
-                    inter_psnr=inter_psnr,
                 ), prog_bar=True, on_step=True, on_epoch=False, logger=False)
 
             self.log_dict({
                 f"train/{model_name}.loss": loss,
                 f"train/{model_name}.bpp": bpp_loss,
-                f"train/{model_name}.bpp_mv": bpp_mv,
-                f"train/{model_name}.bpp_res": bpp_res,
+                f"train/{model_name}.bpp_mv_y": bpp_mv_y,
+                f"train/{model_name}.bpp_mv_z": bpp_mv_z,
+                f"train/{model_name}.bpp_y": bpp_y,
+                f"train/{model_name}.bpp_z": bpp_z,
                 f"train/{model_name}.psnr": psnr,
-                f"train/{model_name}.warp_psnr": warp_psnr,
-                f"train/{model_name}.inter_psnr": inter_psnr,
             }, on_epoch=False, logger=True, sync_dist=True, on_step=True)
         
         optimizer.step()
+        aux_optimizer.step()
 
     def on_validation_start(self):
         for model_name, model_instance in self.model_wrapper.items():
@@ -183,34 +182,31 @@ class DVCLightingModule(L.LightningModule):
     def on_test_end(self):
         self.metric.save()
 
-    
-
     def configure_optimizers(self):
         parameters = []
         aux_parameters = []
         for model_name, model_instance in self.model_wrapper.items():
             parameters += [p for n, p in model_instance.named_parameters() if p.requires_grad and not n.endswith(".quantiles")]
             aux_parameters += [p for n, p in model_instance.named_parameters() if p.requires_grad and n.endswith(".quantiles")]
-        optimizer = torch.optim.Adam(
-            [{
-                "params": parameters,
-                "lr": self.lr
-            },
-            {
-                "params": aux_parameters,
-                "lr": 1e-3
-            }])
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=self.lr_decay_interval, gamma=self.lr_decay)
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-                "interval": "step",
-                "frequency": 1
-            }
-        }
+        optimizer = torch.optim.Adam(parameters, lr=self.lr)
+        aux_optimizer = torch.optim.Adam(aux_parameters, lr=self.lr)
+        # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=self.lr_decay_interval, gamma=self.lr_decay)
+        # return {
+        #     "optimizer": [optimizer, aux_optimizer],
+        #     "lr_scheduler": {
+        #         "scheduler": scheduler,
+        #         "interval": "step",
+        #         "frequency": 1
+        #     }
+        # }
+
+        return optimizer, aux_optimizer
 
 class CompressAILightningModule(L.LightningModule):
+    """
+    In CompressAI implementation, the models contain a image codec to compress the I frame, 
+    and a video frame codec to compress the P frame, which is different from the training stategy of DVC.
+    """
     def __init__(self, 
                  model: CompressionModel,
                  ext_params: Dict[str, Any] = {}):
