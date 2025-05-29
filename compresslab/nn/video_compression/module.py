@@ -107,12 +107,15 @@ class DVCLightingModule(L.LightningModule):
     def validation_step(self, batch, batch_idx):
         for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
 
-            input_frames, ref_frame, ref_bpp, ref_psnr, ref_msssim = batch
+            input_frames_dict, ref_frame_dict, ref_bpp_dict, ref_psnr_dict, ref_msssim_dict = batch
+
+            input_frames = input_frames_dict[lmbda]
+            ref_frame = ref_frame_dict[lmbda].squeeze(0)
             seqlen = input_frames.shape[1]
 
-            avg_bpp = ref_bpp
-            avg_psnr = ref_psnr
-            avg_msssim = ref_msssim
+            avg_bpp = ref_bpp_dict[lmbda]
+            avg_psnr = ref_psnr_dict[lmbda]
+            avg_msssim = ref_msssim_dict[lmbda]
 
             for i in range(seqlen):
                 input_frame = input_frames[:, i, :, :, :]
@@ -139,15 +142,20 @@ class DVCLightingModule(L.LightningModule):
                 f"val/{model_name}.ms-ssim": avg_msssim / (seqlen + 1),
             }, on_step=False, on_epoch=True, logger=True, sync_dist=True)
 
+
     def on_test_start(self):
         self.metric = MetricLogger(save_dir=self.trainer.default_root_dir)
         for model_name, model_instance in self.model_wrapper.items():
             model_instance.update()
 
-
     def test_step(self, batch, batch_idx):
         for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
-            input_frames, ref_frame, ref_bpp, ref_psnr, ref_msssim = batch
+            input_frames_dict, ref_frame_dict, ref_bpp_dict, ref_psnr_dict, ref_msssim_dict = batch
+            input_frames = input_frames_dict[lmbda].squeeze(0)
+            ref_bpp = ref_bpp_dict[lmbda]
+            ref_psnr = ref_psnr_dict[lmbda]
+            ref_msssim = ref_msssim_dict[lmbda]
+            ref_frame = ref_frame_dict[lmbda]
             seqlen = input_frames.shape[1]
 
             self.metric.log(model_name, {
@@ -190,17 +198,9 @@ class DVCLightingModule(L.LightningModule):
             aux_parameters += [p for n, p in model_instance.named_parameters() if p.requires_grad and n.endswith(".quantiles")]
         optimizer = torch.optim.Adam(parameters, lr=self.lr)
         aux_optimizer = torch.optim.Adam(aux_parameters, lr=self.lr)
-        # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=self.lr_decay_interval, gamma=self.lr_decay)
-        # return {
-        #     "optimizer": [optimizer, aux_optimizer],
-        #     "lr_scheduler": {
-        #         "scheduler": scheduler,
-        #         "interval": "step",
-        #         "frequency": 1
-        #     }
-        # }
-
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=self.lr_decay_interval, gamma=self.lr_decay)
         return optimizer, aux_optimizer
+
 
 class CompressAILightningModule(L.LightningModule):
     """
