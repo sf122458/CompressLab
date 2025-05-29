@@ -1,7 +1,23 @@
-from .compressai_impl.models import ScaleSpaceFlow
+import os
+import importlib
 from compresslab.utils.registry import ModelRegistry
+import inspect
+from torch.nn import Module
 
-for model in [
-    ScaleSpaceFlow
-]:
-    ModelRegistry.register(model.__name__)(model)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+for root, dirs, files in os.walk(current_dir):
+    for file in files:
+        if file == "models.py":
+            models_dir = os.path.join(root, file)
+
+            spec = importlib.util.spec_from_file_location("models", models_dir)
+            models_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(models_module)
+
+            classes = [
+                cls for name, cls in inspect.getmembers(models_module, inspect.isclass)
+                if issubclass(cls, Module) and cls.__module__ == models_module.__name__
+            ]
+
+            for cls in classes:
+                ModelRegistry.register(cls.__name__, define_path=models_dir)(cls)
