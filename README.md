@@ -32,16 +32,13 @@ Each folder in `dataset` has a `download.sh` script to download the dataset. Cur
 - `Vimeo-90K` is used for the training of the video compression models.
 - `UVG` is used for the evaluation of the video compression models.
 
-### Support models
+### Available models
 - All models implemented in [CompressAI](https://github.com/InterDigitalInc/CompressAI).
 - MLIC
-- DVC(debugging)
+- TCM
+- DVC
 
-
-### TODO
-- [x] Implementations on compress and decompress.
-- [ ] Benchmark test, such as speed, model size, etc.
-- [ ] Video compression framework.
+**Note: All models can be trained based on the code, but the compression performance has not been verified.**
 
 
 ### Related links
