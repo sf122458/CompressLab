@@ -7,7 +7,7 @@ A PyTorch-based framework for image compression research and development.
 ```shell
 conda create -n compresslab python=3.9
 conda activate compresslab
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ### How to use

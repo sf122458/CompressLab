@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 from torch import Tensor
-from compressai.layers import ResidualBlock, AttentionBlock
+from compresslab.core.layers import ResidualBlock, AttentionBlock
 
 
 SCALES_MIN = 0.11

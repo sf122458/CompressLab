@@ -24,8 +24,8 @@ Model:
 Data:
   Key: BasicImageDataModule
   Params:
-    train_data_dir: data/subset_8000_processed
-    test_data_dir: data/Kodak
+    train_data_dir: dataset/clic2020_professional_train
+    test_data_dir: dataset/Kodak
     batch_size: 4
 
 Train:

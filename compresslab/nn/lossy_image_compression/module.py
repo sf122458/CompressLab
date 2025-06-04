@@ -1,5 +1,5 @@
 import lightning as L
-from compressai.models import CompressionModel
+from compresslab.core.models import CompressionModel
 from compresslab.utils.logger import MetricLogger
 import torch
 import math

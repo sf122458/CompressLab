@@ -1,0 +1,22 @@
+Global:
+  lmbda: &lmbda [256, 512, 1024, 2048]
+
+Model:
+  - Name: DVC
+    Key: DVC
+    ExtParams:
+      lmbda: *lmbda
+
+Data:
+  Key: DVCDataModule
+  Params:
+    train_data_dir: dataset/vimeo_setuplet/sequences
+    test_data_dir: dataset/UVG/images
+    batch_size: 4
+
+Train:
+  Steps: 2000000
+  Valinterval: 1
+
+Env:
+  Devices: [0]

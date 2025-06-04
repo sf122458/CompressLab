@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-from compressai.layers import conv3x3
+from compresslab.core.layers import conv3x3
 
 def conv1x1(in_ch: int, out_ch: int, stride: int = 1) -> nn.Module:
     """1x1 convolution."""

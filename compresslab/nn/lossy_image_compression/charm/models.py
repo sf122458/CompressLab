@@ -4,10 +4,9 @@ Official implementation: https://github.com/tensorflow/compression/blob/master/m
 Paper: https://arxiv.org/pdf/2007.08739v1
 """
 
-from compressai.models import CompressionModel
-from compressai.entropy_models import EntropyBottleneck, GaussianConditional
-from compressai.layers import GDN, conv3x3
-from compressai.models.utils import conv, deconv
+from compresslab.core.models import CompressionModel
+from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
+from compresslab.core.layers import GDN, conv3x3, conv, deconv
 import torch.nn as nn
 import torch
 

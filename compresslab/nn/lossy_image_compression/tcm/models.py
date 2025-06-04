@@ -2,10 +2,10 @@
 
 Code: https://github.com/jmliu206/LIC_TCM/blob/main/models/tcm.py
 """
-from compressai.entropy_models import EntropyBottleneck, GaussianConditional
-from compressai.ans import BufferedRansEncoder, RansDecoder
-from compressai.models import CompressionModel
-from compressai.layers import (
+from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
+from compresslab.ans import BufferedRansEncoder, RansDecoder
+from compresslab.core.models import CompressionModel
+from compresslab.core.layers import (
     ResidualBlockUpsample,
     ResidualBlockWithStride,
     conv3x3,
@@ -13,8 +13,6 @@ from compressai.layers import (
 )
 
 import torch.nn as nn
-import torch.nn.functional as F
-from torch import Tensor
 import torch
 from compresslab.nn.lossy_image_compression.tcm.layers import (
     ConvTransBlock,

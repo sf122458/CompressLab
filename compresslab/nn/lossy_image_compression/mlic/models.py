@@ -4,10 +4,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import time
-from compressai.models import CompressionModel
-from compressai.ops import quantize_ste
-from compressai.models import EntropyBottleneck
-from compressai.ans import BufferedRansEncoder, RansDecoder
+from compresslab.core.models import CompressionModel
+from compresslab.core.entropy_models import EntropyBottleneck
+from compresslab.core.ops import quantize_ste
+from compresslab.ans import BufferedRansEncoder, RansDecoder
 from compresslab.nn.lossy_image_compression.mlic.utils.func import update_registered_buffers, get_scale_table
 from compresslab.nn.lossy_image_compression.mlic.utils.ckbd import *
 from compresslab.nn.lossy_image_compression.mlic.transform import *

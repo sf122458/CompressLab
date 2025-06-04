@@ -1,6 +1,7 @@
 import lightning as L
-from compressai.models import CompressionModel
+from compresslab.core.models import CompressionModel
 from compresslab.utils.logger import MetricLogger
+from compresslab.nn.video_compression.abc import PFrameCodec, IPFrameCodec
 import torch
 import math
 import torch.nn as nn
@@ -10,12 +11,12 @@ from compresslab.nn.video_compression.compressai_impl.utils import RateDistortio
 from typing import Dict, Any
 from pytorch_msssim import ms_ssim
 
-class DVCLightingModule(L.LightningModule):
+class PFrameCodecLightingModule(L.LightningModule):
     """
-    Support models similar to DVC, which contain motion codecs and residual/contextual codecs.
+    A LightningModule for training P-frame codecs.
     """
     def __init__(self,
-                 model: CompressionModel,
+                 model: PFrameCodec,
                  ext_params: Dict[str, Any] = {}
                  ):
         super().__init__()
@@ -29,7 +30,10 @@ class DVCLightingModule(L.LightningModule):
         self.lr = ext_params.get("lr", 1e-4)
         self.lr_decay = ext_params.get("lr_decay", 0.1)
         self.lr_decay_interval = ext_params.get("lr_decay_interval", 1_800_000)
+        self.progressive_training = ext_params.get("progressive_training", None)
 
+        if self.progressive_training is not None:
+            assert isinstance(self.progressive_training, list) and len(self.progressive_training) == 3
 
         self.model_wrapper: nn.ModuleDict[str, CompressionModel] = nn.ModuleDict({})
 
@@ -58,12 +62,10 @@ class DVCLightingModule(L.LightningModule):
         for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
             out = model_instance.forward(input_frame, ref_frame)
 
-            bpp_mv_y = torch.log(out["likelihoods"]["y_mv"]).sum() / (-math.log(2) * N * H * W)
+            bpp_y_mv = torch.log(out["likelihoods"]["y_mv"]).sum() / (-math.log(2) * N * H * W)
             bpp_y = torch.log(out["likelihoods"]["y"]).sum() / (-math.log(2) * N * H * W)
-            bpp_mv_z = torch.log(out["likelihoods"]["z_mv"]).sum() / (-math.log(2) * N * H * W)
+            bpp_z_mv = torch.log(out["likelihoods"]["z_mv"]).sum() / (-math.log(2) * N * H * W)
             bpp_z = torch.log(out["likelihoods"]["z"]).sum() / (-math.log(2) * N * H * W)
-
-            bpp_loss = bpp_mv_z + bpp_mv_y + bpp_z + bpp_y
             
             mse_loss = torch.nn.functional.mse_loss(out["recon_frame"], input_frame)
 
@@ -71,8 +73,22 @@ class DVCLightingModule(L.LightningModule):
 
             #TODO
             distortion_loss = mse_loss
+            if self.progressive_training is None:
+                bpp_loss = bpp_z_mv + bpp_y_mv + bpp_z + bpp_y
+                
+            else:
+                if self.global_step < self.progressive_training[0]:
+                    bpp_loss = bpp_y_mv + bpp_z_mv
+                elif self.global_step < self.progressive_training[1]:
+                    bpp_loss = 0
+                elif self.global_step < self.progressive_training[2]:
+                    bpp_loss = bpp_y + bpp_z
+                else:
+                    bpp_loss = bpp_y_mv + bpp_z_mv + bpp_y + bpp_z
 
+            
             loss = lmbda * distortion_loss + bpp_loss
+
             aux_loss = model_instance.aux_loss()
             self.manual_backward(loss)
             torch.nn.utils.clip_grad_norm_(model_instance.parameters(), 0.5)
@@ -82,7 +98,7 @@ class DVCLightingModule(L.LightningModule):
                 self.log_dict(dict(
                     loss=loss,
                     bpp=bpp_loss,
-                    bpp_mv_y=bpp_mv_y,
+                    bpp_y_mv=bpp_y_mv,
                     bpp_y=bpp_y,
                     psnr=psnr,
                 ), prog_bar=True, on_step=True, on_epoch=False, logger=False)
@@ -90,8 +106,8 @@ class DVCLightingModule(L.LightningModule):
             self.log_dict({
                 f"train/{model_name}.loss": loss,
                 f"train/{model_name}.bpp": bpp_loss,
-                f"train/{model_name}.bpp_mv_y": bpp_mv_y,
-                f"train/{model_name}.bpp_mv_z": bpp_mv_z,
+                f"train/{model_name}.bpp_y_mv": bpp_y_mv,
+                f"train/{model_name}.bpp_z_mv": bpp_z_mv,
                 f"train/{model_name}.bpp_y": bpp_y,
                 f"train/{model_name}.bpp_z": bpp_z,
                 f"train/{model_name}.psnr": psnr,
@@ -121,7 +137,10 @@ class DVCLightingModule(L.LightningModule):
                 input_frame = input_frames[:, i, :, :, :]
                 out_compress = model_instance.compress(input_frame, ref_frame)
 
-                out_decompress = model_instance.decompress(ref_frame, out_compress["strings"], out_compress["shape"])
+                out_decompress = model_instance.decompress(
+                    ref_frame, 
+                    strings=out_compress["strings"], 
+                    shape=out_compress["shape"])
 
                 recon_frame = out_decompress["recon_frame"]
 
@@ -167,10 +186,15 @@ class DVCLightingModule(L.LightningModule):
             for i in range(seqlen):
                 input_frame = input_frames[:, i, :, :, :]
                 with self.metric.timer(model_name, "time_compress") as timer:
-                    out_compress = model_instance.compress(input_frame, ref_frame)
+                    out_compress = model_instance.compress(
+                        input_frame=input_frame, 
+                        ref_frame=ref_frame)
 
                 with self.metric.timer(model_name, "time_decompress") as timer:
-                    out_decompress = model_instance.decompress(ref_frame, out_compress["strings"], out_compress["shape"])
+                    out_decompress = model_instance.decompress(
+                        ref_frame=ref_frame, 
+                        strings=out_compress["strings"], 
+                        shape=out_compress["shape"])
 
                 recon_frame = out_decompress["recon_frame"]
 
@@ -208,7 +232,7 @@ class CompressAILightningModule(L.LightningModule):
     and a video frame codec to compress the P frame, which is different from the training stategy of DVC.
     """
     def __init__(self, 
-                 model: CompressionModel,
+                 model: IPFrameCodec,
                  ext_params: Dict[str, Any] = {}):
         super().__init__()
 

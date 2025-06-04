@@ -1,15 +1,17 @@
-from compressai.models import CompressionModel
-from compressai.entropy_models import EntropyBottleneck, GaussianConditional
-from compressai.models.utils import conv, deconv
-from compressai.layers import GDN, MaskedConv2d, conv1x1, conv3x3, ResidualBlock, ResidualBlockWithStride, ResidualBlockUpsample, subpel_conv3x3, AttentionBlock
-from compressai.latent_codecs import (
+from compresslab.core.models import CompressionModel
+from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
+from compresslab.core.layers import (
+    GDN, MaskedConv2d, conv1x1, conv3x3, ResidualBlock, 
+    ResidualBlockWithStride, ResidualBlockUpsample, subpel_conv3x3, AttentionBlock,
+    conv, deconv)
+from compresslab.core.latent_codecs import (
     ChannelGroupsLatentCodec,
     CheckerboardLatentCodec,
     GaussianConditionalLatentCodec,
     HyperLatentCodec,
     HyperpriorLatentCodec,
 )
-from compressai.layers import (
+from compresslab.core.layers import (
     GDN,
     AttentionBlock,
     CheckerboardMaskedConv2d,
@@ -21,9 +23,9 @@ from compressai.layers import (
     sequential_channel_ramp,
     subpel_conv3x3,
 )
-from compressai.ans import BufferedRansEncoder, RansDecoder
-from compressai.models import SimpleVAECompressionModel
-from compressai.models.sensetime import ResidualBottleneckBlock
+from compresslab.ans import BufferedRansEncoder, RansDecoder
+from compresslab.core.models import SimpleVAECompressionModel
+from compresslab.core.layers import ResidualBottleneckBlock
 import torch.nn as nn
 import torch
 import warnings

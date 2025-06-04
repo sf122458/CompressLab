@@ -9,7 +9,7 @@ Model:
 Data:
   Key: CompressAIVideoDataModule
   Params:
-    root: data/vimeo_setuplet
+    root: dataset/vimeo_setuplet
     batch_size: 4
 
 Train:

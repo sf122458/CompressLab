@@ -1,5 +1,5 @@
 import torch.nn as nn
-from compressai.layers import subpel_conv3x3
+from compresslab.core.layers import subpel_conv3x3
 from .layers.conv import conv3x3
 from .layers.res_blk import *
 

@@ -8,17 +8,16 @@ import torch.nn.functional as F
 
 from torch import amp
 
-from compressai.entropy_models import EntropyBottleneck, GaussianConditional
-from compressai.layers import QReLU
-from compressai.ops import quantize_ste
+from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
+from compresslab.core.layers import QReLU
+from compresslab.core.ops import quantize_ste
 
-from compressai.models.base import CompressionModel
-from compressai.models.utils import conv, deconv, gaussian_blur, gaussian_kernel2d, meshgrid2d
+from compresslab.core.models.base import CompressionModel
+from compresslab.core.layers import conv, deconv, gaussian_blur, gaussian_kernel2d, meshgrid2d
 
-from compresslab.utils.anno import Trainer
+from compresslab.nn.video_compression.abc import IPFrameCodec
 
-@Trainer("CompressAILightningModule")
-class ScaleSpaceFlow(CompressionModel):
+class ScaleSpaceFlow(CompressionModel, IPFrameCodec):
     r"""Google's first end-to-end optimized video compression from E.
     Agustsson, D. Minnen, N. Johnston, J. Balle, S. J. Hwang, G. Toderici: `"Scale-space flow for end-to-end
     optimized video compression" <https://openaccess.thecvf.com/content_CVPR_2020/html/Agustsson_Scale-Space_Flow_for_End-to-End_Optimized_Video_Compression_CVPR_2020_paper.html>`_,

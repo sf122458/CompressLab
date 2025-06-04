@@ -73,7 +73,7 @@ class MetricLogger():
 
 
     @contextlib.contextmanager
-    def timer(self, name, metric_name: str, cuda_sync=True):
+    def timer(self, name, metric_name: str, cuda_sync=False):
         """
         A context manager to time a code block.
         """

@@ -1,4 +1,4 @@
-from compressai.layers import GDN
+from compresslab.core.layers import GDN
 import math
 import torch
 import torch.nn as nn

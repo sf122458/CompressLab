@@ -2,15 +2,14 @@
 import torch
 import math
 from compresslab.nn.video_compression.dvc.subnet import *
+from compresslab.nn.video_compression.abc import PFrameCodec
 
-from compressai.models import CompressionModel
-from compressai.entropy_models import EntropyBottleneck, GaussianConditional
-from compressai.models.utils import update_registered_buffers
+from compresslab.core.models import CompressionModel
+from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
 
-from compresslab.utils.anno import Trainer
 
-@Trainer("DVCLightingModule")
-class DVC(CompressionModel):
+
+class DVC(CompressionModel, PFrameCodec):
     def __init__(self, 
                  out_channel_N=64, 
                  out_channel_M=96, 
@@ -78,29 +77,6 @@ class DVC(CompressionModel):
                 "z": resprior_likelihoods
             },
         }
-    
-    def load_state_dict(self, state_dict):
-        update_registered_buffers(
-            self.entropy_hyper_res,
-            "entropy_hyper_res",
-            ["_quantized_cdf","_offset","_cdf_length"],
-            state_dict,
-        )
-        update_registered_buffers(
-            self.entropy_bottleneck_mv,
-            "entropy_bottleneck_mv",
-            ["_quantized_cdf","_offset","_cdf_length", "scale_table"],
-            state_dict,
-        )
-        update_registered_buffers(
-            self.entropy_bottleneck_res,
-            "entropy_bottleneck_res",
-            ["_quantized_cdf","_offset","_cdf_length","scale_table"],
-            state_dict,
-        )
-        print('finish loading entropy botteleneck buffer')
-
-        super().load_state_dict(state_dict)
 
     def update(self, scale_table=None, force=False):
 
