@@ -19,7 +19,8 @@ class BenchmarkItem(BaseModel):
     Params: Optional[Dict[str, Any]] = None
 
 class TrainClass(BaseModel):
-    Epoch: int
+    Epoch: int = None
+    Steps: int = -1
     Valinterval: int
     Output: str = "output"
     Benchmark: Optional[List[BenchmarkItem]] = None

@@ -65,13 +65,22 @@ def main(args: Args):
             if not lightning_classes:
                 raise ValueError(f"No class inherits from LightningModule found in {module_file}")
 
-            if not hasattr(compressmodel, "trainer_cls"):
-                assert len(lightning_classes) == 1, f"The model doesn't have an annotation about its trainer, but multiple trainers found in {module_file}"
-                LightningModule = lightning_classes[0]  # Assuming the first match is the desired class
-            else:
-                LightningModule = getattr(module, compressmodel.trainer_cls)
+            LightningModule = None
+
+            for module_class in lightning_classes:
+                init_method = getattr(module_class, '__init__', None)
+                if init_method is None:
+                    continue
+                signature = inspect.signature(init_method)
+
+                if "model" in signature.parameters.keys():
+                    if issubclass(compressmodel.__class__, signature.parameters["model"].annotation):
+                        LightningModule = module_class
+                        break
+            if LightningModule is None:
+                raise ValueError(f"No LightningModule found in {module_file} that matches the model {compressmodel.__class__.__name__}")
             
-            modelmodule = LightningModule(compressmodel, ext_params=model.ExtParams)
+            modelmodule = LightningModule(model=compressmodel, ext_params=model.ExtParams)
 
             exp_dir = os.path.join(config.Train.Output, Path(args.config).stem)
             os.makedirs(exp_dir, exist_ok=True)
@@ -103,6 +112,7 @@ def main(args: Args):
                 accelerator="gpu" if torch.cuda.is_available() else "cpu",
                 devices=config.Env.Devices,
                 strategy="ddp_find_unused_parameters_true",
+                max_steps=config.Train.Steps,
                 max_epochs=config.Train.Epoch,
                 check_val_every_n_epoch=config.Train.Valinterval,
                 default_root_dir=out_dir,
