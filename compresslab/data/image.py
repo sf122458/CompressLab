@@ -142,8 +142,8 @@ class Vimeo90kDataset(Dataset):
         list_suffix = {"train": "trainlist", "valid": "testlist"}[split]
         return f"{tuplet_prefix}_{list_suffix}.txt"
     
-@DataRegistry.register("Vimeo90kDataModule", define_path=__file__)
-class Vimeo90kDataModule(L.LightningDataModule):
+@DataRegistry.register("Vimeo90kImageDataModule", define_path=__file__)
+class Vimeo90kImageDataModule(L.LightningDataModule):
     def __init__(self, root: str, batch_size: int = 32, num_workers: int = 4):
         super().__init__()
         self.root = root

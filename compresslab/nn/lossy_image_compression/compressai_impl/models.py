@@ -652,14 +652,6 @@ class Cheng2020Anchor(JointAutoregressiveHierarchicalPriors):
             subpel_conv3x3(N, 3, 2),
         )
 
-    @classmethod
-    def from_state_dict(cls, state_dict):
-        """Return a new model instance from `state_dict`."""
-        N = state_dict["g_a.0.conv1.weight"].size(0)
-        net = cls(N)
-        net.load_state_dict(state_dict)
-        return net
-
 class Cheng2020Attention(Cheng2020Anchor):
     """Self-attention model variant from `"Learned Image Compression with
     Discretized Gaussian Mixture Likelihoods and Attention Modules"
@@ -957,14 +949,6 @@ class Elic2022Official(SimpleVAECompressionModel):
             },
         )
 
-    @classmethod
-    def from_state_dict(cls, state_dict):
-        """Return a new model instance from `state_dict`."""
-        N = state_dict["g_a.0.weight"].size(0)
-        net = cls(N)
-        net.load_state_dict(state_dict)
-        return net
-
 class Elic2022Chandelier(SimpleVAECompressionModel):
     """ELIC 2022; simplified context model using only first and most recent groups.
 
@@ -1159,11 +1143,3 @@ class Elic2022Chandelier(SimpleVAECompressionModel):
         chan_groups_latent_codec = self.latent_codec["y"]
         obj = chan_groups_latent_codec
         obj.merge_y = types.MethodType(merge_y, obj)
-
-    @classmethod
-    def from_state_dict(cls, state_dict):
-        """Return a new model instance from `state_dict`."""
-        N = state_dict["g_a.0.weight"].size(0)
-        net = cls(N)
-        net.load_state_dict(state_dict)
-        return net

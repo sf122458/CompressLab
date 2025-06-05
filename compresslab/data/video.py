@@ -124,7 +124,9 @@ class VideoFolder(Dataset):
     
 
 class Vimeo90kDataset(Dataset):
-    """Dataset for Vimeo90k sequences. Usually used for training.
+    """Dataset for Vimeo90k sequences. Usually used for the training of the P frame codec.
+
+    This dataset will return a pair of images: the cropped input image and the cropped reference image.
     """
     def __init__(self, 
                  rootdir: str = "./dataset/vimeo_setuplet/sequences/", 
@@ -190,10 +192,6 @@ class UVGDataset(Dataset):
                  ):
 
         folders = ["Beauty", "Bosphorus", "HoneyBee", "Jockey", "ReadySteadyGo", "ShakeNDry", "YachtRide"]
-
-        self.ref = []
-        self.refbpp = []
-        self.input = []
 
         self.transform = transforms.ToTensor()
 
@@ -353,8 +351,8 @@ class HEVCDataset(Dataset):
 
 
 
-@DataRegistry.register("CompressAIVideoDataModule", define_path=__file__)
-class CompressAIVideoDataModule(L.LightningDataModule):
+@DataRegistry.register("IPFrameVideoDataModule", define_path=__file__)
+class IPFrameVideoDataModule(L.LightningDataModule):
     def __init__(self,
                  root: str,
                  batch_size: int = 32,
@@ -405,8 +403,8 @@ class CompressAIVideoDataModule(L.LightningDataModule):
                           num_workers=self.num_workers)
     
 
-@DataRegistry.register("DVCDataModule", define_path=__file__)
-class DVCDataModule(L.LightningDataModule):
+@DataRegistry.register("PFrameVideoDataModule", define_path=__file__)
+class PFrameVideoDataModule(L.LightningDataModule):
     def __init__(self,
                  train_data_dir: str = "data/vimeo_setuplet/sequences/",
                  batch_size: int = 32,
