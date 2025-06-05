@@ -73,8 +73,8 @@ class CompressAILightningModule(L.LightningModule):
             if model_name == "codec_0" or model_name == "codec":
                 self.log_dict({"loss": loss, 
                         "bpp": bpp_loss,
-                        "PSNR": psnr,
-                        "MS-SSIM": ms_ssim_loss}, prog_bar=True, on_step=True, on_epoch=False, logger=False)
+                        "psnr": psnr,
+                        "ms-ssim": ms_ssim_loss}, prog_bar=True, on_step=True, on_epoch=False, logger=False)
         
             self.log_dict({
                 f"train/{model_name}.loss": loss,

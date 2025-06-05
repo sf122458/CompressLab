@@ -4,11 +4,11 @@ When a new training task is added, use this script to automatically register the
 The file structure is expected to be like this:
 ├─ lossy_image_compression
 │  ├─ charm
-│  │  └─ models.py (** the definition of end-to-end models needed to be registered **)
+│  │  └─ models.py (** models needed to be registered **)
 │  ├─ compressai_impl
 │  │  └─ models.py
 │  ├─ ...
-│  ├─ module.py (** responsible for defining the LightningModule for training **)
+│  ├─ module.py (** training and validating steps **)
 └─ video_compression
    └─ ... (similar with lossy_image_compression)
 """
