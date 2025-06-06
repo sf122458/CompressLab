@@ -7,10 +7,18 @@ Paper: https://arxiv.org/pdf/2007.08739v1
 from compresslab.core.models import CompressionModel
 from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
 from compresslab.core.layers import GDN, conv3x3, conv, deconv
+from compresslab.nn.lossy_image_compression.abc import (
+    ImageCodec,
+    ImageCodecForwardInput,
+    ImageCodecForwardOutput,
+    ImageCodecCompressInput,
+    ImageCodecCompressOutput,
+    ImageCodecLikelihoods,
+    ImageCodecDecompressOutput)
 import torch.nn as nn
 import torch
 
-class ChARM(CompressionModel):
+class ChARM(CompressionModel, ImageCodec):
     def __init__(self, N=192, M=320, 
                  num_slices=10, **kwargs):
         super().__init__()
@@ -92,8 +100,8 @@ class ChARM(CompressionModel):
         self.entropy_bottleneck = EntropyBottleneck(N)
         self.gaussian_conditional = GaussianConditional(None)
 
-    def forward(self, x):
-        y = self.g_a(x)
+    def forward(self, input: ImageCodecForwardInput) -> ImageCodecForwardOutput:
+        y = self.g_a(input.x)
         z = self.h_a(y)
         z_hat, z_likelihoods = self.entropy_bottleneck(z)
         gaussian_params = self.h_s(z_hat)
@@ -131,26 +139,21 @@ class ChARM(CompressionModel):
 
         x_hat = self.g_s(y_hat)
 
-        return {
-            "x_hat": x_hat,
-            "likelihoods":  {"y": y_likelihoods, "z": z_likelihoods},
-        }
+        return ImageCodecForwardOutput(
+            x=input.x,
+            x_hat=x_hat,
+            likelihoods=ImageCodecLikelihoods(
+                y=y_likelihoods,
+                z=z_likelihoods
+            )
+        )
     
-    def compress(self, x):
+    def compress(self, input: ImageCodecCompressInput) -> ImageCodecCompressOutput:
         pass
 
-    def decompress(self, strings, shape):
+    def decompress(self, input: ImageCodecCompressOutput) -> ImageCodecDecompressOutput:
         pass
 
-    @classmethod
-    def from_state_dict(cls, state_dict):
-        """Return a new model instance from `state_dict`."""
-        N = state_dict["g_a.0.weight"].size(0)
-        M = state_dict["g_a.6.weight"].size(0)
-        # net = cls(N, M)
-        net = cls(N, M)
-        net.load_state_dict(state_dict)
-        return net
 
 if __name__ == "__main__":
     model = ChARM()

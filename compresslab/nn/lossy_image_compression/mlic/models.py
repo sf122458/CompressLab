@@ -11,8 +11,17 @@ from compresslab.ans import BufferedRansEncoder, RansDecoder
 from compresslab.nn.lossy_image_compression.mlic.utils.func import update_registered_buffers, get_scale_table
 from compresslab.nn.lossy_image_compression.mlic.utils.ckbd import *
 from compresslab.nn.lossy_image_compression.mlic.transform import *
+from compresslab.nn.lossy_image_compression.abc import (
+    ImageCodec,
+    ImageCodecForwardInput,
+    ImageCodecForwardOutput,
+    ImageCodecCompressInput,
+    ImageCodecCompressOutput,
+    ImageCodecLikelihoods,
+    ImageCodecDecompressOutput
+)
 
-class MLICPlusPlus(CompressionModel):
+class MLICPlusPlus(CompressionModel, ImageCodec):
     def __init__(self, N=192, M=320, slice_num=10, context_window=5, **kwargs):
         super().__init__(**kwargs)
         slice_ch = M // slice_num
@@ -77,22 +86,9 @@ class MLICPlusPlus(CompressionModel):
         )
 
 
-    def forward(self, x):
-        """
-        Using checkerboard context model with mask attention
-        which divides y into anchor and non-anchor parts
-        non-anchor use anchor as spatial context
-        In addition, a channel-wise entropy model is used, too.
-        Args:
-            x: [B, 3, H, W]
-        return:
-            x_hat: [B, 3, H, W]
-            y_likelihoods: [B, M, H // 16, W // 16]
-            z_likelihoods: [B, N, H // 64, W // 64]
-            likelihoods: y_likelihoods, z_likelihoods
-        """
-        self.update_resolutions(x.size(2) // 16, x.size(3) // 16)
-        y = self.g_a(x)
+    def forward(self, input: ImageCodecForwardInput) -> ImageCodecForwardOutput:
+        self.update_resolutions(input.x.size(2) // 16, input.x.size(3) // 16)
+        y = self.g_a(input.x)
         z = self.h_a(y)
         _, z_likelihoods = self.entropy_bottleneck(z)
         z_offset = self.entropy_bottleneck._get_medians()
@@ -180,10 +176,14 @@ class MLICPlusPlus(CompressionModel):
         y_likelihoods = torch.cat(y_likelihoods, dim=1)
         x_hat = self.g_s(y_hat)
 
-        return {
-            "x_hat": x_hat,
-            "likelihoods": {"y_likelihoods": y_likelihoods, "z_likelihoods": z_likelihoods}
-        }
+        return ImageCodecForwardOutput(
+            x=input.x,
+            x_hat=x_hat,
+            likelihoods=ImageCodecLikelihoods(
+                y=y_likelihoods,
+                z=z_likelihoods
+            )
+        )
 
     def update_resolutions(self, H, W):
         for i in range(len(self.global_intra_context)):
@@ -192,11 +192,9 @@ class MLICPlusPlus(CompressionModel):
             else:
                 self.local_context[i].update_resolution(H, W, next(self.parameters()).device, mask=self.local_context[0].attn_mask)
 
-    def compress(self, x):
-        torch.cuda.synchronize()
-        start_time = time.time()
-        self.update_resolutions(x.size(2) // 16, x.size(3) // 16)
-        y = self.g_a(x)
+    def compress(self, input: ImageCodecCompressInput) -> ImageCodecCompressOutput:
+        self.update_resolutions(input.x.size(2) // 16, input.x.size(3) // 16)
+        y = self.g_a(input.x)
         z = self.h_a(y)
         z_strings = self.entropy_bottleneck.compress(z)
         z_hat = self.entropy_bottleneck.decompress(z_strings, z.size()[-2:])
@@ -275,27 +273,24 @@ class MLICPlusPlus(CompressionModel):
         encoder.encode_with_indexes(symbols_list, indexes_list, cdf, cdf_lengths, offsets)
         y_string = encoder.flush()
         y_strings.append(y_string)
-        torch.cuda.synchronize()
-        end_time = time.time()
 
-        cost_time = end_time - start_time
-        return {
-            "strings": [y_strings, z_strings],
-            "shape": z.size()[-2:],
-            "cost_time": cost_time
-        }
+        return ImageCodecCompressOutput(
+            x=input.x,
+            y_strings=y_strings,
+            z_strings=z_strings,
+            shape=(input.x.size(2), input.x.size(3))
+        )
 
-    def decompress(self, strings, shape):
-        torch.cuda.synchronize()
-        start_time = time.time()
-        y_strings = strings[0][0]
-        z_strings = strings[1]
-        z_hat = self.entropy_bottleneck.decompress(z_strings, shape)
+    def decompress(self, input: ImageCodecCompressOutput) -> ImageCodecDecompressOutput:
+        y_strings = input.y_strings[0]
+        z_strings = input.z_strings
+        z_hat = self.entropy_bottleneck.decompress(z_strings, input.shape)
+
         self.update_resolutions(z_hat.size(2) * 4, z_hat.size(3) * 4)
         hyper_params = self.h_s(z_hat)
         hyper_scales, hyper_means = hyper_params.chunk(2, 1)
         y_hat_slices = []
-
+        
         cdf = self.gaussian_conditional.quantized_cdf.tolist()
         cdf_lengths = self.gaussian_conditional.cdf_length.reshape(-1).int().tolist()
         offsets = self.gaussian_conditional.offset.reshape(-1).int().tolist()
@@ -363,15 +358,8 @@ class MLICPlusPlus(CompressionModel):
 
         y_hat = torch.cat(y_hat_slices, dim=1)
         x_hat = self.g_s(y_hat)
-        torch.cuda.synchronize()
-        end_time = time.time()
 
-        cost_time = end_time - start_time
-
-        return {
-            "x_hat": x_hat,
-            "cost_time": cost_time
-        }
+        return ImageCodecDecompressOutput(x_hat=x_hat)
 
     def load_state_dict(self, state_dict):
         update_registered_buffers(

@@ -22,9 +22,18 @@ from compresslab.nn.lossy_image_compression.tcm.layers import (
     get_scale_table,
     update_registered_buffers
 )
+from compresslab.nn.lossy_image_compression.abc import (
+    ImageCodec,
+    ImageCodecForwardInput,
+    ImageCodecForwardOutput,
+    ImageCodecCompressInput,
+    ImageCodecCompressOutput,
+    ImageCodecLikelihoods,
+    ImageCodecDecompressOutput
+)
 
 
-class TCM(CompressionModel):
+class TCM(CompressionModel, ImageCodec):
     def __init__(self, config=[2, 2, 2, 2, 2, 2], head_dim=[8, 16, 32, 32, 16, 8], drop_path_rate=0, N=128,  M=320, num_slices=5, max_support_slices=5, **kwargs):
         super().__init__(entropy_bottleneck_channels=N)
         self.config = config
@@ -140,8 +149,8 @@ class TCM(CompressionModel):
         updated |= super().update(force=force)
         return updated
     
-    def forward(self, x):
-        y = self.g_a(x)
+    def forward(self, input: ImageCodecForwardInput) -> ImageCodecForwardOutput:
+        y = self.g_a(input.x)
         y_shape = y.shape[2:]
         z = self.h_a(y)
         _, z_likelihoods = self.entropy_bottleneck(z)
@@ -184,38 +193,20 @@ class TCM(CompressionModel):
             y_hat_slices.append(y_hat_slice)
 
         y_hat = torch.cat(y_hat_slices, dim=1)
-        means = torch.cat(mu_list, dim=1)
-        scales = torch.cat(scale_list, dim=1)
         y_likelihoods = torch.cat(y_likelihood, dim=1)
         x_hat = self.g_s(y_hat)
-
-        return {
-            "x_hat": x_hat,
-            "likelihoods": {"y": y_likelihoods, "z": z_likelihoods},
-            "para":{"means": means, "scales":scales, "y":y}
-        }
-
-    def load_state_dict(self, state_dict):
-        update_registered_buffers(
-            self.gaussian_conditional,
-            "gaussian_conditional",
-            ["_quantized_cdf", "_offset", "_cdf_length", "scale_table"],
-            state_dict,
+    
+        return ImageCodecForwardOutput(
+            x=input.x,
+            x_hat=x_hat,
+            likelihoods=ImageCodecLikelihoods(
+                y=y_likelihoods,
+                z=z_likelihoods
+            )
         )
-        super().load_state_dict(state_dict)
 
-    @classmethod
-    def from_state_dict(cls, state_dict):
-        """Return a new model instance from `state_dict`."""
-        N = state_dict["g_a.0.weight"].size(0)
-        M = state_dict["g_a.6.weight"].size(0)
-        # net = cls(N, M)
-        net = cls(N, M)
-        net.load_state_dict(state_dict)
-        return net
-
-    def compress(self, x):
-        y = self.g_a(x)
+    def compress(self, input: ImageCodecCompressInput) -> ImageCodecCompressOutput:
+        y = self.g_a(input.x)
         y_shape = y.shape[2:]
 
         z = self.h_a(y)
@@ -273,36 +264,22 @@ class TCM(CompressionModel):
         y_string = encoder.flush()
         y_strings.append(y_string)
 
-        return {"strings": [y_strings, z_strings], "shape": z.size()[-2:]}
+        return ImageCodecCompressOutput(
+            x=input.x,
+            y_strings=y_strings,
+            z_strings=z_strings,
+            shape=z.size()[-2:],
+        )
 
-    def _likelihood(self, inputs, scales, means=None):
-        half = float(0.5)
-        if means is not None:
-            values = inputs - means
-        else:
-            values = inputs
-
-        scales = torch.max(scales, torch.tensor(0.11))
-        values = torch.abs(values)
-        upper = self._standardized_cumulative((half - values) / scales)
-        lower = self._standardized_cumulative((-half - values) / scales)
-        likelihood = upper - lower
-        return likelihood
-
-    def _standardized_cumulative(self, inputs):
-        half = float(0.5)
-        const = float(-(2 ** -0.5))
-        # Using the complementary error function maximizes numerical precision.
-        return half * torch.erfc(const * inputs)
-
-    def decompress(self, strings, shape):
-        z_hat = self.entropy_bottleneck.decompress(strings[1], shape)
+    def decompress(self, input: ImageCodecCompressOutput) -> ImageCodecDecompressOutput:
+        assert isinstance(input.z_strings, list) and isinstance(input.y_strings, list)
+        z_hat = self.entropy_bottleneck.decompress(input.z_strings, input.shape)
         latent_scales = self.h_scale_s(z_hat)
         latent_means = self.h_mean_s(z_hat)
 
         y_shape = [z_hat.shape[2] * 4, z_hat.shape[3] * 4]
 
-        y_string = strings[0][0]
+        y_string = input.y_strings[0]
 
         y_hat_slices = []
         cdf = self.gaussian_conditional.quantized_cdf.tolist()
@@ -340,4 +317,4 @@ class TCM(CompressionModel):
         y_hat = torch.cat(y_hat_slices, dim=1)
         x_hat = self.g_s(y_hat).clamp_(0, 1)
 
-        return {"x_hat": x_hat}
+        return ImageCodecDecompressOutput(x_hat=x_hat)

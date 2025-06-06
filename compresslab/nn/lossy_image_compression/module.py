@@ -1,17 +1,22 @@
 import lightning as L
 from compresslab.core.models import CompressionModel
 from compresslab.utils.logger import MetricLogger
+from compresslab.nn.lossy_image_compression.abc import (
+    ImageCodecForwardInput,
+    ImageCodecCompressInput,
+    ImageCodec
+)
 import torch
 import math
 import torch.nn as nn
 import numpy as np
 from copy import deepcopy
 from pytorch_msssim import ms_ssim
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Union
 
-class CompressAILightningModule(L.LightningModule):
+class ImageCodecLightningModule(L.LightningModule):
     def __init__(self, 
-                 model: CompressionModel,
+                 model: ImageCodec,
                  ext_params: Dict[str, Any] = None
                  ):
         super().__init__()
@@ -46,24 +51,19 @@ class CompressAILightningModule(L.LightningModule):
         x = batch
         N, _, H, W = x.shape
         for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
-            out = model_instance.forward(x)
-            
-            bpp_loss = \
-                sum(
-                    torch.log(likelihoods).sum() / (-math.log(2) * N * H * W)
-                    for likelihoods in out["likelihoods"].values()
+            model_instance: Union[ImageCodec, CompressionModel]
+            out = model_instance.forward(
+                ImageCodecForwardInput(
+                    x=x
                 )
-            
-            mse_loss = torch.nn.functional.mse_loss(out["x_hat"], x)
-            psnr = 10 * torch.log10(1. / mse_loss)
-            ms_ssim_loss = ms_ssim(out["x_hat"], x, data_range=1)
+            )
             
             if self.distortion == "mse":
-                distortion_loss = mse_loss * 255 ** 2
+                distortion_loss = out.mse_loss * 255 ** 2
             else:
-                distortion_loss = 1 - ms_ssim_loss
+                distortion_loss = 1 - out.ms_ssim
 
-            loss = lmbda * distortion_loss + bpp_loss
+            loss = lmbda * distortion_loss + out.bpp
             aux_loss = model_instance.aux_loss()
             self.manual_backward(loss)
             torch.nn.utils.clip_grad_norm_(model_instance.parameters(), 1.0)
@@ -72,15 +72,15 @@ class CompressAILightningModule(L.LightningModule):
             # show metrics of the first model on the progress bar
             if model_name == "codec_0" or model_name == "codec":
                 self.log_dict({"loss": loss, 
-                        "bpp": bpp_loss,
-                        "psnr": psnr,
-                        "ms-ssim": ms_ssim_loss}, prog_bar=True, on_step=True, on_epoch=False, logger=False)
+                        "bpp": out.bpp,
+                        "psnr": out.psnr,
+                        "ms-ssim": out.ms_ssim}, prog_bar=True, on_step=True, on_epoch=False, logger=False)
         
             self.log_dict({
                 f"train/{model_name}.loss": loss,
-                f"train/{model_name}.bpp": bpp_loss,
-                f"train/{model_name}.psnr": psnr,
-                f"train/{model_name}.ms-ssim": ms_ssim_loss,
+                f"train/{model_name}.bpp": out.bpp,
+                f"train/{model_name}.psnr": out.psnr,
+                f"train/{model_name}.ms-ssim": out.ms_ssim,
             }, on_epoch=False, logger=True, sync_dist=True, on_step=True)
 
         optimizer.step()
@@ -91,21 +91,17 @@ class CompressAILightningModule(L.LightningModule):
         x = batch
         N, _, H, W = x.shape
         for model_name, model_instance in self.model_wrapper.items():
-            out = model_instance.forward(x)
-            mse_loss = torch.nn.functional.mse_loss(out["x_hat"], x)
-            psnr = 10 * torch.log10(1 / mse_loss)
-            bpp_loss = \
-                sum(
-                    torch.log(likelihoods).sum() / (-math.log(2) * N * H * W)
-                    for likelihoods in out["likelihoods"].values()
+            model_instance: Union[ImageCodec, CompressionModel]
+            out = model_instance.forward(
+                ImageCodecForwardInput(
+                    x=x
                 )
-            
-            ms_ssim_loss = ms_ssim(out["x_hat"], x, data_range=1)
+            )
             
             self.log_dict({
-                f"val/{model_name}.bpp": bpp_loss,
-                f"val/{model_name}.psnr": psnr,
-                f"val/{model_name}.ms-ssim": ms_ssim_loss,
+                f"val/{model_name}.bpp": out.bpp,
+                f"val/{model_name}.psnr": out.psnr,
+                f"val/{model_name}.ms-ssim": out.ms_ssim,
             }, on_step=False, on_epoch=True, logger=True, sync_dist=True)
 
     def on_test_start(self):
@@ -115,17 +111,22 @@ class CompressAILightningModule(L.LightningModule):
 
     def test_step(self, batch, batch_idx):
         for model_name, model_instance in self.model_wrapper.items():
-            with self.metric.timer(model_name, "time_compress") as timer:
-                out_compress = model_instance.compress(batch)
-            with self.metric.timer(model_name, "time_decompress") as timer:
-                out_decompress = model_instance.decompress(out_compress["strings"], out_compress["shape"])
-            mse_loss = torch.nn.functional.mse_loss(out_decompress["x_hat"], batch)
+            model_instance: Union[ImageCodec, CompressionModel]
+            with self.metric.timer(model_name, "time_compress(ms)") as timer:
+                out_compress = model_instance.compress(
+                    ImageCodecCompressInput(
+                        x=batch
+                    )
+                )
+            with self.metric.timer(model_name, "time_decompress(ms)") as timer:
+                out_decompress = model_instance.decompress(out_compress)
+            mse_loss = torch.nn.functional.mse_loss(out_decompress.x_hat, batch)
             psnr = 10 * torch.log10(1 / mse_loss).item()
-            ms_ssim_loss = ms_ssim(out_decompress["x_hat"], batch, data_range=1).item()
-            bpp = sum(len(strings[0]) for strings in out_compress["strings"]) / np.prod(batch.shape[-2:]) * 8
+            ms_ssim_loss = ms_ssim(out_decompress.x_hat, batch, data_range=1).item()
+            
             self.metric.log(model_name, 
                             {
-                                "bpp":bpp, 
+                                "bpp": out_compress.bpp, 
                                 "psnr":psnr,
                                 "ms-ssim":ms_ssim_loss,
                              })
