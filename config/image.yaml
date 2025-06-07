@@ -1,6 +1,7 @@
 Global:
-  lmbda: &lmbda [0.0018, 0.0035, 0.0067, 0.0130, 0.0250, 0.0483, 0.0932, 0.1800]
-
+  ExtParams: &extparams
+    lmbda: [0.0018, 0.0035, 0.0067, 0.0130, 0.0250, 0.0483, 0.0932, 0.1800]
+    distortion: mse
 
 Model:
   - Name: balle2016
@@ -8,18 +9,55 @@ Model:
     Params:
       N: 128
       M: 192
-    ExtParams:
-      lmbda: *lmbda
-      distortion: mse
+    ExtParams: *extparams
 
-  - Name: minnen2018
+  - Name: balle2018
+    Key: ScaleHyperprior
+    Params:
+      N: 128
+      M: 192
+    ExtParams: *extparams
+
+  - Name: minnen2018-meanscale
     Key: MeanScaleHyperprior
     Params:
       N: 128
       M: 192
-    ExtParams:
-      lmbda: *lmbda
-      distortion: mse
+    ExtParams: *extparams
+  
+  - Name: minnen2018-autoregressive
+    Key: JointAutoregressiveHierarchicalPriors
+    Params:
+      N: 128
+      M: 192
+    ExtParams: *extparams
+
+  - Name: minnen2020
+    Key: ChARM
+    Params:
+      N: 128
+      M: 192
+    ExtParams: *extparams
+
+  - Name: cheng2020anchor
+    Key: Cheng2020Anchor
+    Params:
+      N: 192
+    ExtParams: *extparams
+
+  - Name: cheng2020checkerboard
+    Key: Cheng2020AnchorCheckerboard
+    Params:
+      N: 192
+    ExtParams: *extparams
+
+  - Name: elic2022
+    Key: Elic2022Official
+    Params:
+      N: 192
+      M: 320
+    ExtParams: *extparams
+
 
 Data:
   Key: BasicImageDataModule
@@ -30,7 +68,7 @@ Data:
 
 Train:
   Epoch: 100
-  Valinterval: 5
+  Valinterval: 10
   Benchmark: 
     - Key: BD_RATE
       Params:
@@ -40,4 +78,4 @@ Train:
 
 
 Env:
-  Devices: [0,1]
+  Devices: [0, 1, 2, 3]
