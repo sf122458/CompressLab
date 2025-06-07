@@ -13,6 +13,7 @@ import inspect
 from torch.utils.data import Dataset
 from rich.console import Console
 from rich.table import Table
+import lightning as L
 
 
 # from the implementation in vlutils
@@ -143,5 +144,5 @@ Example:
 class ModelRegistry(Registry[Type["torch.nn.Module"]]):
     pass
 
-class DataRegistry(Registry[Type["Dataset"]]):
+class DataRegistry(Registry[Type["L.LightningDataModule"]]):
     pass

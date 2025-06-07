@@ -10,29 +10,27 @@ from torchvision import transforms
 import os
 import torchvision.transforms.functional as F
 from pytorch_msssim import ms_ssim
+from typing import List
 
-class PairRandomCrop:
-    """Perform a certain random crop on a pair of images."""
+class SequenceRandomCrop:
+    """Perform a certain random crop on a sequence of images."""
     def __init__(self, size: int=256):
         assert isinstance(size, int) and size > 0, "size must be a positive integer"
         self.crop_size = (size, size)
         
-    def __call__(self, img1, img2):
-        assert img1.shape == img2.shape, "Input images must have the same size, got {} and {}".format(img1.shape, img2.shape)
-        
+    def __call__(self, img_list: List[torch.Tensor]) -> List[torch.Tensor]:
         i, j, h, w = transforms.RandomCrop.get_params(
-            img1, output_size=self.crop_size
+            img_list[0], output_size=self.crop_size
         )
+
+        cropped_img_list = [F.crop(img, i, j, h, w) for img in img_list]
         
-        img1 = F.crop(img1, i, j, h, w)
-        img2 = F.crop(img2, i, j, h, w)
-        
-        return img1, img2
+        return cropped_img_list
 
 # https://github.com/InterDigitalInc/CompressAI/blob/master/compressai/datasets/video.py
 class VideoFolder(Dataset):
     """Load a video folder database. Training and testing video clips
-    are stored in a directorie containing mnay sub-directorie like Vimeo90K Dataset:
+    are stored in a directory containing many sub-directorie like Vimeo90K Dataset:
 
     .. code-block::
 
@@ -123,25 +121,28 @@ class VideoFolder(Dataset):
         return len(self.sample_folders)
     
 
-class Vimeo90kDataset(Dataset):
-    """Dataset for Vimeo90k sequences. Usually used for the training of the P frame codec.
+    
+
+class Vimeo90kPFrameCodecDataset(Dataset):
+    """Dataset for Vimeo90k sequences. Usually used for the training of the P-frame codec.
 
     This dataset will return a pair of images: the cropped input image and the cropped reference image.
+    See original implementation at https://github.com/ZhihaoHu/PyTorchVideoCompression/blob/master/DVC/dataset.py.
     """
     def __init__(self, 
-                 rootdir: str = "./dataset/vimeo_setuplet/sequences/", 
-                 size: int = 256):
+                 root: str = "./dataset/vimeo_setuplet", 
+                 crop_size: int = 256):
         """
         Args:
-            rootdir (string): root directory of the dataset
+            root (string): root directory of the dataset
             size (int): size of the cropped images, default is 256
         """
-        self.image_input_list, self.image_ref_list = self.get_vimeo(rootdir=rootdir)
+        self.image_input_list, self.image_ref_list = self.get_vimeo(rootdir=os.path.join(root, "sequences"))
 
         print(f"Found {len(self.image_input_list)} input images and {len(self.image_ref_list)} reference images.")
 
         self.transform = transforms.ToTensor()
-        self.random_crop = PairRandomCrop(size)
+        self.random_crop = SequenceRandomCrop(crop_size)
 
     def get_vimeo(self, 
                   rootdir: str = "./dataset/vimeo_setuplet/sequences/",
@@ -179,19 +180,31 @@ class Vimeo90kDataset(Dataset):
         input_image = self.transform(input_image)
         ref_image = self.transform(ref_image)
 
-        input_image, ref_image = self.random_crop(input_image, ref_image)
+        input_image, ref_image = self.random_crop([input_image, ref_image])
 
         return input_image, ref_image
     
 
-class UVGDataset(Dataset):
-    """Dataset for UVG sequences. Usually used for evaluation.
+class UVGPFrameCodecDataset(Dataset):
+    """Dataset for UVG sequences. Used for the evaluation of P-frame codec.
+    The I-frame is compressed with **HEVC** by default, and the bpp, psnr and ms-ssim is calculated.
+    Modify from https://github.com/ZhihaoHu/PyTorchVideoCompression/blob/master/DVC/dataset.py.
+    #TODO: I frame compressed with pretrained models, such as cheng2020.
     """
-    def __init__(self, root: str,
-                 test_full: bool = False
+    def __init__(self, 
+                 root: str,
+                 test_full: bool = False,
+                 gop_size: int = 12,
                  ):
+        """
+        Args:
+            root(str): root directory of the UVG dataset
+            test_full(bool): if True, all frames in the folders will be used for testing. Otherwise, only the first gop will be used.
+            gop_size(int): size of the group of pictures (GOP). Default is 12.
+        """
 
-        folders = ["Beauty", "Bosphorus", "HoneyBee", "Jockey", "ReadySteadyGo", "ShakeNDry", "YachtRide"]
+        # NOTE: `ShakeNDry` contains 300 frames, while others contain 600 frames.
+        self.folders = ["Beauty", "Bosphorus", "HoneyBee", "Jockey", "ReadySteadyGo", "ShakeNDry", "YachtRide"]
 
         self.transform = transforms.ToTensor()
 
@@ -212,7 +225,7 @@ class UVGDataset(Dataset):
             refdir = lmbda_to_refdir[lmbda]
             intra_frame_bpp = self.getbpp(refdir)
 
-            for idx, folder in enumerate(folders):
+            for idx, folder in enumerate(self.folders):
                 seqIbpp = intra_frame_bpp[idx]
                 img_list = os.listdir(os.path.join(root, folder))
 
@@ -222,22 +235,23 @@ class UVGDataset(Dataset):
                         cnt += 1
                 
                 if test_full:
-                    framerange = cnt // 12
+                    frame_range = cnt // gop_size
                 else:
-                    framerange = 1
+                    frame_range = 1
                 
-                for i in range(framerange):
-                    refpath = os.path.join(root, folder, refdir, "im" + str(i * 12 + 1).zfill(4) + ".png")
-                    inputpath = []
-                    for j in range(12):
-                        inputpath.append(os.path.join(root, folder, "im" + str(i * 12 + j + 1).zfill(3) + ".png"))
+                for i in range(frame_range):
+                    ref_path = os.path.join(root, folder, refdir, f"im{i * gop_size + 1:04d}.png") # I frame compressed with HEVC
+                    input_path = []
+                    for j in range(1, gop_size):
+                        input_path.append(os.path.join(root, folder, f"im{i * gop_size + j + 1:03d}.png")) # P frames, compressed with HEVC
                     
-                    self.ref[lmbda].append(refpath)
+                    self.ref[lmbda].append(ref_path)
                     self.refbpp[lmbda].append(seqIbpp)
-                    self.input[lmbda].append(inputpath)
+                    self.input[lmbda].append(input_path)
             
     def getbpp(self, ref_i_folder):
-        Ibpp = None
+        """Get the bpp of the I frames compressed with HEVC."""
+        Ibpp = []
         if ref_i_folder == 'H265L20':
             Ibpp = [1.2929020996093752,
                     0.6758680826822915,
@@ -272,7 +286,7 @@ class UVGDataset(Dataset):
                     0.26244807942708337]
         else:
             raise FileNotFoundError('cannot find ref : ', ref_i_folder)
-        if len(Ibpp) == 0:
+        if len(Ibpp) != len(self.folders):
             raise ValueError('You need to generate I frames and fill the bpps above!')
         return Ibpp
     
@@ -304,6 +318,108 @@ class UVGDataset(Dataset):
         ref_bpp = {k:self.refbpp[k][index] for k in self.refbpp.keys()}
         return input_images, ref_image, ref_bpp, ref_psnr, ref_msssim
 
+
+class Vimeo90kIPFrameCodecDataset(Dataset):
+    def __init__(
+            self, 
+            root: str = "./dataset/vimeo_setuplet",
+            crop_size: int = 256,
+            rnd_interval: bool = False
+    ):
+        splitfile = os.path.join(root, "train.list")
+        splitdir = os.path.join(root, "sequences")
+
+        if not os.path.exists(splitfile):
+            raise RuntimeError(f'Missing file "{splitfile}"')
+
+        if not os.path.exists(splitdir) or not os.path.isdir(splitdir):
+            raise RuntimeError(f'Missing directory "{splitdir}"')
+        
+        with open(splitfile, "r") as f_in:
+            self.sample_folders = [Path(f"{splitdir}/{f.strip()}") for f in f_in]
+
+        self.max_frames = 3  # hard coding for now
+        self.rnd_interval = rnd_interval
+        self.transform = transforms.ToTensor()
+        self.random_crop = SequenceRandomCrop(crop_size)
+        
+    def __len__(self):
+        return len(self.sample_folders)
+        
+    def __getitem__(self, index):
+        sample_folder = self.sample_folders[index]
+        samples = sorted(f for f in sample_folder.iterdir() if f.is_file())
+    
+        max_interval = (len(samples) + 2) // self.max_frames
+        interval = random.randint(1, max_interval) if self.rnd_interval else 1
+        frame_paths = (samples[::interval])[: self.max_frames]
+
+        input_images = []
+        for frame_path in frame_paths:
+            input_image = Image.open(frame_path).convert("RGB")
+            input_image = self.transform(input_image)
+            input_images.append(input_image)
+
+        cropped_images = self.random_crop(input_images)
+        return torch.stack(cropped_images)
+        
+
+class UVGIPFrameCodecDataset(Dataset):
+    """Dataset for UVG sequences. Used for the evaluation of IP-frame codec.
+    This dataset will return a sequence of images. The compression of the I-frame and P-frames is done in the model.
+    """
+    def __init__(self, 
+                 root: str, 
+                 test_full: bool = False,
+                 gop_size: int = 12,
+                 ):
+        """
+        Args:
+            root(str): root directory of the UVG dataset
+            test_full(bool): if True, all frames in the folders will be used for testing. Otherwise, only the first gop will be used.
+            gop_size(int): size of the group of pictures (GOP). Default is 12.
+        """
+        
+        folders = ["Beauty", "Bosphorus", "HoneyBee", "Jockey", "ReadySteadyGo", "ShakeNDry", "YachtRide"]
+
+        self.transform = transforms.ToTensor()
+
+        for idx, folder in enumerate(folders):
+            img_list = os.listdir(os.path.join(root, folder))
+
+            cnt = 0
+            for img in img_list:
+                if img.endswith('.png'):
+                    cnt += 1
+
+            if test_full:
+                frame_range = cnt // gop_size
+            else:
+                frame_range = 1
+
+            self.input = []
+
+            for i in range(frame_range):
+                input_path = []
+                for j in range(gop_size):
+                    input_path.append(os.path.join(root, folder, f"im{i * gop_size + j + 1:03d}.png"))
+                
+                self.input.append(input_path)
+
+    def __len__(self):
+        return len(self.input)
+    
+    def __getitem__(self, index):
+        input_images = []
+        for filename in self.input[index]:
+            input_image = Image.open(filename)
+            input_image = self.transform(input_image)
+            h, w = input_image.shape[-2], input_image.shape[-1]
+            h, w = h // 64 * 64, w // 64 * 64
+            input_image = F.center_crop(input_image, (h, w))
+            input_images.append(input_image)
+        return torch.stack(input_images)
+    
 #TODO
 class HEVCDataset(Dataset):
     """Dataset for HEVC test sequences. Usually used for evaluation.
@@ -350,38 +466,39 @@ class HEVCDataset(Dataset):
         ref_image = self.transform(ref_image)
 
 
-
 @DataRegistry.register("IPFrameVideoDataModule", define_path=__file__)
 class IPFrameVideoDataModule(L.LightningDataModule):
+    """
+    Lightning DataModule for loading video datasets for IP-frame compression tasks.
+    """
     def __init__(self,
                  root: str,
                  batch_size: int = 32,
-                 num_workers: int = 4,):
+                 num_workers: int = 4,
+                 crop_size: int = 256,
+                 gop_size: int = 12):
         super().__init__()
         self.root = root
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.crop_size = crop_size
+        self.gop_size = gop_size
 
     def setup(self, stage):
-        self.train_dataset = VideoFolder(
+        self.train_dataset = Vimeo90kIPFrameCodecDataset(
             root=self.root,
             rnd_interval=True,
-            rnd_temp_order=True,
-            split="train",
-            transform=transforms.Compose([
-                transforms.ToTensor(),
-                transforms.RandomCrop((256, 256)),
-            ])
+            crop_size=self.crop_size
         )
-        self.test_dataset = VideoFolder(
+        self.val_dataset = UVGIPFrameCodecDataset(
             root=self.root,
-            rnd_interval=False,
-            rnd_temp_order=False,
-            split="test",
-            transform=transforms.Compose([
-                transforms.ToTensor(),
-                transforms.CenterCrop((256, 256)),
-            ])
+            test_full=False,
+            gop_size=self.gop_size
+        )
+        self.test_dataset = UVGIPFrameCodecDataset(
+            root=self.root,
+            test_full=True,
+            gop_size=self.gop_size
         )
 
     def train_dataloader(self):
@@ -405,25 +522,38 @@ class IPFrameVideoDataModule(L.LightningDataModule):
 
 @DataRegistry.register("PFrameVideoDataModule", define_path=__file__)
 class PFrameVideoDataModule(L.LightningDataModule):
+    """
+    Lightning DataModule for loading video datasets for P-frame compression tasks.
+    """
     def __init__(self,
                  train_data_dir: str = "data/vimeo_setuplet/sequences/",
                  batch_size: int = 32,
                  num_workers: int = 4,
                  test_data_dir: str = "data/UVG/images/",
-                 size: int = 256):
+                 crop_size: int = 256,
+                 gop_size: int = 12):
         super().__init__()
         self.train_data_dir = train_data_dir
         self.test_data_dir = test_data_dir
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.size = size
+        self.crop_size = crop_size
+        self.gop_size = gop_size
 
     def setup(self, stage=None):
-        self.train_dataset = Vimeo90kDataset(rootdir=self.train_data_dir, size=self.size)
-        self.val_dataset = UVGDataset(root=self.test_data_dir,
-                                       test_full=False)
-        self.test_dataset = UVGDataset(root=self.test_data_dir,
-                                       test_full=True)
+        self.train_dataset = Vimeo90kPFrameCodecDataset(
+            root=self.train_data_dir, 
+            crop_size=self.crop_size)
+        
+        self.val_dataset = UVGPFrameCodecDataset(
+            root=self.test_data_dir,
+            test_full=False,
+            gop_size=self.gop_size)
+
+        self.test_dataset = UVGPFrameCodecDataset(
+            root=self.test_data_dir,
+            test_full=False,
+            gop_size=self.gop_size)
         
 
     def train_dataloader(self):
