@@ -1,6 +1,6 @@
 # CompressLab
 
-A PyTorch-based framework for image compression research and development.
+A PyTorch-Based Framework for Data Compression Research.
 
 ### Installation
 
@@ -33,20 +33,33 @@ Each folder in `dataset` has a `download.sh` script to download the dataset. Cur
 - `UVG` is used for the evaluation of the video compression models.
 
 ### Available models
-- All models implemented in [CompressAI](https://github.com/InterDigitalInc/CompressAI).
-- MLIC
-- TCM
-- DVC
+#### Lossy image compression
+- All models implemented in [CompressAI](https://github.com/InterDigitalInc/CompressAI):
+  - [FactorizedPrior](https://arxiv.org/abs/1607.05006)
+  - [ScaleHyperprior](https://arxiv.org/abs/1802.01436)
+  - [MeanScaleHyperprior, JointAutoregressiveandHierarchicalPriors](https://arxiv.org/abs/1809.02736)
+  - [Cheng2020](https://arxiv.org/abs/2001.01568)
+  - [Cheng2020Checkerboard](https://arxiv.org/abs/2103.15306)
+  - [ELIC](https://arxiv.org/abs/2203.10886)
+- [ChARM](https://arxiv.org/abs/2007.08739)
+- [TCM](https://arxiv.org/abs/2303.14978)
+- [MLIC](https://arxiv.org/abs/2307.15421)
 
-**Note: All models can be trained based on the code, but the compression performance has not been verified.**
+#### Video compression
+- [DVC](https://arxiv.org/abs/1812.00101)
+- [SSF](https://openaccess.thecvf.com/content_CVPR_2020/papers/Agustsson_Scale-Space_Flow_for_End-to-End_Optimized_Video_Compression_CVPR_2020_paper.pdf)
+
+**Note: All models can be trained using the provided code, but the compression performance remains unverified.**
 
 
 ### Related links
 - [PyTorch Lightning](https://lightning.ai)
 - [CompressAI](https://github.com/InterDigitalInc/CompressAI)
-- [MLIC++](https://github.com/JiangWeibeta/MLIC)
-- [DVC-Pytorch](https://github.com/binzzheng/DVC-PyTorch)
-- [PytorchVideoCompression](https://github.com/ZhihaoHu/PyTorchVideoCompression)
+- [ChARM-PyTorch](https://github.com/tokkiwa/minnen2020)
+- [LIC-TCM](https://github.com/jmliu206/LIC_TCM)
+- [MLIC](https://github.com/JiangWeibeta/MLIC)
+- [DVC-PyTorch](https://github.com/binzzheng/DVC-PyTorch)
+- [PyTorchVideoCompression](https://github.com/ZhihaoHu/PyTorchVideoCompression)
 - [CLIC](https://www.compression.cc/)
 - [UVG](https://ultravideo.fi)
 - [Kodak](https://r0k.us/graphics/kodak/)
