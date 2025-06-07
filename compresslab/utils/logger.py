@@ -4,6 +4,7 @@ import torch
 import time
 import contextlib
 import pickle
+import torch.distributed as dist
 
 class MetricLogger():
     """
@@ -40,6 +41,7 @@ class MetricLogger():
         if name not in self.metrics:
             self.metrics[name] = {}
         for k, v in log_dict.items():
+            assert isinstance(v, (int, float)), f"Value {v} for key {k} in {name} is not a number."
             if k not in self.metrics[name]:
                 self.metrics[name][k] = []
             self.metrics[name][k].append(v)
