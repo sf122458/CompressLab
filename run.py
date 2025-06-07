@@ -4,6 +4,7 @@ import argparse
 import logging
 import os
 import torch
+import math
 from compresslab.utils.config import Config
 from compresslab.utils.registry import Registry, DataRegistry, ModelRegistry
 from compresslab.utils.benchmark import Benchmark
@@ -39,6 +40,7 @@ def main(args: Args):
         config = parse_yaml_file_as(Config, args.config)
 
         datamodule = DataRegistry.get(config.Data.Key)(**config.Data.Params)
+        datamodule.setup(None)
 
 
         for model in config.Model:
@@ -106,14 +108,18 @@ def main(args: Args):
                     hparams = pickle.load(pkl_file)
                 if hparams != model:
                     raise ValueError(f"Model hyperparams mismatch: {hparams} vs {model}")
-                
+            
+            if config.Train.Steps is None and config.Train.Epoch is None:
+                raise ValueError("Please specify either Train.Steps or Train.Epoch in the config file.")
+
+            num_epoch = config.Train.Epoch if config.Train.Epoch is not None else math.ceil(config.Train.Steps / len(datamodule.train_dataloader()))
 
             trainer = Trainer(
                 accelerator="gpu" if torch.cuda.is_available() else "cpu",
                 devices=config.Env.Devices,
                 strategy="ddp_find_unused_parameters_true",
                 max_steps=config.Train.Steps,
-                max_epochs=config.Train.Epoch,
+                max_epochs=num_epoch,
                 check_val_every_n_epoch=config.Train.Valinterval,
                 default_root_dir=out_dir,
                 callbacks=[
