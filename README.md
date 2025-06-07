@@ -1,6 +1,6 @@
 # CompressLab
 
-A PyTorch-Based Framework for Data Compression Research.
+A PyTorch-based framework for data compression research.
 
 ### Installation
 
