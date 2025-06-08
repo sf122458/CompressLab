@@ -47,13 +47,11 @@ class ImageCodecLightningModule(L.LightningModule):
         optimizer, aux_optimizer = self.optimizers()
         optimizer.zero_grad()
         aux_optimizer.zero_grad()
-        x = batch
-        N, _, H, W = x.shape
         for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
             model_instance: Union[ImageCodec, CompressionModel]
             out = model_instance.forward(
                 ImageCodecForwardInput(
-                    x=x
+                    x=batch
                 )
             )
             
@@ -87,13 +85,11 @@ class ImageCodecLightningModule(L.LightningModule):
         
 
     def validation_step(self, batch, batch_idx):
-        x = batch
-        N, _, H, W = x.shape
         for model_name, model_instance in self.model_wrapper.items():
             model_instance: Union[ImageCodec, CompressionModel]
             out = model_instance.forward(
                 ImageCodecForwardInput(
-                    x=x
+                    x=batch
                 )
             )
             
