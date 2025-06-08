@@ -1,5 +1,5 @@
 Global:
-  lmbda: &lmbda [1625]
+  lmbda: &lmbda [0.0018, 0.0035, 0.0067, 0.0130, 0.0250, 0.0483, 0.0932, 0.1800]
 
 Model:
   - Key: ScaleSpaceFlow
@@ -7,14 +7,15 @@ Model:
       lmbda: *lmbda
 
 Data:
-  Key: CompressAIVideoDataModule
+  Key: IPFrameVideoDataModule
   Params:
-    root: dataset/vimeo_setuplet
+    train_data_dir: dataset/vimeo_setuplet
+    test_data_dir: dataset/UVG/images
     batch_size: 4
 
 Train:
-  Epoch: 50
-  Valinterval: 5
+  Steps: 2_000_000
+  Valinterval: 10
 
 Env:
-  Devices: [0]
+  Devices: [0, 1, 2, 3]
