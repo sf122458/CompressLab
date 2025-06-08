@@ -326,7 +326,7 @@ class Vimeo90kIPFrameCodecDataset(Dataset):
             crop_size: int = 256,
             rnd_interval: bool = False
     ):
-        splitfile = os.path.join(root, "train.list")
+        splitfile = os.path.join(root, "sep_trainlist.txt")
         splitdir = os.path.join(root, "sequences")
 
         if not os.path.exists(splitfile):
