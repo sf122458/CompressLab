@@ -384,6 +384,8 @@ class UVGIPFrameCodecDataset(Dataset):
 
         self.transform = transforms.ToTensor()
 
+        self.input = []
+
         for idx, folder in enumerate(folders):
             img_list = os.listdir(os.path.join(root, folder))
 
@@ -396,8 +398,6 @@ class UVGIPFrameCodecDataset(Dataset):
                 frame_range = cnt // gop_size
             else:
                 frame_range = 1
-
-            self.input = []
 
             for i in range(frame_range):
                 input_path = []
