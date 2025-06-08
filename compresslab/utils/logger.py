@@ -75,7 +75,7 @@ class MetricLogger():
 
 
     @contextlib.contextmanager
-    def timer(self, name, metric_name: str, cuda_sync=False):
+    def timer(self, name, metric_name: str, cuda_sync=False, unit="ms"):
         """
         A context manager to time a code block.
         """
@@ -97,5 +97,10 @@ class MetricLogger():
             yield
 
             elapsed_time = (time.time() - start_time) * 1000
-            
-        self.log(name, {metric_name: elapsed_time})
+
+        if unit == "ms": 
+            self.log(name, {metric_name + f"({unit})": elapsed_time})
+        elif unit == "s":
+            self.log(name, {metric_name + f"({unit})": elapsed_time / 1000})
+        else:
+            raise ValueError(f"Unsupported unit: {unit}. Supported units are 'ms' and 's'.")
