@@ -111,7 +111,7 @@ class Benchmark:
                     bpp.append(metric["bpp"])
                     psnr.append(metric["psnr"])
             plt.plot(bpp, psnr, label=model_name)
-        plt.xlabel("Bpp")
+        plt.xlabel("bpp")
         plt.ylabel("PSNR")
         plt.title("BD-Rate Curve")
         plt.legend()
