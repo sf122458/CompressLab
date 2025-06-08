@@ -310,7 +310,7 @@ class ScaleSpaceFlow(CompressionModel, IPFrameCodec):
 
         # residual
         y_res_hat = self.res_hyperprior.decompress(
-            input.main_strings, 
+            input.strings, 
             input.main_shape
         )
 
