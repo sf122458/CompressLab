@@ -1,7 +1,4 @@
 import math
-
-from typing import List
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,7 +12,8 @@ from compresslab.core.ops import quantize_ste
 from compresslab.core.models.base import CompressionModel
 from compresslab.core.layers import conv, deconv, gaussian_blur, gaussian_kernel2d, meshgrid2d
 
-from compresslab.nn.video_compression.abc import IPFrameCodec
+from compresslab.nn.video_compression.abc import *
+
 
 class ScaleSpaceFlow(CompressionModel, IPFrameCodec):
     r"""Google's first end-to-end optimized video compression from E.
@@ -26,14 +24,12 @@ class ScaleSpaceFlow(CompressionModel, IPFrameCodec):
     Args:
         num_levels (int): Number of Scale-space
         sigma0 (float): standard deviation for gaussian kernel of the first space scale.
-        scale_field_shift (float):
     """
 
     def __init__(
         self,
         num_levels: int = 5,
         sigma0: float = 1.5,
-        scale_field_shift: float = 1.0,
     ):
         super().__init__()
 
@@ -175,52 +171,65 @@ class ScaleSpaceFlow(CompressionModel, IPFrameCodec):
 
         self.sigma0 = sigma0
         self.num_levels = num_levels
-        self.scale_field_shift = scale_field_shift
 
-    def forward(self, frames):
-        if not isinstance(frames, List):
-            raise RuntimeError(f"Invalid number of frames: {len(frames)}.")
+    def forward(self, input: IPFrameCodecForwardInput) -> IPFrameCodecForwardOutput:
+        out_list = []
 
-        reconstructions = []
-        frames_likelihoods = []
+        out = self.forward_I_frame(
+            IFrameForwardInput(
+                input_frame=input.I_frame,
+            )
+        )
+        out_list.append(out)
+        x_ref = out.recon_frame.detach()  # stop gradient flow (cf: google2020 paper)
 
-        x_hat, likelihoods = self.forward_keyframe(frames[0])
-        reconstructions.append(x_hat)
-        frames_likelihoods.append(likelihoods)
-        x_ref = x_hat.detach()  # stop gradient flow (cf: google2020 paper)
+        for i in range(len(input.P_frames)):
+            out = self.forward_P_frame(
+                PFrameForwardInput(
+                    input_frame=input.P_frames[i],
+                    refer_frame=x_ref if i == 0 else out.recon_frame,
+                )
+            )
 
-        for i in range(1, len(frames)):
-            x = frames[i]
-            x_ref, likelihoods = self.forward_inter(x, x_ref)
-            reconstructions.append(x_ref)
-            frames_likelihoods.append(likelihoods)
+        return IPFrameCodecForwardOutput(
+            out_list=out_list,
+        )
 
-        return {
-            "x_hat": reconstructions,
-            "likelihoods": frames_likelihoods,
-        }
-
-    def forward_keyframe(self, x):
-        y = self.img_encoder(x)
+    def forward_I_frame(self, input: IFrameForwardInput) -> IFrameForwardOutput:
+        y = self.img_encoder(input.input_frame)
         y_hat, likelihoods = self.img_hyperprior(y)
         x_hat = self.img_decoder(y_hat)
-        return x_hat, {"keyframe": likelihoods}
+        return IFrameForwardOutput(
+            input_frame=input.input_frame,
+            recon_frame=x_hat,
+            likelihoods=IFrameLikelihoods(
+                y=likelihoods["y"],
+                z=likelihoods["z"],
+            )
+        )
 
-    def encode_keyframe(self, x):
-        y = self.img_encoder(x)
+    def compress_I_frame(self, input: IFrameCompressInput) -> IFrameCompressOutput:
+        y = self.img_encoder(input.input_frame)
         y_hat, out_keyframe = self.img_hyperprior.compress(y)
         x_hat = self.img_decoder(y_hat)
 
-        return x_hat, out_keyframe
+        return IFrameCompressOutput(
+            input_frame=input.input_frame,
+            recon_frame=x_hat,
+            y_strings=out_keyframe["strings"][0],
+            z_strings=out_keyframe["strings"][1],
+            shape=out_keyframe["shape"],
+        )
 
-    def decode_keyframe(self, strings, shape):
-        y_hat = self.img_hyperprior.decompress(strings, shape)
+    def decompress_I_frame(self, input: IFrameCompressOutput) -> IFrameDecompressOutput:
+        y_hat = self.img_hyperprior.decompress(input.strings, input.shape)
         x_hat = self.img_decoder(y_hat)
 
-        return x_hat
+        return IFrameDecompressOutput(recon_frame=x_hat)
 
-    def forward_inter(self, x_cur, x_ref):
+    def forward_P_frame(self, input: PFrameForwardInput) -> PFrameForwardOutput:
         # encode the motion information
+        x_cur, x_ref = input.input_frame, input.refer_frame
         x = torch.cat((x_cur, x_ref), dim=1)
         y_motion = self.motion_encoder(x)
         y_motion_hat, motion_likelihoods = self.motion_hyperprior(y_motion)
@@ -241,9 +250,20 @@ class ScaleSpaceFlow(CompressionModel, IPFrameCodec):
         # final reconstruction: prediction + residual
         x_rec = x_pred + x_res_hat
 
-        return x_rec, {"motion": motion_likelihoods, "residual": res_likelihoods}
+        # return x_rec, {"motion": motion_likelihoods, "residual": res_likelihoods}
+        return PFrameForwardOutput(
+            input_frame=x_cur,
+            recon_frame=x_rec,
+            likelihoods=PFrameLikelihoods(
+                y_mv=motion_likelihoods["y"],
+                z_mv=motion_likelihoods["z"],
+                y=res_likelihoods["y"],
+                z=res_likelihoods["z"],
+            )
+        )
 
-    def encode_inter(self, x_cur, x_ref):
+    def compress_P_frame(self, input: PFrameCompressInput) -> PFrameCompressOutput:
+        x_cur, x_ref = input.input_frame, input.refer_frame
         # encode the motion information
         x = torch.cat((x_cur, x_ref), dim=1)
         y_motion = self.motion_encoder(x)
@@ -265,25 +285,34 @@ class ScaleSpaceFlow(CompressionModel, IPFrameCodec):
         # final reconstruction: prediction + residual
         x_rec = x_pred + x_res_hat
 
-        return x_rec, {
-            "strings": {
-                "motion": out_motion["strings"],
-                "residual": out_res["strings"],
-            },
-            "shape": {"motion": out_motion["shape"], "residual": out_res["shape"]},
-        }
+        return PFrameCompressOutput(
+            input_frame=x_cur,
+            recon_frame=x_rec,
+            refer_frame=x_ref,
+            y_mv_strings=out_motion["strings"][0],
+            z_mv_strings=out_motion["strings"][1],
+            y_strings=out_res["strings"][0],
+            z_strings=out_res["strings"][1],
+            mv_shape=out_motion["shape"],
+            main_shape=out_res["shape"]
+        )
 
-    def decode_inter(self, x_ref, strings, shapes):
-        key = "motion"
-        y_motion_hat = self.motion_hyperprior.decompress(strings[key], shapes[key])
+    def decompress_P_frame(self, input: PFrameCompressOutput) -> PFrameDecompressOutput:
+        # motion
+        y_motion_hat = self.motion_hyperprior.decompress(
+            input.mv_strings, 
+            input.mv_shape
+        )
 
         # decode the space-scale flow information
         motion_info = self.motion_decoder(y_motion_hat)
-        x_pred = self.forward_prediction(x_ref, motion_info)
+        x_pred = self.forward_prediction(input.refer_frame, motion_info)
 
         # residual
-        key = "residual"
-        y_res_hat = self.res_hyperprior.decompress(strings[key], shapes[key])
+        y_res_hat = self.res_hyperprior.decompress(
+            input.main_strings, 
+            input.main_shape
+        )
 
         # y_combine
         y_combine = torch.cat((y_res_hat, y_motion_hat), dim=1)
@@ -292,7 +321,7 @@ class ScaleSpaceFlow(CompressionModel, IPFrameCodec):
         # final reconstruction: prediction + residual
         x_rec = x_pred + x_res_hat
 
-        return x_rec
+        return PFrameDecompressOutput(recon_frame=x_rec)
 
     @staticmethod
     def gaussian_volume(x, sigma: float, num_levels: int):
@@ -350,61 +379,69 @@ class ScaleSpaceFlow(CompressionModel, IPFrameCodec):
         x_pred = self.warp_volume(volume, flow, scale_field)
         return x_pred
 
-    def aux_loss(self):
-        """Return a list of the auxiliary entropy bottleneck over module(s)."""
+    def compress(self, input: IPFrameCodecCompressInput) -> IPFrameCodecCompressOutput:
+        I_frame_out = self.compress_I_frame(
+            IFrameCompressInput(
+                input_frame=input.I_frame,
+            )
+        )
 
-        aux_loss_list = []
-        for m in self.modules():
-            if isinstance(m, CompressionModel) and m is not self:
-                aux_loss_list.append(m.aux_loss())
+        x_ref = I_frame_out.recon_frame
 
-        return aux_loss_list
+        P_frame_out_list = []
 
-    def compress(self, frames):
-        if not isinstance(frames, List):
-            raise RuntimeError(f"Invalid number of frames: {len(frames)}.")
+        for i in range(len(input.P_frames)):
+            P_frame_out = self.compress_P_frame(
+                PFrameCompressInput(
+                    input_frame=input.P_frames[i],
+                    refer_frame=x_ref,
+                )
+            )
 
-        frame_strings = []
-        shape_infos = []
+            x_ref = P_frame_out.recon_frame
 
-        x_ref, out_keyframe = self.encode_keyframe(frames[0])
+            P_frame_out_list.append(P_frame_out)
 
-        frame_strings.append(out_keyframe["strings"])
-        shape_infos.append(out_keyframe["shape"])
+        return IPFrameCodecCompressOutput(
+            I_frame_compress_output=I_frame_out,
+            P_frame_compress_output=P_frame_out_list,
+        )
 
-        for i in range(1, len(frames)):
-            x = frames[i]
-            x_ref, out_interframe = self.encode_inter(x, x_ref)
 
-            frame_strings.append(out_interframe["strings"])
-            shape_infos.append(out_interframe["shape"])
 
-        return frame_strings, shape_infos
-
-    def decompress(self, strings, shapes):
-        if not isinstance(strings, List) or not isinstance(shapes, List):
-            raise RuntimeError(f"Invalid number of frames: {len(strings)}.")
-
-        assert len(strings) == len(
-            shapes
-        ), f"Number of information should match {len(strings)} != {len(shapes)}."
-
+    def decompress(self, input: IPFrameCodecCompressOutput) -> IPFrameCodecDecompressOutput:
         dec_frames = []
 
-        x_ref = self.decode_keyframe(strings[0], shapes[0])
-        dec_frames.append(x_ref)
+        I_frame_out = self.decompress_I_frame(input.I_frame_compress_output)
+        dec_frames.append(I_frame_out.recon_frame)
 
-        for i in range(1, len(strings)):
-            string = strings[i]
-            shape = shapes[i]
-            x_ref = self.decode_inter(x_ref, string, shape)
-            dec_frames.append(x_ref)
+        x_ref = I_frame_out.recon_frame
 
-        return dec_frames
+        for i in range(len(input.P_frame_compress_output)):
+            input.P_frame_compress_output[i].refer_frame = x_ref
+            P_frame_out = self.decompress_P_frame(input.P_frame_compress_output[i])
+            dec_frames.append(P_frame_out.recon_frame)
 
-    @classmethod
-    def from_state_dict(cls, state_dict):
-        """Return a new model instance from `state_dict`."""
-        net = cls()
-        net.load_state_dict(state_dict)
-        return net
+
+        return IPFrameCodecDecompressOutput(recon_frames=dec_frames)
+
+    # def decompress(self, strings, shapes):
+    #     if not isinstance(strings, List) or not isinstance(shapes, List):
+    #         raise RuntimeError(f"Invalid number of frames: {len(strings)}.")
+
+    #     assert len(strings) == len(
+    #         shapes
+    #     ), f"Number of information should match {len(strings)} != {len(shapes)}."
+
+    #     dec_frames = []
+
+    #     x_ref = self.decompress_I_frame(strings[0], shapes[0])
+    #     dec_frames.append(x_ref)
+
+    #     for i in range(1, len(strings)):
+    #         string = strings[i]
+    #         shape = shapes[i]
+    #         x_ref = self.decompress_P_frame(x_ref, string, shape)
+    #         dec_frames.append(x_ref)
+
+    #     return IPFrameDecompressOutput(recon_frames=dec_frames)

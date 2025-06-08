@@ -158,17 +158,17 @@ class Vimeo90kPFrameCodecDataset(Dataset):
         with open(filefolderlist) as f:
             data = f.readlines()
 
-        train_frame = []
-        ref_frame = []
+        train_frame_name = []
+        ref_frame_name = []
 
         for line in data:
             filename = os.path.join(rootdir, line.strip())
-            train_frame += [filename]
+            train_frame_name.append(filename)
             refnumber = int(filename[-5:-4]) - 2
             refname = filename[0:-5] + str(refnumber) + '.png'
-            ref_frame += [refname]
+            ref_frame_name.append(refname)
 
-        return train_frame, ref_frame
+        return train_frame_name, ref_frame_name
 
     def __len__(self):
         return len(self.image_input_list)
@@ -313,8 +313,8 @@ class UVGPFrameCodecDataset(Dataset):
                     ref_msssim[lmbda] = ms_ssim(ref_image[lmbda].unsqueeze(0), input_image.unsqueeze(0), data_range=1.0).item()
                 else:
                     input_images[lmbda].append(input_image)
-        input_images = {k:torch.stack(input_images[k]) for k in input_images.keys()}
-        ref_image = {k:ref_image[k].unsqueeze(0) for k in ref_image.keys()}
+        input_images = {k:input_images[k] for k in input_images.keys()}
+        ref_image = {k:ref_image[k] for k in ref_image.keys()}
         ref_bpp = {k:self.refbpp[k][index] for k in self.refbpp.keys()}
         return input_images, ref_image, ref_bpp, ref_psnr, ref_msssim
 
@@ -361,7 +361,7 @@ class Vimeo90kIPFrameCodecDataset(Dataset):
             input_images.append(input_image)
 
         cropped_images = self.random_crop(input_images)
-        return torch.stack(cropped_images)
+        return cropped_images[0], cropped_images[1:]
         
 
 class UVGIPFrameCodecDataset(Dataset):
@@ -418,7 +418,7 @@ class UVGIPFrameCodecDataset(Dataset):
             h, w = h // 64 * 64, w // 64 * 64
             input_image = F.center_crop(input_image, (h, w))
             input_images.append(input_image)
-        return torch.stack(input_images)
+        return input_images[0], input_images[1:]
     
 #TODO
 class HEVCDataset(Dataset):
@@ -472,31 +472,33 @@ class IPFrameVideoDataModule(L.LightningDataModule):
     Lightning DataModule for loading video datasets for IP-frame compression tasks.
     """
     def __init__(self,
-                 root: str,
+                 train_data_dir: str = "data/vimeo_setuplet/sequences/",
+                 test_data_dir: str = "data/UVG/images/",
                  batch_size: int = 32,
                  num_workers: int = 4,
-                 crop_size: int = 256,
-                 gop_size: int = 12):
+                 train_crop_size: int = 256,
+                 test_gop_size: int = 12):
         super().__init__()
-        self.root = root
+        self.train_data_dir = train_data_dir
+        self.test_data_dir = test_data_dir
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.crop_size = crop_size
-        self.gop_size = gop_size
+        self.crop_size = train_crop_size
+        self.gop_size = test_gop_size
 
     def setup(self, stage):
         self.train_dataset = Vimeo90kIPFrameCodecDataset(
-            root=self.root,
+            root=self.train_data_dir,
             rnd_interval=True,
             crop_size=self.crop_size
         )
         self.val_dataset = UVGIPFrameCodecDataset(
-            root=self.root,
+            root=self.test_data_dir,
             test_full=False,
             gop_size=self.gop_size
         )
         self.test_dataset = UVGIPFrameCodecDataset(
-            root=self.root,
+            root=self.test_data_dir,
             test_full=True,
             gop_size=self.gop_size
         )
@@ -527,18 +529,18 @@ class PFrameVideoDataModule(L.LightningDataModule):
     """
     def __init__(self,
                  train_data_dir: str = "data/vimeo_setuplet/sequences/",
+                 test_data_dir: str = "data/UVG/images/",
                  batch_size: int = 32,
                  num_workers: int = 4,
-                 test_data_dir: str = "data/UVG/images/",
-                 crop_size: int = 256,
-                 gop_size: int = 12):
+                 train_crop_size: int = 256,
+                 test_gop_size: int = 12):
         super().__init__()
         self.train_data_dir = train_data_dir
         self.test_data_dir = test_data_dir
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.crop_size = crop_size
-        self.gop_size = gop_size
+        self.crop_size = train_crop_size
+        self.gop_size = test_gop_size
 
     def setup(self, stage=None):
         self.train_dataset = Vimeo90kPFrameCodecDataset(
@@ -552,7 +554,7 @@ class PFrameVideoDataModule(L.LightningDataModule):
 
         self.test_dataset = UVGPFrameCodecDataset(
             root=self.test_data_dir,
-            test_full=False,
+            test_full=True,
             gop_size=self.gop_size)
         
 

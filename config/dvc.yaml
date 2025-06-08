@@ -2,17 +2,17 @@ Global:
   lmbda: &lmbda [256, 512, 1024, 2048]
 
 Model:
-  - Name: DVC
+  - Name: DVC-CompressAI
     Key: DVC
     ExtParams:
       lmbda: *lmbda
 
 Data:
-  Key: DVCDataModule
+  Key: PFrameVideoDataModule
   Params:
-    train_data_dir: dataset/vimeo_setuplet/sequences
+    train_data_dir: dataset/vimeo_setuplet
     test_data_dir: dataset/UVG/images
-    batch_size: 4
+    batch_size: 16
 
 Train:
   Steps: 2000000
