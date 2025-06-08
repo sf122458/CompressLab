@@ -35,6 +35,7 @@ class ImageCodecForwardOutput:
     bpp: torch.Tensor = field(init=False)
     mse_loss: torch.Tensor = field(init=False)
     psnr: torch.Tensor = field(init=False)
+    ms_ssim_loss: torch.Tensor = field(init=False)
     ms_ssim: torch.Tensor = field(init=False)
 
     def __post_init__(self):
@@ -46,6 +47,7 @@ class ImageCodecForwardOutput:
         self.mse_loss = F.mse_loss(self.x_hat, self.x)
         self.psnr = 10 * torch.log10(1.0 / self.mse_loss)
         self.ms_ssim = ms_ssim(self.x_hat, self.x, data_range=1.0, size_average=True)
+        self.ms_ssim_loss = 1 - self.ms_ssim
 
 
 @dataclass
@@ -60,17 +62,31 @@ class ImageCodecCompressInput:
 @dataclass
 class ImageCodecCompressOutput:
     x: torch.Tensor
+    
     y_strings: List[bytes]
-    z_strings: List[bytes] = field(default_factory=list)
-    shape: Tuple[int, int] = field(default_factory=lambda: (0, 0))
+    z_strings: List[bytes] = None
+    shape: Tuple[int, int] = None
+
+    x_hat: torch.Tensor = None
 
     bpp: float = field(init=False)
+    psnr: float = field(init=False)
+    ms_ssim: float = field(init=False)
+
+    # compatible with CompressAI
+    strings: List[List[bytes]] = field(init=False)
 
     def __post_init__(self):
         N, _, H, W = self.x.shape
         num_pixels = N * H * W
         total_bits = sum(len(s) * 8 for s in self.y_strings + self.z_strings)
         self.bpp = total_bits / num_pixels
+
+        if self.x_hat is not None:
+            self.psnr = 10 * torch.log10(1.0 / F.mse_loss(self.x_hat, self.x)).item()
+            self.ms_ssim = ms_ssim(self.x_hat, self.x, data_range=1.0, size_average=True).item()
+
+        self.strings = [self.y_strings, self.z_strings] if self.z_strings else [self.y_strings]
 
 @dataclass
 class ImageCodecDecompressOutput:

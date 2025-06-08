@@ -7,7 +7,6 @@ from compresslab.nn.lossy_image_compression.abc import (
     ImageCodec
 )
 import torch
-import math
 import torch.nn as nn
 import numpy as np
 from copy import deepcopy
@@ -61,7 +60,7 @@ class ImageCodecLightningModule(L.LightningModule):
             if self.distortion == "mse":
                 distortion_loss = out.mse_loss * 255 ** 2
             else:
-                distortion_loss = 1 - out.ms_ssim
+                distortion_loss = 1 - out.ms_ssim_loss
 
             loss = lmbda * distortion_loss + out.bpp
             aux_loss = model_instance.aux_loss()
@@ -112,23 +111,24 @@ class ImageCodecLightningModule(L.LightningModule):
     def test_step(self, batch, batch_idx):
         for model_name, model_instance in self.model_wrapper.items():
             model_instance: Union[ImageCodec, CompressionModel]
-            with self.metric.timer(model_name, "time_compress(ms)") as timer:
+            with self.metric.timer(model_name, "time_compress") as timer:
                 out_compress = model_instance.compress(
                     ImageCodecCompressInput(
                         x=batch
                     )
                 )
-            with self.metric.timer(model_name, "time_decompress(ms)") as timer:
+            with self.metric.timer(model_name, "time_decompress") as timer:
                 out_decompress = model_instance.decompress(out_compress)
+
             mse_loss = torch.nn.functional.mse_loss(out_decompress.x_hat, batch)
             psnr = 10 * torch.log10(1 / mse_loss).item()
-            ms_ssim_loss = ms_ssim(out_decompress.x_hat, batch, data_range=1).item()
+            msssim = ms_ssim(out_decompress.x_hat, batch, data_range=1).item()
             
             self.metric.log(model_name, 
                             {
                                 "bpp": out_compress.bpp, 
-                                "psnr":psnr,
-                                "ms-ssim":ms_ssim_loss,
+                                "psnr": psnr,
+                                "ms-ssim": msssim,
                              })
 
     def on_test_end(self):
