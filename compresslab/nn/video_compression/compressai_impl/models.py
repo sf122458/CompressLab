@@ -173,26 +173,29 @@ class ScaleSpaceFlow(CompressionModel, IPFrameCodec):
         self.num_levels = num_levels
 
     def forward(self, input: IPFrameCodecForwardInput) -> IPFrameCodecForwardOutput:
-        out_list = []
 
-        out = self.forward_I_frame(
+        I_frame_out = self.forward_I_frame(
             IFrameForwardInput(
                 input_frame=input.I_frame,
             )
         )
-        out_list.append(out)
-        x_ref = out.recon_frame.detach()  # stop gradient flow (cf: google2020 paper)
+
+        out_list = []
 
         for i in range(len(input.P_frames)):
-            out = self.forward_P_frame(
+            P_frame_out = self.forward_P_frame(
                 PFrameForwardInput(
                     input_frame=input.P_frames[i],
-                    refer_frame=x_ref if i == 0 else out.recon_frame,
+                    refer_frame=I_frame_out.recon_frame.detach() if i == 0 else P_frame_out.recon_frame, 
+                    # stop gradient flow (cf: google2020 paper)
                 )
             )
 
+            out_list.append(P_frame_out)
+
         return IPFrameCodecForwardOutput(
-            out_list=out_list,
+            I_frame_output= I_frame_out,
+            P_frame_output=out_list,
         )
 
     def forward_I_frame(self, input: IFrameForwardInput) -> IFrameForwardOutput:
@@ -385,63 +388,32 @@ class ScaleSpaceFlow(CompressionModel, IPFrameCodec):
                 input_frame=input.I_frame,
             )
         )
-
-        x_ref = I_frame_out.recon_frame
-
+        
         P_frame_out_list = []
 
         for i in range(len(input.P_frames)):
             P_frame_out = self.compress_P_frame(
                 PFrameCompressInput(
                     input_frame=input.P_frames[i],
-                    refer_frame=x_ref,
+                    refer_frame=I_frame_out.recon_frame if i == 0 else P_frame_out.recon_frame,
                 )
             )
-
-            x_ref = P_frame_out.recon_frame
 
             P_frame_out_list.append(P_frame_out)
 
         return IPFrameCodecCompressOutput(
-            I_frame_compress_output=I_frame_out,
-            P_frame_compress_output=P_frame_out_list,
+            I_frame_output=I_frame_out,
+            P_frame_output=P_frame_out_list,
         )
-
-
 
     def decompress(self, input: IPFrameCodecCompressOutput) -> IPFrameCodecDecompressOutput:
         dec_frames = []
 
-        I_frame_out = self.decompress_I_frame(input.I_frame_compress_output)
+        I_frame_out = self.decompress_I_frame(input.I_frame_output)
         dec_frames.append(I_frame_out.recon_frame)
 
-        x_ref = I_frame_out.recon_frame
-
-        for i in range(len(input.P_frame_compress_output)):
-            input.P_frame_compress_output[i].refer_frame = x_ref
-            P_frame_out = self.decompress_P_frame(input.P_frame_compress_output[i])
+        for i in range(len(input.P_frame_output)):
+            P_frame_out = self.decompress_P_frame(input.P_frame_output[i])
             dec_frames.append(P_frame_out.recon_frame)
 
-
         return IPFrameCodecDecompressOutput(recon_frames=dec_frames)
-
-    # def decompress(self, strings, shapes):
-    #     if not isinstance(strings, List) or not isinstance(shapes, List):
-    #         raise RuntimeError(f"Invalid number of frames: {len(strings)}.")
-
-    #     assert len(strings) == len(
-    #         shapes
-    #     ), f"Number of information should match {len(strings)} != {len(shapes)}."
-
-    #     dec_frames = []
-
-    #     x_ref = self.decompress_I_frame(strings[0], shapes[0])
-    #     dec_frames.append(x_ref)
-
-    #     for i in range(1, len(strings)):
-    #         string = strings[i]
-    #         shape = shapes[i]
-    #         x_ref = self.decompress_P_frame(x_ref, string, shape)
-    #         dec_frames.append(x_ref)
-
-    #     return IPFrameDecompressOutput(recon_frames=dec_frames)

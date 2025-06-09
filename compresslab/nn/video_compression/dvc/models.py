@@ -187,17 +187,17 @@ class DVC(CompressionModel, PFrameCodec):
             output_list.append(output)
 
         return PFrameCodecCompressOutput(
-            compress_input=input,
-            P_frame_compress_output=output_list
+            input=input,
+            P_frame_output=output_list
         )
     
 
     def decompress(self, input: PFrameCodecCompressOutput) -> PFrameCodecDecompressOutput:
         recon_frames = []
 
-        for i in range(len(input.P_frame_compress_output)):
+        for i in range(len(input.P_frame_output)):
             output = self.decompress_P_frame(
-                input.P_frame_compress_output[i]
+                input.P_frame_output[i]
             )
             recon_frames.append(output.recon_frame)
 

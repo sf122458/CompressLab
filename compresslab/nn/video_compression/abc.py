@@ -234,15 +234,15 @@ class PFrameCodecCompressOutput:
     Output of the `PFrameCodec` 's `compress` method.
 
     Attributes:
-        compress_input (PFrameCodecCompressInput): The input of `compress` method.
-        P_frame_compress_output (List[PFrameCompressOutput]): A list of compressed P-frame outputs.
+        input (PFrameCodecCompressInput): The input of `compress` method.
+        P_frame_output (List[PFrameCompressOutput]): A list of compressed P-frame outputs.
 
         bpp (float): Average bits per pixel for all frames.
         psnr (float, optional): Average peak signal-to-noise ratio for all frames.
         ms_ssim (float, optional): Average multi-scale structural similarity index for all frames.
     """
-    compress_input: PFrameCodecCompressInput
-    P_frame_compress_output: List[PFrameCompressOutput] = field(default_factory=list)
+    input: PFrameCodecCompressInput
+    P_frame_output: List[PFrameCompressOutput] = field(default_factory=list)
     
     # automatically calculated in `__post_init__`
     bpp: float = field(init=False)
@@ -250,21 +250,21 @@ class PFrameCodecCompressOutput:
     ms_ssim: float = field(init=False, default=None)
 
     def __post_init__(self):
-        avg_bpp = self.compress_input.I_frame_bpp.item() if isinstance(self.compress_input.I_frame_bpp, torch.Tensor) \
-            else self.compress_input.I_frame_bpp
-        avg_psnr = self.compress_input.I_frame_psnr.item() if isinstance(self.compress_input.I_frame_psnr, torch.Tensor) \
-            else self.compress_input.I_frame_psnr
-        avg_ms_ssim = self.compress_input.I_frame_ms_ssim.item() if isinstance(self.compress_input.I_frame_ms_ssim, torch.Tensor) \
-            else self.compress_input.I_frame_ms_ssim
+        avg_bpp = self.input.I_frame_bpp.item() if isinstance(self.input.I_frame_bpp, torch.Tensor) \
+            else self.input.I_frame_bpp
+        avg_psnr = self.input.I_frame_psnr.item() if isinstance(self.input.I_frame_psnr, torch.Tensor) \
+            else self.input.I_frame_psnr
+        avg_ms_ssim = self.input.I_frame_ms_ssim.item() if isinstance(self.input.I_frame_ms_ssim, torch.Tensor) \
+            else self.input.I_frame_ms_ssim
 
-        for output in self.P_frame_compress_output:
+        for output in self.P_frame_output:
             avg_bpp += output.bpp
             avg_psnr += output.psnr
             avg_ms_ssim = output.ms_ssim
         
-        self.bpp = avg_bpp / (len(self.P_frame_compress_output) + 1)
-        self.psnr = avg_psnr / (len(self.P_frame_compress_output) + 1)
-        self.ms_ssim = avg_ms_ssim / (len(self.P_frame_compress_output) + 1)
+        self.bpp = avg_bpp / (len(self.P_frame_output) + 1)
+        self.psnr = avg_psnr / (len(self.P_frame_output) + 1)
+        self.ms_ssim = avg_ms_ssim / (len(self.P_frame_output) + 1)
 
 
 
@@ -484,27 +484,49 @@ class IPFrameCodecForwardOutput:
     Output of the `IPFrameCodec` 's `forward` method.
 
     Attributes:
-        out_list (List[Union[IFrameForwardOutput, PFrameForwardOutput]]): A list containing the outputs of the I-frame and P-frames.
+        I_frame_output (IFrameForwardOutput): The output of the I-frame forward operation.
+        P_frame_output (List[PFrameForwardOutput]): A list of outputs for P-frame forward operations.
         
         bpp (torch.Tensor): Total bits per pixel for all frames.
         mse_loss (torch.Tensor): Total mean squared error loss for all frames.
         psnr (float): Total peak signal-to-noise ratio for all frames.
     """
-    out_list: List[Union[IFrameForwardOutput, PFrameForwardOutput]]
+    I_frame_output: IFrameForwardOutput
+    P_frame_output: List[PFrameForwardOutput] = field(default_factory=list)
+
+    # automatically calculated in `__post_init__`
+    I_frame_bpp: float = field(init=False, default=0)
+    I_frame_psnr: float = field(init=False, default=0)
+
+    P_frame_bpp: float = field(init=False, default=0)
+    P_frame_psnr: float = field(init=False, default=0)
 
     bpp: torch.Tensor = field(init=False, default=0)
     mse_loss: torch.Tensor = field(init=False, default=0)
     psnr: float = field(init=False, default=0)
 
     def __post_init__(self):
-        for out in self.out_list:
-            self.bpp += out.bpp
-            self.mse_loss += out.mse_loss
-            self.psnr += out.psnr
+        self.I_frame_bpp = self.I_frame_output.bpp
+        self.I_frame_psnr = self.I_frame_output.psnr
 
-        self.bpp /= len(self.out_list)
-        self.mse_loss /= len(self.out_list)
-        self.psnr /= len(self.out_list)
+        total_bpp, total_psnr, total_mse_loss = 0, 0, 0
+
+        for output in self.P_frame_output:
+            total_bpp += output.bpp
+            total_mse_loss += output.mse_loss
+            total_psnr += output.psnr
+
+        self.P_frame_bpp = total_bpp / len(self.P_frame_output)
+        self.P_frame_psnr = total_psnr / len(self.P_frame_output)
+
+        total_bpp += self.I_frame_bpp
+        total_psnr += self.I_frame_psnr
+        total_mse_loss += self.I_frame_output.mse_loss
+
+        self.bpp = total_bpp / (len(self.P_frame_output) + 1)
+        self.mse_loss = total_mse_loss / (len(self.P_frame_output) + 1)
+        self.psnr = total_psnr / (len(self.P_frame_output) + 1)
+
 
 
 @dataclass
@@ -526,34 +548,52 @@ class IPFrameCodecCompressOutput:
     Output of the `IPFrameCodec` 's `compress` method.
 
     Attributes:
-        I_frame_compress_output (IFrameCompressOutput): The compressed output of the I-frame.
-        P_frame_compress_output (List[PFrameCompressOutput]): A list of compressed outputs for P-frames.
+        I_frame_output (IFrameCompressOutput): The compressed output of the I-frame.
+        P_frame_output (List[PFrameCompressOutput]): A list of compressed outputs for P-frames.
 
         bpp (float): Total bits per pixel for all frames.
         psnr (float): Total peak signal-to-noise ratio for all frames.
         ms_ssim (float): Total multi-scale structural similarity index for all frames.
     """
-    I_frame_compress_output: IFrameCompressOutput
-    P_frame_compress_output: List[PFrameCompressOutput] = field(default_factory=list)
+    I_frame_output: IFrameCompressOutput
+    P_frame_output: List[PFrameCompressOutput] = field(default_factory=list)
 
     # automatically calculated in `__post_init__`
-    bpp: float = field(init=False)
-    psnr: float = field(init=False, default=None)
-    ms_ssim: float = field(init=False, default=None)
+    I_frame_bpp: float = field(init=False, default=0)
+    I_frame_psnr: float = field(init=False, default=0)
+    I_frame_ms_ssim: float = field(init=False, default=0)
+
+    P_frame_bpp: float = field(init=False, default=0)
+    P_frame_psnr: float = field(init=False, default=0)
+    P_frame_ms_ssim: float = field(init=False, default=0)
+
+    bpp: float = field(init=False, default=0)
+    psnr: float = field(init=False, default=0)
+    ms_ssim: float = field(init=False, default=0)
 
     def __post_init__(self):
-        avg_bpp = self.I_frame_compress_output.bpp
-        avg_psnr = self.I_frame_compress_output.psnr
-        avg_ms_ssim = self.I_frame_compress_output.ms_ssim
+        self.I_frame_bpp = self.I_frame_output.bpp
+        self.I_frame_psnr = self.I_frame_output.psnr
+        self.I_frame_ms_ssim = self.I_frame_output.ms_ssim
 
-        for output in self.P_frame_compress_output:
-            avg_bpp += output.bpp
-            avg_psnr += output.psnr
-            avg_ms_ssim += output.ms_ssim
+        total_bpp, total_psnr, total_ms_ssim = 0, 0, 0
 
-        self.bpp = avg_bpp / (len(self.P_frame_compress_output) + 1)
-        self.psnr = avg_psnr / (len(self.P_frame_compress_output) + 1)
-        self.ms_ssim = avg_ms_ssim / (len(self.P_frame_compress_output) + 1)
+        for output in self.P_frame_output:
+            total_bpp += output.bpp
+            total_psnr += output.psnr
+            total_ms_ssim += output.ms_ssim
+
+        self.P_frame_bpp = total_bpp / len(self.P_frame_output)
+        self.P_frame_psnr = total_psnr / len(self.P_frame_output)
+        self.P_frame_ms_ssim = total_ms_ssim / len(self.P_frame_output)
+
+        total_bpp += self.I_frame_bpp
+        total_psnr += self.I_frame_psnr
+        total_ms_ssim += self.I_frame_ms_ssim        
+
+        self.bpp = total_bpp / (len(self.P_frame_output) + 1)
+        self.psnr = total_psnr / (len(self.P_frame_output) + 1)
+        self.ms_ssim = total_ms_ssim / (len(self.P_frame_output) + 1)
 
 
 @dataclass
