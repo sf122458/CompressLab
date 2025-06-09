@@ -502,6 +502,10 @@ class IPFrameCodecForwardOutput:
             self.mse_loss += out.mse_loss
             self.psnr += out.psnr
 
+        self.bpp /= len(self.out_list)
+        self.mse_loss /= len(self.out_list)
+        self.psnr /= len(self.out_list)
+
 
 @dataclass
 class IPFrameCodecCompressInput:
@@ -538,14 +542,18 @@ class IPFrameCodecCompressOutput:
     ms_ssim: float = field(init=False, default=None)
 
     def __post_init__(self):
-        self.bpp = self.I_frame_compress_output.bpp
-        self.psnr = self.I_frame_compress_output.psnr
-        self.ms_ssim = self.I_frame_compress_output.ms_ssim
+        avg_bpp = self.I_frame_compress_output.bpp
+        avg_psnr = self.I_frame_compress_output.psnr
+        avg_ms_ssim = self.I_frame_compress_output.ms_ssim
 
         for output in self.P_frame_compress_output:
-            self.bpp += output.bpp
-            self.psnr += output.psnr
-            self.ms_ssim += output.ms_ssim
+            avg_bpp += output.bpp
+            avg_psnr += output.psnr
+            avg_ms_ssim += output.ms_ssim
+
+        self.bpp = avg_bpp / (len(self.P_frame_compress_output) + 1)
+        self.psnr = avg_psnr / (len(self.P_frame_compress_output) + 1)
+        self.ms_ssim = avg_ms_ssim / (len(self.P_frame_compress_output) + 1)
 
 
 @dataclass
