@@ -257,24 +257,19 @@ class IPFrameCodecLightningModule(L.LightningModule):
         optimizer.step()
         aux_optimizer.step()
 
-    def on_validation_start(self):
-        for model_name, model_instance in self.model_wrapper.items():
-            model_instance.update()
-
     def validation_step(self, batch, batch_idx):
         for model_name, model_instance in self.model_wrapper.items():
             model_instance: Union[IPFrameCodec, CompressionModel]
-            out_compress = model_instance.compress(
-                IPFrameCodecCompressInput(
+            out = model_instance.forward(
+                IPFrameCodecForwardInput(
                     I_frame=batch[0],
                     P_frames=batch[1]
                 )
             )
 
             self.log_dict({
-                f"val/{model_name}.bpp": out_compress.bpp,
-                f"val/{model_name}.psnr": out_compress.psnr,
-                f"val/{model_name}.ms-ssim": out_compress.ms_ssim,
+                f"val/{model_name}.bpp": out.bpp,
+                f"val/{model_name}.psnr": out.psnr,
             }, on_step=False, on_epoch=True, logger=True, sync_dist=True)
 
     def on_test_start(self):
