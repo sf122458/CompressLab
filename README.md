@@ -5,7 +5,7 @@ A PyTorch-based framework for deep-learning-based data compression research.
 ### Features
 - **Multi-λ Training & Parallel Model Execution**
 
-  Support setting multiple λ values in the loss function to train multiple models simultaneously, enabling efficient hyperparameter tuning and multi-scenario model optimization. `TensorBoard` is used to monitor the training process.
+  Support setting multiple λ values in the loss function to train multiple models simultaneously. `TensorBoard` is used to monitor the training process.
 
 - **Automatic Metric Calculation via Dataclass Encapsulation**
 
