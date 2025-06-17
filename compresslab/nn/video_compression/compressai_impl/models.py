@@ -174,32 +174,6 @@ class ScaleSpaceFlow(VideoCodec):
 
         self.train_patch_size = 256
 
-    def forward(self, input: IPFrameCodecForwardInput) -> IPFrameCodecForwardOutput:
-
-        I_frame_out = self.forward_I_frame(
-            IFrameForwardInput(
-                input_frame=input.I_frame,
-            )
-        )
-
-        out_list = []
-
-        for i in range(len(input.P_frames)):
-            P_frame_out = self.forward_P_frame(
-                PFrameForwardInput(
-                    input_frame=input.P_frames[i],
-                    refer_frame=I_frame_out.recon_frame.detach() if i == 0 else P_frame_out.recon_frame, 
-                    # stop gradient flow (cf: google2020 paper)
-                )
-            )
-
-            out_list.append(P_frame_out)
-
-        return IPFrameCodecForwardOutput(
-            I_frame_output= I_frame_out,
-            P_frame_output=out_list,
-        )
-
     def forward_I_frame(self, input: IFrameForwardInput) -> IFrameForwardOutput:
         y = self.img_encoder(input.input_frame)
         y_hat, likelihoods = self.img_hyperprior(y)
