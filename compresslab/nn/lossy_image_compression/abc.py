@@ -64,7 +64,7 @@ class ImageCodecCompressOutput:
     x: torch.Tensor
     
     y_strings: List[bytes]
-    z_strings: List[bytes] = None
+    z_strings: List[bytes] = field(default_factory=list)
     shape: Tuple[int, int] = None
 
     x_hat: torch.Tensor = None

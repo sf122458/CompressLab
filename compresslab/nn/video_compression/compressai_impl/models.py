@@ -172,6 +172,8 @@ class ScaleSpaceFlow(CompressionModel, IPFrameCodec):
         self.sigma0 = sigma0
         self.num_levels = num_levels
 
+        self.train_patch_size = 256
+
     def forward(self, input: IPFrameCodecForwardInput) -> IPFrameCodecForwardOutput:
 
         I_frame_out = self.forward_I_frame(
@@ -376,7 +378,15 @@ class ScaleSpaceFlow(CompressionModel, IPFrameCodec):
         return out.squeeze(2)
 
     def forward_prediction(self, x_ref, motion_info):
+        b, _, h, w = motion_info.shape
         flow, scale_field = motion_info.chunk(2, dim=1)
+        weighting = torch.Tensor([[self.train_patch_size / w, self.train_patch_size / h]]).to(x_ref)
+
+        weighting = weighting.repeat(b, 1)
+
+        weighting = weighting.unsqueeze_(2).unsqueeze_(3)
+
+        flow = flow * weighting
 
         volume = self.gaussian_volume(x_ref, self.sigma0, self.num_levels)
         x_pred = self.warp_volume(volume, flow, scale_field)
