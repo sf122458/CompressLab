@@ -187,6 +187,30 @@ void BufferedRansEncoder::encode_with_indexes(
   }
 }
 
+void BufferedRansEncoder::encode_with_indexes_np(
+    const py::array_t<int32_t> &symbols,
+    const py::array_t<int32_t> &indexes,
+    const py::array_t<int32_t, py::array::c_style | py::array::forcecast> &cdfs,
+    const py::array_t<int32_t> &cdfs_sizes,
+    const py::array_t<int32_t> &offsets) {
+  // TODO: this copys memory! Is there a way to avoid this?
+  std::vector<int32_t> symbols_vec(symbols.data(), symbols.data() + symbols.size());
+  std::vector<int32_t> indexes_vec(indexes.data(), indexes.data() + indexes.size());
+
+  std::vector<std::vector<int32_t>> cdfs_vec;
+  if (cdfs.ndim() != 2 && cdfs.shape(0) != cdfs_sizes.size()) {
+    throw pybind11::value_error("cdfs should be 2-dimensional with shape (cdfs_sizes.size, cdfs_sizes)");
+  }
+  for (int32_t idx=0; idx < cdfs.shape(0); idx++){
+    cdfs_vec.emplace_back(cdfs.data(idx), cdfs.data(idx) + cdfs_sizes.at(idx));
+  }
+  
+  std::vector<int32_t> cdfs_sizes_vec(cdfs_sizes.data(), cdfs_sizes.data() + cdfs_sizes.size());
+  std::vector<int32_t> offsets_vec(offsets.data(), offsets.data() + offsets.size());
+
+  encode_with_indexes(symbols_vec, indexes_vec, cdfs_vec, cdfs_sizes_vec, offsets_vec);
+}
+
 /**
  * @brief This function use the information saved in `_sysm` to encode the symbols
  */
@@ -230,6 +254,20 @@ RansEncoder::encode_with_indexes(const std::vector<int32_t> &symbols,
                                         offsets);
   return buffered_rans_enc.flush();
 }
+
+py::bytes
+RansEncoder::encode_with_indexes_np(
+    const py::array_t<int32_t> &symbols,
+    const py::array_t<int32_t> &indexes,
+    const py::array_t<int32_t, py::array::c_style | py::array::forcecast> &cdfs,
+    const py::array_t<int32_t> &cdfs_sizes,
+    const py::array_t<int32_t> &offsets) {
+  BufferedRansEncoder buffered_rans_enc;
+  buffered_rans_enc.encode_with_indexes_np(symbols, indexes, cdfs, cdfs_sizes,
+                                        offsets);
+  return buffered_rans_enc.flush();
+}
+
 
 std::vector<int32_t>
 RansDecoder::decode_with_indexes(const std::string &encoded,
@@ -302,92 +340,6 @@ RansDecoder::decode_with_indexes(const std::string &encoded,
   return output;
 }
 
-
-py::array_t<int32_t>
-RansDecoder::decode_with_indexes_full_np(
-  const std::string &encoded,
-  const py::array_t<int32_t> &indexes,
-  const py::array_t<int32_t, py::array::c_style | py::array::forcecast> &cdfs,
-  const py::array_t<int32_t> &cdfs_sizes,
-  const py::array_t<int32_t> &offsets
-) {
-  assert(cdfs.size() == cdfs_sizes.size());
-  // assert_cdfs(cdfs, cdfs_sizes);
-
-  py::array_t<int32_t> output(indexes.size());
-  py::buffer_info output_buf = output.request();
-  int32_t *output_ptr = static_cast<int32_t *>(output_buf.ptr);
-
-  Rans64State rans;
-  uint32_t *ptr = (uint32_t *)encoded.data();
-  assert(ptr != nullptr);
-  Rans64DecInit(&rans, &ptr);
-
-  py::buffer_info indexes_buf = indexes.request(),
-      cdfs_buf = cdfs.request(),
-      cdfs_sizes_buf = cdfs_sizes.request(),
-      offsets_buf = offsets.request();
-
-  int32_t *indexes_ptr = static_cast<int32_t *>(indexes_buf.ptr),
-      *cdfs_ptr = static_cast<int32_t *>(cdfs_buf.ptr),
-      *cdfs_sizes_ptr = static_cast<int32_t *>(cdfs_sizes_buf.ptr),
-      *offsets_ptr = static_cast<int32_t *>(offsets_buf.ptr);
-
-  for (int i = 0; i < static_cast<int>(indexes.size()); ++i) {
-    const int32_t cdf_idx = indexes_ptr[i];
-    assert(cdf_idx >= 0);
-    assert(cdf_idx < cdfs.size());
-
-    // TODO
-    const int32_t *cdf = cdfs_ptr + cdf_idx * cdfs_sizes_buf.shape[0];
-
-    const int32_t max_value = cdfs_sizes_ptr[cdf_idx] - 2;
-    // assert(max_value >= 0);
-    // assert((max_value + 1) < cdf.size());
-
-    const int32_t offset = offsets_ptr[cdf_idx];
-
-    const uint32_t cum_freq = Rans64DecGet(&rans, precision);
-
-    const auto cdf_end = cdf + cdfs_sizes_ptr[cdf_idx];
-    const auto it = std::find_if(cdf, cdf_end,
-                                 [cum_freq](int v) { return v > cum_freq; });
-    assert(it != cdf_end + 1);
-    const uint32_t s = std::distance(cdf, it) - 1;
-
-    Rans64DecAdvance(&rans, &ptr, cdf[s], cdf[s + 1] - cdf[s], precision);
-
-    int32_t value = static_cast<int32_t>(s);
-
-    if (value == max_value) {
-      /* Bypass decoding mode */
-      int32_t val = Rans64DecGetBits(&rans, &ptr, bypass_precision);
-      int32_t n_bypass = val;
-
-      while (val == max_bypass_val) {
-        val = Rans64DecGetBits(&rans, &ptr, bypass_precision);
-        n_bypass += val;
-      }
-
-      int32_t raw_val = 0;
-      for (int j = 0; j < n_bypass; ++j) {
-        val = Rans64DecGetBits(&rans, &ptr, bypass_precision);
-        assert(val <= max_bypass_val);
-        raw_val |= val << (j * bypass_precision);
-      }
-      value = raw_val >> 1;
-      if (raw_val & 1) {
-        value = -value - 1;
-      } else {
-        value += max_value;
-      }
-    }
-
-    output_ptr[i] = value + offset;
-  }
-
-  return output;
-}
 
 py::array_t<int32_t> RansDecoder::decode_with_indexes_np(
     const std::string &encoded,
@@ -528,6 +480,7 @@ PYBIND11_MODULE(ans, m) {
                const std::vector<std::vector<int32_t>> &,
                const std::vector<int32_t> &, const std::vector<int32_t> &>(
                &BufferedRansEncoder::encode_with_indexes))
+      .def("encode_with_indexes_np", &BufferedRansEncoder::encode_with_indexes_np)
       .def("flush", &BufferedRansEncoder::flush);
 
   py::class_<RansEncoder>(m, "RansEncoder")
@@ -537,7 +490,8 @@ PYBIND11_MODULE(ans, m) {
                const std::vector<int32_t> &, const std::vector<int32_t> &,
                const std::vector<std::vector<int32_t>> &,
                const std::vector<int32_t> &, const std::vector<int32_t> &>(
-               &RansEncoder::encode_with_indexes));
+               &RansEncoder::encode_with_indexes))
+      .def("encode_with_indexes_np", &RansEncoder::encode_with_indexes_np);
 
   py::class_<RansDecoder>(m, "RansDecoder")
       .def(py::init<>())
@@ -556,6 +510,5 @@ PYBIND11_MODULE(ans, m) {
                &RansDecoder::decode_with_indexes),
            "Decode a string to a list of symbols")
       .def("decode_with_indexes_np", &RansDecoder::decode_with_indexes_np)
-      .def("decode_stream_full_np", &RansDecoder::decode_with_indexes_full_np)
       .def("decode_stream_np", &RansDecoder::decode_stream_np);
 }

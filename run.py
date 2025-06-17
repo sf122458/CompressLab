@@ -24,7 +24,8 @@ import importlib.util
 class Args(Namespace):
     config: str = None
     list: bool = False
-    test_only: bool = False
+    test: bool = False
+    cpu: bool = False
 
 def main(args: Args):
     if args.list:
@@ -114,32 +115,47 @@ def main(args: Args):
 
             num_epoch = config.Train.Epoch if config.Train.Epoch is not None else math.ceil(config.Train.Steps / len(datamodule.train_dataloader()))
 
-            trainer = Trainer(
-                accelerator="gpu" if torch.cuda.is_available() else "cpu",
-                devices=config.Env.Devices,
-                strategy="ddp_find_unused_parameters_true",
-                max_steps=config.Train.Steps,
-                max_epochs=num_epoch,
-                check_val_every_n_epoch=config.Train.Valinterval,
-                default_root_dir=out_dir,
-                callbacks=[
-                    RichProgressBar(),
-                    ModelCheckpoint(
-                        dirpath=os.path.join(out_dir, "checkpoints"),
-                        every_n_epochs=config.Train.Valinterval,
-                        save_last=True,
-                    ),
-                    RichModelSummary(
-                        max_depth=2,
-                    )
-                ],
-                logger=TensorBoardLogger(save_dir=out_dir),
-                deterministic="warn" # NOTE: this is important for reproducibility, otherwise the entropy decoding may fail
-            )
-
-            if not args.test_only:
+            if not args.test:
+                trainer = Trainer(
+                    accelerator="gpu" if torch.cuda.is_available() else "cpu",
+                    devices=config.Env.Devices,
+                    strategy="ddp_find_unused_parameters_true",
+                    max_steps=config.Train.Steps,
+                    max_epochs=num_epoch,
+                    check_val_every_n_epoch=config.Train.Valinterval,
+                    default_root_dir=out_dir,
+                    callbacks=[
+                        RichProgressBar(),
+                        ModelCheckpoint(
+                            dirpath=os.path.join(out_dir, "checkpoints"),
+                            every_n_epochs=config.Train.Valinterval,
+                            save_last=True,
+                        ),
+                        RichModelSummary(
+                            max_depth=2,
+                        )
+                    ],
+                    logger=TensorBoardLogger(save_dir=out_dir),
+                    deterministic="warn" # NOTE: this is important for reproducibility, otherwise the entropy decoding may fail
+                )
                 trainer.fit(modelmodule, datamodule, ckpt_path="last")
             
+            trainer = Trainer(
+                    accelerator="cpu" if args.cpu else "gpu" if torch.cuda.is_available() else "cpu",
+                    devices=1 if args.cpu else config.Env.Devices,
+                    default_root_dir=out_dir,
+                    callbacks=[
+                        RichProgressBar(),
+                        ModelCheckpoint(
+                            dirpath=os.path.join(out_dir, "checkpoints"),
+                            every_n_epochs=config.Train.Valinterval,
+                            save_last=True,
+                        ),
+                    ],
+                    logger=False,
+                    deterministic="warn" # NOTE: this is important for reproducibility, otherwise the entropy decoding may fail
+                )
+
             trainer.test(modelmodule, datamodule, ckpt_path="last")
 
         
@@ -152,7 +168,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='test')
     parser.add_argument('-c', '--config', required=False, type=str,help ='Config file path.', default=None)
     parser.add_argument('-l', '--list', action="store_true", help='List all available models.')
-    parser.add_argument('--test_only', action="store_true", help='Test only.')
+    parser.add_argument('--test', action="store_true", help='Test only.')
+    parser.add_argument('--cpu', action="store_true", help='Use CPU in the inference.')
     
     args = parser.parse_args()
     main(args)

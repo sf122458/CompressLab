@@ -33,13 +33,10 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
-#include <omp.h>
 // #include <torch/extension.h>
 
 #include "rans64.h"
 
-
-#define OMP_NUM_THREADS 8 // Set the number of threads for OpenMP
 
 namespace py = pybind11;
 
@@ -67,6 +64,12 @@ public:
                            const std::vector<int32_t> &cdfs_sizes,
                            const std::vector<int32_t> &offsets);
 
+  void encode_with_indexes_np(const py::array_t<int32_t> &symbols,
+                              const py::array_t<int32_t> &indexes,
+                              const py::array_t<int32_t, py::array::c_style | py::array::forcecast> &cdfs,
+                              const py::array_t<int32_t> &cdfs_sizes,
+                              const py::array_t<int32_t> &offsets);
+
   py::bytes flush();
 
 private:
@@ -87,6 +90,12 @@ public:
                                 const std::vector<std::vector<int32_t>> &cdfs,
                                 const std::vector<int32_t> &cdfs_sizes,
                                 const std::vector<int32_t> &offsets);
+
+  py::bytes encode_with_indexes_np(const py::array_t<int32_t> &symbols,
+                              const py::array_t<int32_t> &indexes,
+                              const py::array_t<int32_t, py::array::c_style | py::array::forcecast> &cdfs,
+                              const py::array_t<int32_t> &cdfs_sizes,
+                              const py::array_t<int32_t> &offsets);
 };
 
 class RansDecoder {
@@ -115,13 +124,6 @@ public:
 
   py::array_t<int32_t>
   decode_with_indexes_np(const std::string &encoded,
-                         const py::array_t<int32_t> &indexes,
-                         const py::array_t<int32_t, py::array::c_style | py::array::forcecast> &cdfs,
-                         const py::array_t<int32_t> &cdfs_sizes,
-                         const py::array_t<int32_t> &offsets);
-  
-  py::array_t<int32_t>
-  decode_with_indexes_full_np(const std::string &encoded,
                          const py::array_t<int32_t> &indexes,
                          const py::array_t<int32_t, py::array::c_style | py::array::forcecast> &cdfs,
                          const py::array_t<int32_t> &cdfs_sizes,

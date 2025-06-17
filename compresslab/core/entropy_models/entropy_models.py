@@ -64,10 +64,12 @@ class _EntropyCoder:
         self._decoder = decoder
 
     def encode_with_indexes(self, *args, **kwargs):
-        return self._encoder.encode_with_indexes(*args, **kwargs)
+        # return self._encoder.encode_with_indexes(*args, **kwargs)
+        return self._encoder.encode_with_indexes_np(*args, **kwargs)
 
     def decode_with_indexes(self, *args, **kwargs):
-        return self._decoder.decode_with_indexes(*args, **kwargs)
+        # return self._decoder.decode_with_indexes(*args, **kwargs)
+        return self._decoder.decode_with_indexes_np(*args, **kwargs)
 
 
 def default_entropy_coder():
@@ -245,12 +247,19 @@ class EntropyModel(nn.Module):
 
         strings = []
         for i in range(symbols.size(0)):
+            # rv = self.entropy_coder.encode_with_indexes(
+            #     symbols[i].reshape(-1).int().tolist(),
+            #     indexes[i].reshape(-1).int().tolist(),
+            #     self._quantized_cdf.tolist(),
+            #     self._cdf_length.reshape(-1).int().tolist(),
+            #     self._offset.reshape(-1).int().tolist(),
+            # )
             rv = self.entropy_coder.encode_with_indexes(
-                symbols[i].reshape(-1).int().tolist(),
-                indexes[i].reshape(-1).int().tolist(),
-                self._quantized_cdf.tolist(),
-                self._cdf_length.reshape(-1).int().tolist(),
-                self._offset.reshape(-1).int().tolist(),
+                symbols[i].reshape(-1).int().cpu().numpy(),
+                indexes[i].reshape(-1).int().cpu().numpy(),
+                self._quantized_cdf.cpu().numpy(),
+                self._cdf_length.reshape(-1).int().cpu().numpy(),
+                self._offset.reshape(-1).int().cpu().numpy(),
             )
             strings.append(rv)
         return strings
@@ -299,12 +308,19 @@ class EntropyModel(nn.Module):
         outputs = cdf.new_empty(indexes.size())
 
         for i, s in enumerate(strings):
+            # values = self.entropy_coder.decode_with_indexes(
+            #     s,
+            #     indexes[i].reshape(-1).int().tolist(),
+            #     cdf.tolist(),
+            #     self._cdf_length.reshape(-1).int().tolist(),
+            #     self._offset.reshape(-1).int().tolist(),
+            # )
             values = self.entropy_coder.decode_with_indexes(
                 s,
-                indexes[i].reshape(-1).int().tolist(),
-                cdf.tolist(),
-                self._cdf_length.reshape(-1).int().tolist(),
-                self._offset.reshape(-1).int().tolist(),
+                indexes[i].reshape(-1).int().cpu().numpy(),
+                cdf.cpu().numpy(),
+                self._cdf_length.reshape(-1).int().cpu().numpy(),
+                self._offset.reshape(-1).int().cpu().numpy(),
             )
             outputs[i] = torch.tensor(
                 values, device=outputs.device, dtype=outputs.dtype

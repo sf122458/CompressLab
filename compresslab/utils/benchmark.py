@@ -88,7 +88,7 @@ class Benchmark:
         # load all metrics from each model directory
         for root, _, files in os.walk(exp_dir):
             for file in files:
-                if file.endswith(".pkl"):
+                if file == "metrics.pkl":
                     with open(os.path.join(root, file), 'rb') as f:
                         data = pickle.load(f)
                         self.exp_metrics[root.split('/')[-1]] = data
@@ -111,11 +111,11 @@ class Benchmark:
                     bpp.append(metric["bpp"])
                     psnr.append(metric["psnr"])
             plt.plot(bpp, psnr, label=model_name)
-        plt.xlabel("bpp")
+        plt.xlabel("bits per pixel (Bpp)")
         plt.ylabel("PSNR")
         plt.title("BD-Rate Curve")
         plt.legend()
-        plt.savefig(os.path.join(self.exp_dir, "bd_curve.png"))
+        plt.savefig(os.path.join(self.exp_dir, "bd_curve.pdf"))
 
 
     def calc_bd_rate(self, *args, 
@@ -131,6 +131,7 @@ class Benchmark:
         for model_name, metrics in self.exp_metrics.items():
             bpp = []
             psnr = []
+            print(model_name, metrics)
             for metric in metrics.values(): # multi codec
                 if "bpp" in metric and "psnr" in metric:
                     bpp.append(metric["bpp"])
