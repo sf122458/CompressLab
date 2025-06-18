@@ -354,22 +354,37 @@ class VideoCodecForwardOutput:
     P_frame_output: List[PFrameForwardOutput] = field(default_factory=list)
 
     # automatically calculated in `__post_init__`
-    bpp: float = field(init=False, default=0)
-    mse_loss: float = field(init=False, default=0)
+    I_frame_bpp: float = field(init=False, default=0)
+    I_frame_psnr: float = field(init=False, default=0)
+
+    P_frame_bpp: float = field(init=False, default=0)
+    P_frame_psnr: float = field(init=False, default=0)
+
+    bpp: torch.Tensor = field(init=False, default=0)
+    mse_loss: torch.Tensor = field(init=False, default=0)
     psnr: float = field(init=False, default=0)
 
     def __post_init__(self):
-        if self.I_frame_output is not None:
-            self.bpp += self.I_frame_output.bpp
-            self.mse_loss += self.I_frame_output.mse_loss
-            self.psnr += self.I_frame_output.psnr
+        self.I_frame_bpp = self.I_frame_output.bpp
+        self.I_frame_psnr = self.I_frame_output.psnr
+
+        total_bpp, total_psnr, total_mse_loss = 0, 0, 0
 
         for output in self.P_frame_output:
-            self.bpp += output.bpp
-            self.mse_loss += output.mse_loss
-            self.psnr += output.psnr
+            total_bpp += output.bpp
+            total_mse_loss += output.mse_loss
+            total_psnr += output.psnr
 
-        num_frames = len(self.P_frame_output) + 1
+        self.P_frame_bpp = total_bpp / len(self.P_frame_output)
+        self.P_frame_psnr = total_psnr / len(self.P_frame_output)
+
+        total_bpp += self.I_frame_bpp
+        total_psnr += self.I_frame_psnr
+        total_mse_loss += self.I_frame_output.mse_loss
+
+        self.bpp = total_bpp / (len(self.P_frame_output) + 1)
+        self.mse_loss = total_mse_loss / (len(self.P_frame_output) + 1)
+        self.psnr = total_psnr / (len(self.P_frame_output) + 1)
 
 
 @dataclass
