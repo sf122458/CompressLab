@@ -47,6 +47,10 @@ class ImageCodecLightningModule(L.LightningModule):
         optimizer, aux_optimizer = self.optimizers()
         optimizer.zero_grad()
         aux_optimizer.zero_grad()
+
+        total_loss = 0.0
+        total_aux_loss = 0.0
+
         for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
             model_instance: Union[ImageCodec, CompressionModel]
             out = model_instance.forward(
@@ -62,9 +66,6 @@ class ImageCodecLightningModule(L.LightningModule):
 
             loss = lmbda * distortion_loss + out.bpp
             aux_loss = model_instance.aux_loss()
-            self.manual_backward(loss)
-            torch.nn.utils.clip_grad_norm_(model_instance.parameters(), 1.0)
-            self.manual_backward(aux_loss)
 
             # show metrics of the first model on the progress bar
             if model_name == "codec_0" or model_name == "codec":
@@ -79,6 +80,13 @@ class ImageCodecLightningModule(L.LightningModule):
                 f"train/{model_name}.psnr": out.psnr,
                 f"train/{model_name}.ms-ssim": out.ms_ssim,
             }, on_epoch=False, logger=True, sync_dist=True, on_step=True)
+
+            total_loss += loss
+            total_aux_loss += aux_loss
+
+        self.manual_backward(total_loss)
+        torch.nn.utils.clip_grad_norm_(self.model_wrapper.parameters(), 1.0)
+        self.manual_backward(total_aux_loss)
 
         optimizer.step()
         aux_optimizer.step()

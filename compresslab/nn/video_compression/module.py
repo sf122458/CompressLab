@@ -57,6 +57,9 @@ class PFrameCodecLightingModule(L.LightningModule):
 
         input_frame, ref_frame = batch
 
+        total_loss = 0.0
+        total_aux_loss = 0.0
+
         for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
             model_instance: Union[PFrameCodec, CompressionModel]
             out = model_instance.forward(PFrameForwardInput(
@@ -89,9 +92,6 @@ class PFrameCodecLightingModule(L.LightningModule):
             loss = lmbda * distortion_loss + bpp_loss
 
             aux_loss = model_instance.aux_loss()
-            self.manual_backward(loss)
-            torch.nn.utils.clip_grad_norm_(model_instance.parameters(), 0.5)
-            self.manual_backward(aux_loss)
 
             if model_name == "codec_0" or model_name == "codec":
                 self.log_dict(dict(
@@ -111,6 +111,13 @@ class PFrameCodecLightingModule(L.LightningModule):
                 f"train/{model_name}.bpp_z": out.likelihoods.bpp_z,
                 f"train/{model_name}.psnr": out.psnr,
             }, on_epoch=False, logger=True, sync_dist=True, on_step=True)
+
+            total_loss += loss
+            total_aux_loss += aux_loss
+
+        self.manual_backward(total_loss)
+        torch.nn.utils.clip_grad_norm_(self.model_wrapper.parameters(), 1.0)
+        self.manual_backward(total_aux_loss)
         
         optimizer.step()
         aux_optimizer.step()
