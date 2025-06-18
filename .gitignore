@@ -2,7 +2,6 @@
 __pycache__
 test*.py
 output*
-*.yaml
 .vscode
 *.so
 build
@@ -12,3 +11,4 @@ csrc/
 test/
 dcvc/
 lalic/
+config_test/
