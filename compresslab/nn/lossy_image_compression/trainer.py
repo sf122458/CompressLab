@@ -13,7 +13,7 @@ from copy import deepcopy
 from pytorch_msssim import ms_ssim
 from typing import Dict, List, Any, Union
 
-class ImageCodecLightningModule(L.LightningModule):
+class ImageCodecTrainer(L.LightningModule):
     def __init__(self, 
                  model: ImageCodec,
                  ext_params: Dict[str, Any] = None
@@ -34,13 +34,12 @@ class ImageCodecLightningModule(L.LightningModule):
 
         self.model_wrapper: nn.ModuleDict[str, CompressionModel] = nn.ModuleDict({})
         
-        if isinstance(self.lmbda, list):
-            for idx in range(len(self.lmbda)):
-                self.model_wrapper[f"codec_{idx}"] = deepcopy(model)
-            del model
-        else:
+        if isinstance(self.lmbda, float) or isinstance(self.lmbda, int):
             self.lmbda = [self.lmbda]
-            self.model_wrapper["codec"] = model
+
+        for idx in range(len(self.lmbda)):
+            self.model_wrapper[f"codec_{idx}"] = deepcopy(model)
+        del model
     
 
     def training_step(self, batch, batch_idx):
@@ -62,13 +61,13 @@ class ImageCodecLightningModule(L.LightningModule):
             if self.distortion == "mse":
                 distortion_loss = out.mse_loss * 255 ** 2
             else:
-                distortion_loss = 1 - out.ms_ssim_loss
+                distortion_loss = out.ms_ssim_loss
 
             loss = lmbda * distortion_loss + out.bpp
             aux_loss = model_instance.aux_loss()
 
             # show metrics of the first model on the progress bar
-            if model_name == "codec_0" or model_name == "codec":
+            if model_name == "codec_0":
                 self.log_dict({"loss": loss, 
                         "bpp": out.bpp,
                         "psnr": out.psnr,
@@ -122,17 +121,13 @@ class ImageCodecLightningModule(L.LightningModule):
                     )
                 )
             with self.metric.timer(model_name, "time_decompress") as timer:
-                out_decompress = model_instance.decompress(out_compress)
-
-            mse_loss = torch.nn.functional.mse_loss(out_decompress.x_hat, batch)
-            psnr = 10 * torch.log10(1 / mse_loss).item()
-            msssim = ms_ssim(out_decompress.x_hat, batch, data_range=1).item()
+                model_instance.decompress(out_compress)
             
             self.metric.log(model_name, 
                             {
                                 "bpp": out_compress.bpp, 
-                                "psnr": psnr,
-                                "ms-ssim": msssim,
+                                "psnr": out_compress.psnr,
+                                "ms-ssim": out_compress.ms_ssim,
                              })
 
     def on_test_end(self):
