@@ -7,6 +7,7 @@ from compresslab.nn.video_compression.abc import *
 from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
 
 class DVC(VideoCodec):
+class DVC(VideoCodec):
     def __init__(self, 
                  out_channel_N=64, 
                  out_channel_M=96, 
@@ -38,6 +39,7 @@ class DVC(VideoCodec):
         return prediction, warpframe
 
     def forward_P_frame(self, input: PFrameForwardInput):
+    def forward_P_frame(self, input: PFrameForwardInput):
         input_image, referframe = input.input_frame, input.refer_frame
         estmv = self.opticFlow(input_image, referframe)
         mv_fea = self.mvEncoder(estmv)
@@ -67,8 +69,6 @@ class DVC(VideoCodec):
         return PFrameForwardOutput(
             input_frame=input_image,
             recon_frame=clipped_recon_image,
-            warp_frame=warp_frame,
-            prediction=prediction,
             likelihoods=PFrameLikelihoods(
                 y_mv=mv_likelihoods,
                 z_mv=mvprior_likelihoods,
@@ -76,23 +76,6 @@ class DVC(VideoCodec):
                 z=resprior_likelihoods
             )
         )
-
-    def update(self, scale_table=None, force=False):
-
-        SCALES_MIN = 0.11
-        SCALES_MAX = 256
-        SCALES_LEVELS = 64
-
-        def get_scale_table(min=SCALES_MIN, max=SCALES_MAX, levels=SCALES_LEVELS):
-            return torch.exp(torch.linspace(math.log(min), math.log(max), levels))
-
-        if scale_table is None:
-            scale_table = get_scale_table()
-        updated = self.entropy_bottleneck_mv.update_scale_table(scale_table, force=force)
-        updated = self.entropy_bottleneck_res.update_scale_table(scale_table, force=force)
-        updated |= super().update(force=force)
-        return updated
-    
     
     def compress_P_frame(self, input: PFrameCompressInput):
         input_image, referframe = input.input_frame, input.refer_frame     
@@ -158,3 +141,19 @@ class DVC(VideoCodec):
         return PFrameDecompressOutput(
             recon_frame=recon_frame,
         )
+
+    def update(self, scale_table=None, force=False):
+
+        SCALES_MIN = 0.11
+        SCALES_MAX = 256
+        SCALES_LEVELS = 64
+
+        def get_scale_table(min=SCALES_MIN, max=SCALES_MAX, levels=SCALES_LEVELS):
+            return torch.exp(torch.linspace(math.log(min), math.log(max), levels))
+
+        if scale_table is None:
+            scale_table = get_scale_table()
+        updated = self.entropy_bottleneck_mv.update_scale_table(scale_table, force=force)
+        updated = self.entropy_bottleneck_res.update_scale_table(scale_table, force=force)
+        updated |= super().update(force=force)
+        return updated
