@@ -52,11 +52,11 @@ def main(args: Args):
 
             model_path = Path(getattr(compresslab.utils.registry, "ModelRegistry")._map.get(model.Key)["register_path"])
 
-            module_file = model_path.parent / "module.py"
+            module_file = model_path.parent / "trainer.py"
             if not module_file.exists():
-                raise FileNotFoundError(f"module.py not found in {model_path.parent}")
+                raise FileNotFoundError(f"trainer.py not found in {model_path.parent}")
 
-            module_spec = importlib.util.spec_from_file_location("module", module_file)
+            module_spec = importlib.util.spec_from_file_location("trainer", module_file)
             module = importlib.util.module_from_spec(module_spec)
             module_spec.loader.exec_module(module)
 
@@ -81,7 +81,7 @@ def main(args: Args):
                         LightningModule = module_class
                         break
             if LightningModule is None:
-                raise ValueError(f"No LightningModule found in {module_file} that matches the model {compressmodel.__class__.__name__}")
+                raise ValueError(f"No Trainer found in {module_file} that matches the model {compressmodel.__class__.__name__}")
             
             modelmodule = LightningModule(model=compressmodel, ext_params=model.ExtParams)
 

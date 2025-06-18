@@ -3,26 +3,14 @@ import torch
 import torch.nn as nn
 import math
 from compresslab.nn.video_compression.dvc.subnet import *
-from compresslab.nn.video_compression.abc import (
-    PFrameCodec, 
-    PFrameLikelihoods, 
-    PFrameCompressInput,
-    PFrameCompressOutput,
-    PFrameDecompressOutput,
-    PFrameForwardOutput,
-    PFrameForwardInput,
-    PFrameCodecCompressInput,
-    PFrameCodecCompressOutput,
-    PFrameCodecDecompressOutput,
-    IFrameCompressOutput
-)
+from compresslab.nn.video_compression.abc import *
 
 from compresslab.core.models import CompressionModel
 from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
 # import torchac
 import numpy as np
 
-class DVC(CompressionModel, PFrameCodec):
+class DVC(VideoCodec):
     def __init__(self, 
                  out_channel_N=64, 
                  out_channel_M=96, 
@@ -53,7 +41,7 @@ class DVC(CompressionModel, PFrameCodec):
         prediction = self.warpnet(inputfeature) + warpframe
         return prediction, warpframe
 
-    def forward(self, input: PFrameForwardInput):
+    def forward_P_frame(self, input: PFrameForwardInput):
         input_image, referframe = input.input_frame, input.refer_frame
         estmv = self.opticFlow(input_image, referframe)
         mv_fea = self.mvEncoder(estmv)
@@ -83,8 +71,6 @@ class DVC(CompressionModel, PFrameCodec):
         return PFrameForwardOutput(
             input_frame=input_image,
             recon_frame=clipped_recon_image,
-            warp_frame=warp_frame,
-            prediction=prediction,
             likelihoods=PFrameLikelihoods(
                 y_mv=mv_likelihoods,
                 z_mv=mvprior_likelihoods,
@@ -92,23 +78,6 @@ class DVC(CompressionModel, PFrameCodec):
                 z=resprior_likelihoods
             )
         )
-
-    def update(self, scale_table=None, force=False):
-
-        SCALES_MIN = 0.11
-        SCALES_MAX = 256
-        SCALES_LEVELS = 64
-
-        def get_scale_table(min=SCALES_MIN, max=SCALES_MAX, levels=SCALES_LEVELS):
-            return torch.exp(torch.linspace(math.log(min), math.log(max), levels))
-
-        if scale_table is None:
-            scale_table = get_scale_table()
-        updated = self.entropy_bottleneck_mv.update_scale_table(scale_table, force=force)
-        updated = self.entropy_bottleneck_res.update_scale_table(scale_table, force=force)
-        updated |= super().update(force=force)
-        return updated
-    
     
     def compress_P_frame(self, input: PFrameCompressInput):
         input_image, referframe = input.input_frame, input.refer_frame     
@@ -174,37 +143,22 @@ class DVC(CompressionModel, PFrameCodec):
         return PFrameDecompressOutput(
             recon_frame=recon_frame,
         )
-    
-    def compress(self, input: PFrameCodecCompressInput) -> PFrameCodecCompressOutput:
-        output_list = []
-        for i in range(len(input.P_frames)):
-            output = self.compress_P_frame(
-                PFrameCompressInput(
-                    input_frame=input.P_frames[i],
-                    refer_frame=input.I_frame if i == 0 else output.recon_frame
-                )
-            )
-            output_list.append(output)
 
-        return PFrameCodecCompressOutput(
-            input=input,
-            P_frame_output=output_list
-        )
-    
+    def update(self, scale_table=None, force=False):
 
-    def decompress(self, input: PFrameCodecCompressOutput) -> PFrameCodecDecompressOutput:
-        recon_frames = []
+        SCALES_MIN = 0.11
+        SCALES_MAX = 256
+        SCALES_LEVELS = 64
 
-        for i in range(len(input.P_frame_output)):
-            output = self.decompress_P_frame(
-                input.P_frame_output[i]
-            )
-            recon_frames.append(output.recon_frame)
+        def get_scale_table(min=SCALES_MIN, max=SCALES_MAX, levels=SCALES_LEVELS):
+            return torch.exp(torch.linspace(math.log(min), math.log(max), levels))
 
-        return PFrameCodecDecompressOutput(recon_frames=recon_frames)
-
-
-
+        if scale_table is None:
+            scale_table = get_scale_table()
+        updated = self.entropy_bottleneck_mv.update_scale_table(scale_table, force=force)
+        updated = self.entropy_bottleneck_res.update_scale_table(scale_table, force=force)
+        updated |= super().update(force=force)
+        return updated
 
 # class DVC_Official(nn.Module, PFrameCodec):
 #     def __init__(self,
