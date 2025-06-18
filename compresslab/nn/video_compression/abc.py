@@ -104,7 +104,7 @@ class PFrameForwardOutput:
             self.bpp = self.likelihoods.calc_bpp(num_pixels)
 
         self.mse_loss = F.mse_loss(self.recon_frame, self.input_frame)
-        self.psnr = 10 * torch.log10(1.0 / self.mse_loss).item()
+        self.psnr = 10 * torch.log10(1.0 / self.mse_loss).detach()
 
 
 @dataclass
@@ -255,7 +255,7 @@ class IFrameForwardOutput:
         if self.likelihoods is not None:
             self.bpp = self.likelihoods.calc_bpp(num_pixels)
         self.mse_loss = F.mse_loss(self.recon_frame, self.input_frame)
-        self.psnr = 10 * torch.log10(1.0 / self.mse_loss).item()
+        self.psnr = 10 * torch.log10(1.0 / self.mse_loss).detach()
 
 
 @dataclass
@@ -346,6 +346,13 @@ class VideoCodecForwardInput:
 
         else:
             raise ValueError("Either 'frames' or both 'I_frame' and 'P_frames' must be provided.")
+        
+    def to_dict(self):
+        return {
+            "frames": self.frames,
+            "I_frame": self.I_frame,
+            "P_frames": self.P_frames
+        }
 
 
 @dataclass
@@ -480,7 +487,37 @@ class VideoCodec(CompressionModel, ABC):
             self.image_codec = load_model(codec, quality=quality, **kwargs)
 
 
-    def forward(self, input: VideoCodecForwardInput) -> VideoCodecForwardOutput:
+    def forward(self, frames):
+        I_frame_out = self.forward_I_frame(
+            IFrameForwardInput(
+                input_frame=frames[0]
+            )
+        )
+
+        P_frame_out_list = []
+        for i in range(1, len(frames)):
+            P_frame_out = self.forward_P_frame(
+                PFrameForwardInput(
+                    input_frame=frames[i],
+                    refer_frame=I_frame_out.recon_frame.detach() if i == 1 else P_frame_out.recon_frame
+                )
+            )
+            P_frame_out_list.append(P_frame_out)
+
+        # return {
+        #     "I_frame_output": I_frame_out,
+        #     "P_frame_output": P_frame_out_list
+        # }
+
+        return {
+            "bpp": I_frame_out.bpp + sum(p.bpp for p in P_frame_out_list),
+            "mse_loss": I_frame_out.mse_loss + sum(p.mse_loss for p in P_frame_out_list),
+            "psnr": I_frame_out.psnr + sum(p.psnr for p in P_frame_out_list) / len(P_frame_out_list),
+        }
+        
+
+
+    def forward_all(self, input: VideoCodecForwardInput) -> VideoCodecForwardOutput:
         I_frame_out = self.forward_I_frame(
             IFrameForwardInput(
                 input_frame=input.I_frame
@@ -503,6 +540,7 @@ class VideoCodec(CompressionModel, ABC):
             I_frame_output=I_frame_out,
             P_frame_output=P_frame_out_list
         )
+    
 
     def compress(self, input: VideoCodecCompressInput) -> VideoCodecCompressOutput:
         I_frame_out = self.compress_I_frame(

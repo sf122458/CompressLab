@@ -6,6 +6,41 @@ import torch
 import torch.nn as nn
 from copy import deepcopy
 from typing import Dict, Any, Union
+from torch import vmap
+from torch.func import stack_module_state, functional_call
+
+
+#TODO: vmap support
+class ModelWrapper(nn.Module):
+    def __init__(self, lmbda: List[float], model: VideoCodec, codec):
+        super().__init__()
+
+        self.lmbda = lmbda if isinstance(lmbda, list) else [lmbda]
+        self.models = nn.ModuleList([deepcopy(model) for _ in range(len(lmbda))])
+
+        for model in self.models:
+            model.preprocess(codec)
+
+        def fmodel(params, buffers, x):
+            return functional_call(model, (params, buffers), (x,))
+        
+        self.vmap_forward = vmap(fmodel, in_dims=(0, 0, None), randomness="different")
+
+    def forward(self, input) -> List[VideoCodecForwardOutput]:
+        self.param, self.buffer = stack_module_state(self.models)
+        vmap_output = self.vmap_forward(self.param, self.buffer, input)
+        
+        return vmap_output
+
+    def aux_loss(self) -> torch.Tensor:
+        aux_loss = 0.0
+        for model in self.models:
+            aux_loss += model.aux_loss()
+        return aux_loss
+
+    def items(self):
+        return {f"codec_{idx}": model for idx, model in enumerate(self.models)}.items()
+
 
 class VideoCodecTrainer(L.LightningModule):
     def __init__(self, 
@@ -16,20 +51,26 @@ class VideoCodecTrainer(L.LightningModule):
 
         self.automatic_optimization = False
 
+
+        self.enable_vmap = False
+
         self.lmbda = ext_params.get("lmbda", 1)
         self.lr = ext_params.get("lr", 1e-4)
-        self.codec = ext_params.get("codec", None)
+        codec = ext_params.get("codec", None)
 
-        self.model_wrapper: nn.ModuleDict[str, VideoCodec] = nn.ModuleDict({})
+        # self.model_wrapper: nn.ModuleDict[str, VideoCodec] = nn.ModuleDict({})
 
-        if isinstance(self.lmbda, float) or isinstance(self.lmbda, int):
-            self.lmbda = [self.lmbda]
+        # if isinstance(self.lmbda, float) or isinstance(self.lmbda, int):
+        #     self.lmbda = [self.lmbda]
         
-        for idx in range(len(self.lmbda)):
-            model_instance = deepcopy(model)
-            model_instance.preprocess(self.codec)
-            self.model_wrapper[f"codec_{idx}"] = model_instance
-        del model
+        # for idx in range(len(self.lmbda)):
+        #     model_instance = deepcopy(model)
+        #     model_instance.preprocess(self.codec)
+        #     self.model_wrapper[f"codec_{idx}"] = model_instance
+        # del model
+
+
+        self.model_wrapper = ModelWrapper(self.lmbda, model, codec)
 
     # TODO: multi-stage training
 
@@ -38,36 +79,47 @@ class VideoCodecTrainer(L.LightningModule):
         optimizer.zero_grad()
         aux_optimizer.zero_grad()
 
-        total_loss = 0.0
-        total_aux_loss = 0.0
 
-        for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
-            model_instance: Union[VideoCodec, CompressionModel]
+        if self.enable_vmap:
+            out = self.model_wrapper.forward(batch)
 
-            out = model_instance.forward(
-                VideoCodecForwardInput(
-                    frames=batch
+            total_loss = 0.0
+            for idx, lmbda in enumerate(self.lmbda):
+                total_loss += lmbda * 255 ** 2 * out["mse_loss"][idx] + out["bpp"][idx]
+
+            total_aux_loss = self.model_wrapper.aux_loss()
+
+        else:
+            total_loss = 0.0
+            total_aux_loss = 0.0
+
+            for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
+                model_instance: Union[VideoCodec, CompressionModel]
+
+                out = model_instance.forward_all(
+                    VideoCodecForwardInput(
+                        frames=batch
+                    )
                 )
-            )
 
-            loss = lmbda * 255 ** 2 * out.mse_loss + out.bpp
-            aux_loss = model_instance.aux_loss()
+                loss = lmbda * 255 ** 2 * out.mse_loss + out.bpp
+                aux_loss = model_instance.aux_loss()
 
-            if model_name == "codec_0":
+                if model_name == "codec_0":
+                    self.log_dict({
+                        "loss": loss, 
+                        "bpp": out.bpp,
+                        "psnr": out.psnr
+                    }, prog_bar=True, on_step=True, on_epoch=False, logger=False)
+                
                 self.log_dict({
-                    "loss": loss, 
-                    "bpp": out.bpp,
-                    "psnr": out.psnr
-                }, prog_bar=True, on_step=True, on_epoch=False, logger=False)
-            
-            self.log_dict({
-                f"train/{model_name}.loss": loss,
-                f"train/{model_name}.bpp": out.bpp,
-                f"train/{model_name}.psnr": out.psnr
-            }, on_epoch=False, logger=True, sync_dist=True, on_step=True)
-            
-            total_loss += loss
-            total_aux_loss += aux_loss
+                    f"train/{model_name}.loss": loss,
+                    f"train/{model_name}.bpp": out.bpp,
+                    f"train/{model_name}.psnr": out.psnr
+                }, on_epoch=False, logger=True, sync_dist=True, on_step=True)
+                
+                total_loss += loss
+                total_aux_loss += aux_loss
 
         self.manual_backward(total_loss)
         torch.nn.utils.clip_grad_norm_(self.model_wrapper.parameters(), 1.0)
@@ -77,20 +129,20 @@ class VideoCodecTrainer(L.LightningModule):
         aux_optimizer.step()
 
 
-    def validation_step(self, batch, batch_idx):
-        for model_name, model_instance in self.model_wrapper.items():
-            model_instance: Union[VideoCodec, CompressionModel]
+    # def validation_step(self, batch, batch_idx):
+    #     for model_name, model_instance in self.model_wrapper.items():
+    #         model_instance: Union[VideoCodec, CompressionModel]
 
-            out = model_instance.forward(
-                VideoCodecForwardInput(
-                    frames=batch
-                )
-            )
+    #         out = model_instance.forward(
+    #             VideoCodecForwardInput(
+    #                 frames=batch
+    #             )
+    #         )
 
-            self.log_dict({
-                f"val/{model_name}.bpp": out.bpp,
-                f"val/{model_name}.psnr": out.psnr,
-            }, on_step=False, on_epoch=True, logger=True, sync_dist=True)
+    #         self.log_dict({
+    #             f"val/{model_name}.bpp": out.bpp,
+    #             f"val/{model_name}.psnr": out.psnr,
+    #         }, on_step=False, on_epoch=True, logger=True, sync_dist=True)
 
 
     def on_test_start(self):

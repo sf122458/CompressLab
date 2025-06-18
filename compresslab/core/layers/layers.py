@@ -437,8 +437,8 @@ class QReLU(Function):
             * grad_output.clone()
         )
 
-        grad_input[input < 0] = grad_sub[input < 0]
-        grad_input[input > ctx.max_value] = grad_sub[input > ctx.max_value]
+        # grad_input[input < 0] = grad_sub[input < 0]
+        # grad_input[input > ctx.max_value] = grad_sub[input > ctx.max_value]
 
         return grad_input, None, None
 
