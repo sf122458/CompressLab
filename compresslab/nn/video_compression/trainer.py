@@ -58,18 +58,6 @@ class VideoCodecTrainer(L.LightningModule):
         self.lr = ext_params.get("lr", 1e-4)
         codec = ext_params.get("codec", None)
 
-        # self.model_wrapper: nn.ModuleDict[str, VideoCodec] = nn.ModuleDict({})
-
-        # if isinstance(self.lmbda, float) or isinstance(self.lmbda, int):
-        #     self.lmbda = [self.lmbda]
-        
-        # for idx in range(len(self.lmbda)):
-        #     model_instance = deepcopy(model)
-        #     model_instance.preprocess(self.codec)
-        #     self.model_wrapper[f"codec_{idx}"] = model_instance
-        # del model
-
-
         self.model_wrapper = ModelWrapper(self.lmbda, model, codec)
 
     # TODO: multi-stage training
@@ -85,7 +73,22 @@ class VideoCodecTrainer(L.LightningModule):
 
             total_loss = 0.0
             for idx, lmbda in enumerate(self.lmbda):
-                total_loss += lmbda * 255 ** 2 * out["mse_loss"][idx] + out["bpp"][idx]
+                loss = lmbda * 255 ** 2 * out["mse_loss"][idx] + out["bpp"][idx]
+                
+                if idx == 0:
+                    self.log_dict({
+                        "loss": loss, 
+                        "bpp": out["bpp"][idx],
+                        "psnr": out["psnr"][idx]
+                    }, prog_bar=True, on_step=True, on_epoch=False, logger=False)
+                
+                self.log_dict({
+                    f"train/codec_{idx}.loss": loss,
+                    f"train/codec_{idx}.bpp": out["bpp"][idx],
+                    f"train/codec_{idx}.psnr": out["psnr"][idx]
+                }, on_epoch=False, logger=True, sync_dist=True, on_step=True)
+
+                total_loss += loss
 
             total_aux_loss = self.model_wrapper.aux_loss()
 
