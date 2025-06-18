@@ -15,7 +15,7 @@ from compresslab.core.layers import conv, deconv, gaussian_blur, gaussian_kernel
 from compresslab.nn.video_compression.abc import *
 
 
-class ScaleSpaceFlow(CompressionModel, IPFrameCodec):
+class ScaleSpaceFlow(VideoCodec):
     r"""Google's first end-to-end optimized video compression from E.
     Agustsson, D. Minnen, N. Johnston, J. Balle, S. J. Hwang, G. Toderici: `"Scale-space flow for end-to-end
     optimized video compression" <https://openaccess.thecvf.com/content_CVPR_2020/html/Agustsson_Scale-Space_Flow_for_End-to-End_Optimized_Video_Compression_CVPR_2020_paper.html>`_,
@@ -391,39 +391,3 @@ class ScaleSpaceFlow(CompressionModel, IPFrameCodec):
         volume = self.gaussian_volume(x_ref, self.sigma0, self.num_levels)
         x_pred = self.warp_volume(volume, flow, scale_field)
         return x_pred
-
-    def compress(self, input: IPFrameCodecCompressInput) -> IPFrameCodecCompressOutput:
-        I_frame_out = self.compress_I_frame(
-            IFrameCompressInput(
-                input_frame=input.I_frame,
-            )
-        )
-        
-        P_frame_out_list = []
-
-        for i in range(len(input.P_frames)):
-            P_frame_out = self.compress_P_frame(
-                PFrameCompressInput(
-                    input_frame=input.P_frames[i],
-                    refer_frame=I_frame_out.recon_frame if i == 0 else P_frame_out.recon_frame,
-                )
-            )
-
-            P_frame_out_list.append(P_frame_out)
-
-        return IPFrameCodecCompressOutput(
-            I_frame_output=I_frame_out,
-            P_frame_output=P_frame_out_list,
-        )
-
-    def decompress(self, input: IPFrameCodecCompressOutput) -> IPFrameCodecDecompressOutput:
-        dec_frames = []
-
-        I_frame_out = self.decompress_I_frame(input.I_frame_output)
-        dec_frames.append(I_frame_out.recon_frame)
-
-        for i in range(len(input.P_frame_output)):
-            P_frame_out = self.decompress_P_frame(input.P_frame_output[i])
-            dec_frames.append(P_frame_out.recon_frame)
-
-        return IPFrameCodecDecompressOutput(recon_frames=dec_frames)
