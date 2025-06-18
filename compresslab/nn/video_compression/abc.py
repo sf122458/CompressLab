@@ -4,10 +4,8 @@ import torch, math
 from typing import List, Tuple, Union, Dict
 import torch.nn.functional as F
 from pytorch_msssim import ms_ssim
-
-###########################################################
-#                       PFrameCodec                       #
-###########################################################
+from compresslab.nn.video_compression.image_codec import load_model
+from compresslab.core.models import CompressionModel
 
 @dataclass
 class PFrameLikelihoods:
@@ -99,16 +97,6 @@ class PFrameForwardOutput:
     mse_loss: torch.Tensor = field(init=False)
     psnr: float = field(init=False)
 
-
-    # below metrics are used in DVC official implementation, not required in all codecs
-    warp_frame: torch.Tensor = None
-    prediction: torch.Tensor = None
-    warp_loss: torch.Tensor = field(init=False, default=None)
-    warp_psnr: float = field(init=False, default=None)
-    inter_loss: torch.Tensor = field(init=False, default=None)
-    inter_psnr: float = field(init=False, default=None)
-
-
     def __post_init__(self):
         N, _, H, W = self.input_frame.shape
         num_pixels = N * H * W
@@ -118,12 +106,6 @@ class PFrameForwardOutput:
         self.mse_loss = F.mse_loss(self.recon_frame, self.input_frame)
         self.psnr = 10 * torch.log10(1.0 / self.mse_loss).item()
 
-        if self.warp_frame is not None:
-            self.warp_loss = F.mse_loss(self.warp_frame, self.input_frame)
-            self.warp_psnr = 10 * torch.log10(1.0 / self.warp_loss).item()
-        if self.prediction is not None:
-            self.inter_loss = F.mse_loss(self.prediction, self.input_frame)
-            self.inter_psnr = 10 * torch.log10(1.0 / self.inter_loss).item()
 
 @dataclass
 class PFrameCompressInput:
@@ -136,7 +118,6 @@ class PFrameCompressInput:
     """
     input_frame: torch.Tensor
     refer_frame: torch.Tensor
-
 
 
 @dataclass
@@ -204,126 +185,6 @@ class PFrameDecompressOutput:
         recon_frame (torch.Tensor): The reconstructed P frame tensor.
     """
     recon_frame: torch.Tensor
-
-
-@dataclass
-class PFrameCodecCompressInput:
-    """
-    Input of the `PFrameCodec` 's `compress` method.
-
-    Attributes:
-        I_frame (torch.Tensor): The I-frame tensor.
-        P_frames (List[torch.Tensor]): A list of P-frame tensors.
-
-        I_frame_bpp (Union[float, torch.Tensor], optional): Bits per pixel for the I-frame.
-        I_frame_psnr (Union[float, torch.Tensor], optional): Peak signal-to-noise ratio for the I-frame.
-        I_frame_ms_ssim (Union[float, torch.Tensor], optional): Multi-scale structural similarity index for the I-frame.
-    """
-    I_frame: torch.Tensor
-    P_frames: List[torch.Tensor]
-
-    # In DVC implementation, the I frame is pre-compressed with H.265 codec so below attributes are required to store the pre-compressed I frame metrics.
-    I_frame_bpp: Union[float, torch.Tensor] = None
-    I_frame_psnr: Union[float, torch.Tensor] = None
-    I_frame_ms_ssim: Union[float, torch.Tensor] = None
-
-
-@dataclass
-class PFrameCodecCompressOutput:
-    """
-    Output of the `PFrameCodec` 's `compress` method.
-
-    Attributes:
-        input (PFrameCodecCompressInput): The input of `compress` method.
-        P_frame_output (List[PFrameCompressOutput]): A list of compressed P-frame outputs.
-
-        bpp (float): Average bits per pixel for all frames.
-        psnr (float, optional): Average peak signal-to-noise ratio for all frames.
-        ms_ssim (float, optional): Average multi-scale structural similarity index for all frames.
-    """
-    input: PFrameCodecCompressInput
-    P_frame_output: List[PFrameCompressOutput] = field(default_factory=list)
-    
-    # automatically calculated in `__post_init__`
-    bpp: float = field(init=False)
-    psnr: float = field(init=False, default=None)
-    ms_ssim: float = field(init=False, default=None)
-
-    def __post_init__(self):
-        avg_bpp = self.input.I_frame_bpp.item() if isinstance(self.input.I_frame_bpp, torch.Tensor) \
-            else self.input.I_frame_bpp
-        avg_psnr = self.input.I_frame_psnr.item() if isinstance(self.input.I_frame_psnr, torch.Tensor) \
-            else self.input.I_frame_psnr
-        avg_ms_ssim = self.input.I_frame_ms_ssim.item() if isinstance(self.input.I_frame_ms_ssim, torch.Tensor) \
-            else self.input.I_frame_ms_ssim
-
-        for output in self.P_frame_output:
-            avg_bpp += output.bpp
-            avg_psnr += output.psnr
-            avg_ms_ssim = output.ms_ssim
-        
-        self.bpp = avg_bpp / (len(self.P_frame_output) + 1)
-        self.psnr = avg_psnr / (len(self.P_frame_output) + 1)
-        self.ms_ssim = avg_ms_ssim / (len(self.P_frame_output) + 1)
-
-
-
-@dataclass
-class PFrameCodecDecompressOutput:
-    """
-    Output of the `PFrameCodec` 's `decompress` method.
-    
-    Attributes:
-        recon_frames (List[torch.Tensor]): A list of reconstructed P-frame tensors.
-    """
-    recon_frames: List[torch.Tensor]
-
-
-
-class PFrameCodec(ABC):
-    """
-    Abstract base class for codecs that only encode one P-frame in one `forward` operation.
-
-    """
-    @abstractmethod
-    def forward(self, input: PFrameForwardInput) -> PFrameForwardOutput:
-        """
-        Encode and decode the P-frame and obtain the metrics.
-        """
-        pass
-
-    @abstractmethod
-    def compress(self, input: PFrameCompressInput) -> PFrameCompressOutput:
-        """
-        Compress the P-frame sequences and obtain the compressed output.
-        """
-        pass
-
-    @abstractmethod
-    def decompress(self, input: PFrameCompressOutput) -> PFrameDecompressOutput:
-        """
-        Decompress the P-frame from the compressed output and obtain the reconstructed frame.
-        """
-        pass
-
-    @abstractmethod
-    def compress_P_frame(self, input: PFrameCompressInput) -> PFrameCompressOutput:
-        """
-        Compress a single P-frame and obtain the compressed output.
-        """
-        pass
-
-    @abstractmethod
-    def decompress_P_frame(self, input: PFrameCompressOutput) -> PFrameDecompressOutput:
-        """
-        Decompress a single P-frame from the compressed output and obtain the reconstructed frame.
-        """
-        pass
-
-
-###########################################################
-#                      IPFrameCodec                       #
-###########################################################
 
 
 @dataclass
@@ -466,97 +327,77 @@ class IFrameDecompressOutput:
 
 
 @dataclass
-class IPFrameCodecForwardInput:
-    """
-    Input of the `IPFrameCodec` 's `forward` method.
+class VideoCodecForwardInput:
+    frames: List[torch.Tensor] = None
+    I_frame: torch.Tensor = None
+    P_frames: List[torch.Tensor] = None
 
-    Attributes:
-        I_frame (torch.Tensor): The I-frame tensor.
-        P_frames (List[torch.Tensor]): A list of P-frame tensors.
-    """
-    I_frame: torch.Tensor
-    P_frames: List[torch.Tensor]
+
+    def __post_init__(self):
+        if self.frames is not None:
+            assert len(self.frames) > 1
+            self.I_frame = self.frames[0]
+            self.P_frames = self.frames[1:]
+        
+        elif self.I_frame is not None and self.P_frames is not None:
+            assert isinstance(self.I_frame, torch.Tensor)
+            assert isinstance(self.P_frames, list) and all(isinstance(frame, torch.Tensor) for frame in self.P_frames)
+            self.frames = [self.I_frame] + self.P_frames
+
+        else:
+            raise ValueError("Either 'frames' or both 'I_frame' and 'P_frames' must be provided.")
 
 
 @dataclass
-class IPFrameCodecForwardOutput:
-    """
-    Output of the `IPFrameCodec` 's `forward` method.
-
-    Attributes:
-        I_frame_output (IFrameForwardOutput): The output of the I-frame forward operation.
-        P_frame_output (List[PFrameForwardOutput]): A list of outputs for P-frame forward operations.
-        
-        bpp (torch.Tensor): Total bits per pixel for all frames.
-        mse_loss (torch.Tensor): Total mean squared error loss for all frames.
-        psnr (float): Total peak signal-to-noise ratio for all frames.
-    """
-    I_frame_output: IFrameForwardOutput
+class VideoCodecForwardOutput:
+    I_frame_output: IFrameForwardOutput = None
     P_frame_output: List[PFrameForwardOutput] = field(default_factory=list)
 
     # automatically calculated in `__post_init__`
-    I_frame_bpp: float = field(init=False, default=0)
-    I_frame_psnr: float = field(init=False, default=0)
-
-    P_frame_bpp: float = field(init=False, default=0)
-    P_frame_psnr: float = field(init=False, default=0)
-
-    bpp: torch.Tensor = field(init=False, default=0)
-    mse_loss: torch.Tensor = field(init=False, default=0)
+    bpp: float = field(init=False, default=0)
+    mse_loss: float = field(init=False, default=0)
     psnr: float = field(init=False, default=0)
 
     def __post_init__(self):
-        self.I_frame_bpp = self.I_frame_output.bpp
-        self.I_frame_psnr = self.I_frame_output.psnr
-
-        total_bpp, total_psnr, total_mse_loss = 0, 0, 0
+        if self.I_frame_output is not None:
+            self.bpp += self.I_frame_output.bpp
+            self.mse_loss += self.I_frame_output.mse_loss
+            self.psnr += self.I_frame_output.psnr
 
         for output in self.P_frame_output:
-            total_bpp += output.bpp
-            total_mse_loss += output.mse_loss
-            total_psnr += output.psnr
+            self.bpp += output.bpp
+            self.mse_loss += output.mse_loss
+            self.psnr += output.psnr
 
-        self.P_frame_bpp = total_bpp / len(self.P_frame_output)
-        self.P_frame_psnr = total_psnr / len(self.P_frame_output)
-
-        total_bpp += self.I_frame_bpp
-        total_psnr += self.I_frame_psnr
-        total_mse_loss += self.I_frame_output.mse_loss
-
-        self.bpp = total_bpp / (len(self.P_frame_output) + 1)
-        self.mse_loss = total_mse_loss / (len(self.P_frame_output) + 1)
-        self.psnr = total_psnr / (len(self.P_frame_output) + 1)
-
+        num_frames = len(self.P_frame_output) + 1
 
 
 @dataclass
-class IPFrameCodecCompressInput:
-    """
-    Input of the `IPFrameCodec` 's `compress` method.
+class VideoCodecCompressInput:
+    frames: List[torch.Tensor] = None
+    I_frame: torch.Tensor = None
+    P_frames: List[torch.Tensor] = None
 
-    Attributes:
-        I_frame (torch.Tensor): The I-frame tensor.
-        P_frames (List[torch.Tensor]): A list of P-frame tensors.
-    """
-    I_frame: torch.Tensor
-    P_frames: List[torch.Tensor]
+    def __post_init__(self):
+        if self.frames is not None:
+            assert len(self.frames) > 1
+            self.I_frame = self.frames[0]
+            self.P_frames = self.frames[1:]
+        
+        elif self.I_frame is not None and self.P_frames is not None:
+            assert isinstance(self.I_frame, torch.Tensor)
+            assert isinstance(self.P_frames, list) and all(isinstance(frame, torch.Tensor) for frame in self.P_frames)
+            self.frames = [self.I_frame] + self.P_frames
 
+        else:
+            raise ValueError("Either 'frames' or both 'I_frame' and 'P_frames' must be provided.")
+    
 
 @dataclass
-class IPFrameCodecCompressOutput:
-    """
-    Output of the `IPFrameCodec` 's `compress` method.
-
-    Attributes:
-        I_frame_output (IFrameCompressOutput): The compressed output of the I-frame.
-        P_frame_output (List[PFrameCompressOutput]): A list of compressed outputs for P-frames.
-
-        bpp (float): Total bits per pixel for all frames.
-        psnr (float): Total peak signal-to-noise ratio for all frames.
-        ms_ssim (float): Total multi-scale structural similarity index for all frames.
-    """
-    I_frame_output: IFrameCompressOutput
-    P_frame_output: List[PFrameCompressOutput] = field(default_factory=list)
+class VideoCodecCompressOutput:
+    frame_output: List[Union[IFrameCompressOutput, PFrameCompressOutput]] = None
+    I_frame_output: IFrameCompressOutput = None
+    P_frame_output: List[PFrameCompressOutput] = None
 
     # automatically calculated in `__post_init__`
     I_frame_bpp: float = field(init=False, default=0)
@@ -572,6 +413,13 @@ class IPFrameCodecCompressOutput:
     ms_ssim: float = field(init=False, default=0)
 
     def __post_init__(self):
+        if self.frame_output is not None:
+            self.I_frame_output = self.frame_output[0]
+            self.P_frame_output = self.frame_output[1:]
+        else:
+            assert self.I_frame_output is not None
+            assert isinstance(self.P_frame_output, list) and all(isinstance(output, PFrameCompressOutput) for output in self.P_frame_output)
+
         self.I_frame_bpp = self.I_frame_output.bpp
         self.I_frame_psnr = self.I_frame_output.psnr
         self.I_frame_ms_ssim = self.I_frame_output.ms_ssim
@@ -597,81 +445,131 @@ class IPFrameCodecCompressOutput:
 
 
 @dataclass
-class IPFrameCodecDecompressOutput:
-    """
-    Output of the `IPFrameCodec` 's `decompress` method.
-
-    Attributes:
-        recon_frames (List[torch.Tensor]): A list of reconstructed frames, including the I-frame and P-frames.
-    """
+class VideoCodecDecompressOutput:
     recon_frames: List[torch.Tensor]
 
 
-class IPFrameCodec(ABC):
+class VideoCodec(CompressionModel, ABC):
     """
-    Abstract base class for codecs that encode a single I-frame and multiple P-frames in one `forward` operation.
+    Video codec abstract base class.
+
+    TODO: If the model does not support I-frame encoding
     """
-    @abstractmethod
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+
+    def preprocess(self, codec: str=None, quality="low", **kwargs):
+        self.codec = codec
+        if codec is not None:
+            self.image_codec = load_model(codec, quality=quality, **kwargs)
+
+
+    def forward(self, input: VideoCodecForwardInput) -> VideoCodecForwardOutput:
+        I_frame_out = self.forward_I_frame(
+            IFrameForwardInput(
+                input_frame=input.I_frame
+            )
+        )
+
+        P_frame_out_list = []
+
+        for i in range(len(input.P_frames)):
+            P_frame_out = self.forward_P_frame(
+                PFrameForwardInput(
+                    input_frame=input.P_frames[i],
+                    refer_frame=I_frame_out.recon_frame.detach() if i == 0 else P_frame_out.recon_frame
+                )
+            )
+
+            P_frame_out_list.append(P_frame_out)
+
+        return VideoCodecForwardOutput(
+            I_frame_output=I_frame_out,
+            P_frame_output=P_frame_out_list
+        )
+
+    def compress(self, input: VideoCodecCompressInput) -> VideoCodecCompressOutput:
+        I_frame_out = self.compress_I_frame(
+            IFrameCompressInput(
+                input_frame=input.I_frame
+            )
+        )
+
+        P_frame_out_list = []
+
+        for i in range(len(input.P_frames)):
+            P_frame_out = self.compress_P_frame(
+                PFrameCompressInput(
+                    input_frame=input.P_frames[i],
+                    refer_frame=I_frame_out.recon_frame if i == 0 else P_frame_out.recon_frame
+                )
+            )
+
+            P_frame_out_list.append(P_frame_out)
+
+        return VideoCodecCompressOutput(
+            I_frame_output=I_frame_out,
+            P_frame_output=P_frame_out_list
+        )
+        
+
+    def decompress(self, input: VideoCodecCompressOutput) -> VideoCodecDecompressOutput:
+        dec_frames = []
+
+        I_frame_out = self.decompress_I_frame(input.I_frame_output)
+        dec_frames.append(I_frame_out.recon_frame)
+
+        for i in range(len(input.P_frame_output)):
+            P_frame_out = self.decompress_P_frame(input.P_frame_output[i])
+            dec_frames.append(P_frame_out.recon_frame)
+
+        return VideoCodecDecompressOutput(recon_frames=dec_frames)
+
+
     def forward_I_frame(self, input: IFrameForwardInput) -> IFrameForwardOutput:
-        """
-        Encode and decode a single I-frame and obtain the metrics.
-        """
-        pass
+        if self.codec is None:
+            raise NotImplementedError("The I frame codec is not implemented.")
+        else:
+            out = self.image_codec(input.input_frame)
+            return IFrameForwardOutput(
+                input_frame=input.input_frame,
+                recon_frame=out["x_hat"],
+                likelihoods=IFrameLikelihoods(
+                    y=out["likelihoods"]["y"],
+                    z=out["likelihoods"]["z"]
+                )
+            )
 
-    @abstractmethod
     def compress_I_frame(self, input: IFrameCompressInput) -> IFrameCompressOutput:
-        """
-        Compress a single I-frame and obtain the compressed data and metrics.
-        """
-        pass
+        if self.codec is None:
+            raise NotImplementedError("The I frame codec is not implemented.")
+        else:
+            out = self.image_codec.compress(input.input_frame)
+            return IFrameCompressOutput(
+                input_frame=input.input_frame,
+                recon_frame=out["x_hat"],
+                y_strings=out["strings"][0],
+                z_strings=out["strings"][1],
+                shape=out["shape"]
+            )
 
-    @abstractmethod
     def decompress_I_frame(self, input: IFrameCompressOutput) -> IFrameDecompressOutput:
-        """
-        Decompress a single I-frame from the compressed data and obtain the reconstructed frame.
-        """
-        pass
+        if self.codec is None:
+            raise NotImplementedError("The I frame codec is not implemented.")
+        else:
+            out = self.image_codec.decompress(input.strings, input.shape)
+            return IFrameDecompressOutput(recon_frame=out["x_hat"])
 
     @abstractmethod
     def forward_P_frame(self, input: PFrameForwardInput) -> PFrameForwardOutput:
-        """
-        Encode and decode a single P-frame and obtain the metrics.
-        """
         pass
+
 
     @abstractmethod
     def compress_P_frame(self, input: PFrameCompressInput) -> PFrameCompressOutput:
-        """
-        Compress a single P-frame and obtain the compressed data and metrics.
-        """
         pass
 
     @abstractmethod
     def decompress_P_frame(self, input: PFrameCompressOutput) -> PFrameDecompressOutput:
-        """
-        Decompress a single P-frame from the compressed data and obtain the reconstructed frame.
-        """
         pass
-
-    @abstractmethod
-    def forward(self, input: IPFrameCodecForwardInput) -> IPFrameCodecForwardOutput:
-        """
-        Encodes and decodes the I-frame and P-frames, returning their metrics.
-        """
-        pass
-
-    @abstractmethod
-    def compress(self, input: IPFrameCodecCompressInput) -> IPFrameCodecCompressOutput:
-        """
-        Compresses the I-frame and P-frames, returning their compressed data and metrics.
-        """
-        pass
-
-    @abstractmethod
-    def decompress(self, input: IPFrameCodecCompressOutput) -> IPFrameCodecDecompressOutput:
-        """
-        Decompresses the I-frame and P-frames from the compressed data, returning the reconstructed frames.
-        """
-        pass
-
-
