@@ -75,7 +75,7 @@ class MetricLogger():
 
 
     @contextlib.contextmanager
-    def timer(self, name, metric_name: str, cuda_sync=False, unit="ms"):
+    def timer(self, name, metric_name: str, avg: int = 1, cuda_sync=False, unit="ms"):
         """
         A context manager to time a code block.
         """
@@ -87,7 +87,6 @@ class MetricLogger():
             
             yield
 
-            
             end_event.record()
             torch.cuda.synchronize()
             elapsed_time = start_event.elapsed_time(end_event)
@@ -99,8 +98,8 @@ class MetricLogger():
             elapsed_time = (time.time() - start_time) * 1000
 
         if unit == "ms": 
-            self.log(name, {metric_name + f"({unit})": elapsed_time})
+            self.log(name, {metric_name + f"({unit})": elapsed_time / avg})
         elif unit == "s":
-            self.log(name, {metric_name + f"({unit})": elapsed_time / 1000})
+            self.log(name, {metric_name + f"({unit})": elapsed_time / avg / 1000})
         else:
             raise ValueError(f"Unsupported unit: {unit}. Supported units are 'ms' and 's'.")
