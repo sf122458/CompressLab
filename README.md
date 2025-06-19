@@ -3,12 +3,20 @@
 A PyTorch-based framework for deep-learning-based data compression research.
 
 ### Features
+- **YAML-Driven Zero-Code Experiment Launch**
+
+  Start experiments with a single `yaml` configuration file:
+  - Model Auto-Registration: The `Registry` class enables automatic model registration. Specify a list of models under the `Model` key in the config file to train multiple models in one run.
+  - DDP Training Simplification: Built on [PyTorch Lightning](https://lightning.ai), configure the `Devices` key in the config file to easily enable DDP (Distributed Data Parallel) training for multi-GPU acceleration.
+  - Each config file responds to a folder in the `output` directory, so it is suggested to train models oriented to a specific task in a single config file.
+  - **NOTE**: All trainers are defined in `trainer.py`. Models choose the corresponding trainer based on the `model`' s annotation defined in the trainer. If you want to create a customed model, you need to inherit from the abstract class in `abc.py` and implement the code in `models.py`. The abstract class defines some common methods that all models should implement. All models defined in `models.py` will be automatically registered. You can refer to the existing models in `models.py` for implementation details.
+
 - **Multi-λ Training & Parallel Model Execution**
 
-  The framework supports configuring multiple λ values in the loss function to enable simultaneous training of multiple models, offering three training modes: `fast`, `medium`, and `slow`:
-  `fast`: Leverages PyTorch `vmap` to perform batch-wise forward propagation for multiple models in a single forward pass.
-  `medium`: Conducts individual forward propagation for each model and aggregates gradient backpropagation at the ends.
-  `slow`: Executes forward propagation and gradient backpropagation sequentially for each model.
+  The framework supports configuring multiple λ values in the loss function to enable simultaneous training of multiple models, offering three training modes:
+  - `fast`: Leverages PyTorch `vmap` to perform batch-wise forward propagation for multiple models in a single forward pass.
+  - `medium`: Conducts individual forward propagation for each model and aggregates gradient backpropagation at the ends.
+  - `slow`: Executes forward propagation and gradient backpropagation sequentially for each model.
   
   **NOTE: `vmap` may not optimize training speed for certain GPUs, requiring a trade-off between `fast` and `medium` modes. For example, the training time per epoch of `fast` is reduced to 80% of `medium` mode on the 4090, while it increases on the 1080Ti. In terms of GPU memory consumption: `slow` < `medium` < `fast`.**
 
@@ -16,19 +24,11 @@ A PyTorch-based framework for deep-learning-based data compression research.
 
 - **Automatic Metric Calculation via Dataclass Encapsulation**
 
-  Inputs and outputs of compression models are encapsulated in dataclass, which automatically computes key metrics based on input arguments. For example, providing `likelihoods` allows the dataclass to directly calculate the `bpp` (bits per pixel) attribute—simply access the attribute to obtain results without manual computation.
-
-- **YAML-Driven Zero-Code Experiment Launch**
-
-  Start experiments with a single `yaml` configuration file:
-  - Model Auto-Registration: The `Registry` class enables automatic model registration. Specify a list of models under the `Model` key in the config file to train multiple models in one run.
-  - DDP Training Simplification: Built on [PyTorch Lightning](https://lightning.ai), configure the `Devices` key in the config file to easily enable DDP (Distributed Data Parallel) training for multi-GPU acceleration.
-  - Each config file responds to a folder in the `output` directory, so it is suggested to train models oriented to a specific task in a single config file.
-  - **NOTE**: All trainers are defined in `trainer.py`. Models choose the corresponding trainer based on the `model` annotation defined in `LightningModule` class, so if you want to define a new model, you need to inherit from the abstract class in `abc.py`. The abstract class defines some common methods that all models should implement. You can refer to the existing models in `model` folder for implementation details.
+  Inputs and outputs of compression models are encapsulated in dataclass, which automatically computes key metrics based on input arguments. For example, providing `likelihoods` allows the dataclass to directly calculate the `bpp` (bits per pixel) attribute. Then you can simply access the attribute to obtain results without manual computation.
 
 - **Comprehensive Benchmarking Suite**
   
-  The `Benchmark` module can automatically collect multiple metrics and write into `metric.txt`, including:
+  The `Benchmark` module can automatically collect multiple metrics and write into `metrics.csv`, currently including:
   - **Quality Metrics**: Bits per pixel (bpp), peak signal-to-noise ratio (PSNR);
   - **Performance Metrics**: Compression/decompression speed;
   - **Comparative Metrics**: BD-rate across models for direct performance comparison.
