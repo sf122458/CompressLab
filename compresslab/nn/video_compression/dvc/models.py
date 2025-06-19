@@ -7,7 +7,6 @@ from compresslab.nn.video_compression.abc import *
 from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
 
 class DVC(VideoCodec):
-class DVC(VideoCodec):
     def __init__(self, 
                  out_channel_N=64, 
                  out_channel_M=96, 
