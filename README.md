@@ -91,8 +91,8 @@ Each folder in `dataset` has a `download.sh` script to download the dataset. Jus
 
 
 ### TODO
-- [] Set different training stage in video compression.
-- [] Finetine from checkpoints.
+-[] Set different training stage in video compression.
+-[] Finetine from checkpoints.
 
 ### Related links
 - [PyTorch Lightning](https://lightning.ai)
