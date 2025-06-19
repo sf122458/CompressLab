@@ -38,7 +38,6 @@ class DVC(VideoCodec):
         return prediction, warpframe
 
     def forward_P_frame(self, input: PFrameForwardInput):
-    def forward_P_frame(self, input: PFrameForwardInput):
         input_image, referframe = input.input_frame, input.refer_frame
         estmv = self.opticFlow(input_image, referframe)
         mv_fea = self.mvEncoder(estmv)
