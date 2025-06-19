@@ -21,7 +21,7 @@ from compresslab.nn.lossy_image_compression.abc import (
     ImageCodecDecompressOutput
 )
 
-class MLICPlusPlus(CompressionModel, ImageCodec):
+class MLICPlusPlus(ImageCodec):
     def __init__(self, N=192, M=320, slice_num=10, context_window=5, **kwargs):
         super().__init__(**kwargs)
         slice_ch = M // slice_num

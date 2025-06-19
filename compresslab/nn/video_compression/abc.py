@@ -393,6 +393,13 @@ class VideoCodecForwardOutput:
         self.mse_loss = total_mse_loss / (len(self.P_frame_output) + 1)
         self.psnr = total_psnr / (len(self.P_frame_output) + 1)
 
+    def to_dict(self):  #NOTE: vmap support
+        return {
+            "bpp": self.bpp,
+            "mse_loss": self.mse_loss,
+            "psnr": self.psnr
+        }
+
 
 @dataclass
 class VideoCodecCompressInput:
@@ -477,8 +484,20 @@ class VideoCodec(CompressionModel, ABC):
 
     TODO: If the model does not support I-frame encoding
     """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init_subclass__(cls):
+        # decorate the forward method for vmap support
+        def vmap_forward(func):
+            def wrapper(self, input):
+                if isinstance(input, VideoCodecForwardInput):
+                    return func(self, input)
+                else:
+                    # Assuming input is a list of tensors for vmap support
+                    output = func(self, VideoCodecForwardInput(I_frame=input[0], P_frames=input[1:]))
+                    return output.to_dict()
+            return wrapper
+
+        if hasattr(cls, 'forward') and callable(cls.forward):
+            cls.forward = vmap_forward(cls.forward)
         
 
     def preprocess(self, codec: str=None, quality="low", **kwargs):
@@ -487,37 +506,7 @@ class VideoCodec(CompressionModel, ABC):
             self.image_codec = load_model(codec, quality=quality, **kwargs)
 
 
-    def forward(self, frames):
-        I_frame_out = self.forward_I_frame(
-            IFrameForwardInput(
-                input_frame=frames[0]
-            )
-        )
-
-        P_frame_out_list = []
-        for i in range(1, len(frames)):
-            P_frame_out = self.forward_P_frame(
-                PFrameForwardInput(
-                    input_frame=frames[i],
-                    refer_frame=I_frame_out.recon_frame.detach() if i == 1 else P_frame_out.recon_frame
-                )
-            )
-            P_frame_out_list.append(P_frame_out)
-
-        # return {
-        #     "I_frame_output": I_frame_out,
-        #     "P_frame_output": P_frame_out_list
-        # }
-
-        return {
-            "bpp": I_frame_out.bpp + sum(p.bpp for p in P_frame_out_list),
-            "mse_loss": I_frame_out.mse_loss + sum(p.mse_loss for p in P_frame_out_list),
-            "psnr": I_frame_out.psnr + sum(p.psnr for p in P_frame_out_list) / len(P_frame_out_list),
-        }
-        
-
-
-    def forward_all(self, input: VideoCodecForwardInput) -> VideoCodecForwardOutput:
+    def forward(self, input: Union[VideoCodecForwardInput, List[torch.Tensor]]) -> Union[VideoCodecForwardOutput, Dict[str, Union[float, torch.Tensor]]]:
         I_frame_out = self.forward_I_frame(
             IFrameForwardInput(
                 input_frame=input.I_frame
@@ -540,7 +529,6 @@ class VideoCodec(CompressionModel, ABC):
             I_frame_output=I_frame_out,
             P_frame_output=P_frame_out_list
         )
-    
 
     def compress(self, input: VideoCodecCompressInput) -> VideoCodecCompressOutput:
         I_frame_out = self.compress_I_frame(

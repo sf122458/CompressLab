@@ -6,41 +6,7 @@ import torch
 import torch.nn as nn
 from copy import deepcopy
 from typing import Dict, Any, Union
-from torch import vmap
-from torch.func import stack_module_state, functional_call
-
-
-#TODO: vmap support
-class ModelWrapper(nn.Module):
-    def __init__(self, lmbda: List[float], model: VideoCodec, codec):
-        super().__init__()
-
-        self.lmbda = lmbda if isinstance(lmbda, list) else [lmbda]
-        self.models = nn.ModuleList([deepcopy(model) for _ in range(len(lmbda))])
-
-        for model in self.models:
-            model.preprocess(codec)
-
-        def fmodel(params, buffers, x):
-            return functional_call(model, (params, buffers), (x,))
-        
-        self.vmap_forward = vmap(fmodel, in_dims=(0, 0, None), randomness="different")
-
-    def forward(self, input) -> List[VideoCodecForwardOutput]:
-        self.param, self.buffer = stack_module_state(self.models)
-        vmap_output = self.vmap_forward(self.param, self.buffer, input)
-        
-        return vmap_output
-
-    def aux_loss(self) -> torch.Tensor:
-        aux_loss = 0.0
-        for model in self.models:
-            aux_loss += model.aux_loss()
-        return aux_loss
-
-    def items(self):
-        return {f"codec_{idx}": model for idx, model in enumerate(self.models)}.items()
-
+from compresslab.utils.wrapper import ModelWrapper
 
 class VideoCodecTrainer(L.LightningModule):
     def __init__(self, 
@@ -51,14 +17,26 @@ class VideoCodecTrainer(L.LightningModule):
 
         self.automatic_optimization = False
 
+        self.training_mode = "fast"
 
-        self.enable_vmap = False
+        assert self.training_mode in ["fast", "medium", "slow"]
 
         self.lmbda = ext_params.get("lmbda", 1)
+        if not isinstance(self.lmbda, list):
+            self.lmbda = [self.lmbda]
+
         self.lr = ext_params.get("lr", 1e-4)
+        self.training_mode = ext_params.get("training_mode", "fast")
+        assert self.training_mode in ["fast", "medium", "slow"]
+        
         codec = ext_params.get("codec", None)
 
-        self.model_wrapper = ModelWrapper(self.lmbda, model, codec)
+        self.model_wrapper = ModelWrapper(model, len(self.lmbda))
+
+        for model_instance in self.model_wrapper.values():
+            model_instance: Union[VideoCodec, CompressionModel]
+            model_instance.preprocess(codec)
+
 
     # TODO: multi-stage training
 
@@ -68,7 +46,7 @@ class VideoCodecTrainer(L.LightningModule):
         aux_optimizer.zero_grad()
 
 
-        if self.enable_vmap:
+        if self.training_mode == "fast":
             out = self.model_wrapper.forward(batch)
 
             total_loss = 0.0
@@ -92,6 +70,10 @@ class VideoCodecTrainer(L.LightningModule):
 
             total_aux_loss = self.model_wrapper.aux_loss()
 
+            self.manual_backward(total_loss)
+            torch.nn.utils.clip_grad_norm_(self.model_wrapper.parameters(), 1.0)
+            self.manual_backward(total_aux_loss)
+
         else:
             total_loss = 0.0
             total_aux_loss = 0.0
@@ -99,7 +81,7 @@ class VideoCodecTrainer(L.LightningModule):
             for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
                 model_instance: Union[VideoCodec, CompressionModel]
 
-                out = model_instance.forward_all(
+                out = model_instance.forward(
                     VideoCodecForwardInput(
                         frames=batch
                     )
@@ -107,6 +89,14 @@ class VideoCodecTrainer(L.LightningModule):
 
                 loss = lmbda * 255 ** 2 * out.mse_loss + out.bpp
                 aux_loss = model_instance.aux_loss()
+
+                if self.training_mode == "slow":
+                    self.manual_backward(loss)
+                    torch.nn.utils.clip_grad_norm_(model_instance.parameters(), 1.0)
+                    self.manual_backward(aux_loss)
+                else:
+                    total_loss += loss
+                    total_aux_loss += aux_loss
 
                 if model_name == "codec_0":
                     self.log_dict({
@@ -120,13 +110,11 @@ class VideoCodecTrainer(L.LightningModule):
                     f"train/{model_name}.bpp": out.bpp,
                     f"train/{model_name}.psnr": out.psnr
                 }, on_epoch=False, logger=True, sync_dist=True, on_step=True)
-                
-                total_loss += loss
-                total_aux_loss += aux_loss
 
-        self.manual_backward(total_loss)
-        torch.nn.utils.clip_grad_norm_(self.model_wrapper.parameters(), 1.0)
-        self.manual_backward(total_aux_loss)
+            if self.training_mode == "medium":
+                self.manual_backward(total_loss)
+                torch.nn.utils.clip_grad_norm_(self.model_wrapper.parameters(), 1.0)
+                self.manual_backward(total_aux_loss)
 
         optimizer.step()
         aux_optimizer.step()

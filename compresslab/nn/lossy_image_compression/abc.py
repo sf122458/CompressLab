@@ -4,6 +4,7 @@ import torch, math
 import torch.nn.functional as F
 from pytorch_msssim import ms_ssim
 from typing import List, Tuple
+from compresslab.core.models import CompressionModel
 
 @dataclass
 class ImageCodecLikelihoods:
@@ -49,6 +50,15 @@ class ImageCodecForwardOutput:
         self.ms_ssim = ms_ssim(self.x_hat, self.x, data_range=1.0, size_average=True)
         self.ms_ssim_loss = 1 - self.ms_ssim
 
+    def to_dict(self):
+        return {
+            "bpp": self.bpp,
+            "mse_loss": self.mse_loss,
+            "psnr": self.psnr,
+            "ms_ssim_loss": self.ms_ssim_loss,
+            "ms_ssim": self.ms_ssim,
+        }
+
 
 @dataclass
 class ImageCodecCompressInput:
@@ -92,7 +102,21 @@ class ImageCodecCompressOutput:
 class ImageCodecDecompressOutput:
     x_hat: torch.Tensor
 
-class ImageCodec(ABC):
+class ImageCodec(CompressionModel, ABC):
+    def __init_subclass__(cls):
+        # decorate the forward method for vmap support
+        def vmap_forward(func):
+            def wrapper(self, input):
+                if isinstance(input, ImageCodecForwardInput):
+                    return func(self, input)
+                else:
+                    out = func(self, ImageCodecForwardInput(x=input))
+                    return out.to_dict()
+            return wrapper
+        
+        if hasattr(cls, 'forward') and callable(cls.forward):
+            cls.forward = vmap_forward(cls.forward)
+
     @abstractmethod
     def forward(self, input: ImageCodecForwardInput) -> ImageCodecForwardOutput:
         """

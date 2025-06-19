@@ -42,20 +42,6 @@ def lower_bound_bwd(x: Tensor, bound: Tensor, grad_output: Tensor):
     return pass_through_if * grad_output, None
 
 
-# class LowerBoundFunction(torch.autograd.Function):
-#     """Autograd function for the `LowerBound` operator."""
-
-#     @staticmethod
-#     def forward(ctx, x, bound):
-#         ctx.save_for_backward(x, bound)
-#         return lower_bound_fwd(x, bound)
-
-#     @staticmethod
-#     def backward(ctx, grad_output):
-#         x, bound = ctx.saved_tensors
-#         return lower_bound_bwd(x, bound, grad_output)
-
-
 class LowerBoundFunction(torch.autograd.Function):
     """Autograd function for the `LowerBound` operator."""
     generate_vmap_rule = True

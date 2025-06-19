@@ -336,58 +336,6 @@ class AttentionBlock(nn.Module):
         out += identity
         return out
 
-
-# class QReLU(Function):
-#     """QReLU
-
-#     Clamping input with given bit-depth range.
-#     Suppose that input data presents integer through an integer network
-#     otherwise any precision of input will simply clamp without rounding
-#     operation.
-
-#     Pre-computed scale with gamma function is used for backward computation.
-
-#     More details can be found in
-#     `"Integer networks for data compression with latent-variable models"
-#     <https://openreview.net/pdf?id=S1zz2i0cY7>`_,
-#     by Johannes Ballé, Nick Johnston and David Minnen, ICLR in 2019
-
-#     Args:
-#         input: a tensor data
-#         bit_depth: source bit-depth (used for clamping)
-#         beta: a parameter for modeling the gradient during backward computation
-#     """
-
-#     @staticmethod
-#     def forward(ctx, input, bit_depth, beta):
-#         # TODO(choih): allow to use adaptive scale instead of
-#         # pre-computed scale with gamma function
-#         ctx.alpha = 0.9943258522851727
-#         ctx.beta = beta
-#         ctx.max_value = 2**bit_depth - 1
-#         ctx.save_for_backward(input)
-
-#         return input.clamp(min=0, max=ctx.max_value)
-
-#     @staticmethod
-#     def backward(ctx, grad_output):
-#         grad_input = None
-#         (input,) = ctx.saved_tensors
-
-#         grad_input = grad_output.clone()
-#         grad_sub = (
-#             torch.exp(
-#                 (-ctx.alpha**ctx.beta)
-#                 * torch.abs(2.0 * input / ctx.max_value - 1) ** ctx.beta
-#             )
-#             * grad_output.clone()
-#         )
-
-#         grad_input[input < 0] = grad_sub[input < 0]
-#         grad_input[input > ctx.max_value] = grad_sub[input > ctx.max_value]
-
-#         return grad_input, None, None
-
 class QReLU(Function):
     """QReLU
 
@@ -437,8 +385,11 @@ class QReLU(Function):
             * grad_output.clone()
         )
 
-        # grad_input[input < 0] = grad_sub[input < 0]
-        # grad_input[input > ctx.max_value] = grad_sub[input > ctx.max_value]
+        mask1 = input < 0
+        mask2 = input > ctx.max_value
+
+        grad_input = torch.where(mask1, grad_sub, grad_input)
+        grad_input = torch.where(mask2, grad_sub, grad_input)
 
         return grad_input, None, None
 

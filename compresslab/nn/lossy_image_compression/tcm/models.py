@@ -33,9 +33,9 @@ from compresslab.nn.lossy_image_compression.abc import (
 )
 
 
-class TCM(CompressionModel, ImageCodec):
+class TCM(ImageCodec):
     def __init__(self, config=[2, 2, 2, 2, 2, 2], head_dim=[8, 16, 32, 32, 16, 8], drop_path_rate=0, N=128,  M=320, num_slices=5, max_support_slices=5, **kwargs):
-        super().__init__(entropy_bottleneck_channels=N)
+        super().__init__()
         self.config = config
         self.head_dim = head_dim
         self.window_size = 8

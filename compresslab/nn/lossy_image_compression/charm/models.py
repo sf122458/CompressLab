@@ -20,7 +20,7 @@ from compresslab.nn.lossy_image_compression.abc import (
 import torch.nn as nn
 import torch
 
-class ChARM_wo_LRP(CompressionModel, ImageCodec):
+class ChARM_wo_LRP(ImageCodec):
     '''
     Channel-wise Context Model proposed in David Minnen&Saurabh Singh, Channel-wise Autoregressive Entropy Models for Learned Image Compression. ICIP 2020. 
     *WITHOUT* LRP(Latent Residual Prediction) module. 

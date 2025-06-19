@@ -12,6 +12,7 @@ import numpy as np
 from copy import deepcopy
 from pytorch_msssim import ms_ssim
 from typing import Dict, List, Any, Union
+from compresslab.utils.wrapper import ModelWrapper
 
 class ImageCodecTrainer(L.LightningModule):
     def __init__(self, 
@@ -27,68 +28,102 @@ class ImageCodecTrainer(L.LightningModule):
             raise ValueError("lmbda is required in ext_params")
 
         self.lmbda = ext_params.get("lmbda")
+        if not isinstance(self.lmbda, list):
+            self.lmbda = [self.lmbda]
+        
         self.lr = ext_params.get("lr", 1e-4)
         self.distortion = ext_params.get("distortion", "mse")
         assert self.distortion in ["mse", "ms-ssim"], f"invalid distortion: {self.distortion}, only mse and ms-ssim are supported"
+        self.training_mode = ext_params.get("training_mode", "fast")
+        assert self.training_mode in ["fast", "medium", "slow"]
 
 
-        self.model_wrapper: nn.ModuleDict[str, CompressionModel] = nn.ModuleDict({})
-        
-        if isinstance(self.lmbda, float) or isinstance(self.lmbda, int):
-            self.lmbda = [self.lmbda]
-
-        for idx in range(len(self.lmbda)):
-            self.model_wrapper[f"codec_{idx}"] = deepcopy(model)
-        del model
+        self.model_wrapper = ModelWrapper(model, len(self.lmbda))
     
-
     def training_step(self, batch, batch_idx):
         optimizer, aux_optimizer = self.optimizers()
         optimizer.zero_grad()
         aux_optimizer.zero_grad()
 
-        total_loss = 0.0
-        total_aux_loss = 0.0
+        if self.training_mode == "fast":
+            out = self.model_wrapper.forward(batch)
 
-        for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
-            model_instance: Union[ImageCodec, CompressionModel]
-            out = model_instance.forward(
-                ImageCodecForwardInput(
-                    x=batch
+            total_loss = 0.0
+            for idx, lmbda in enumerate(self.lmbda):
+                if self.distortion == "mse":
+                    distortion_loss = out["mse_loss"][idx] * 255 ** 2
+                else:
+                    distortion_loss = out["ms_ssim_loss"][idx]
+
+                loss = lmbda * distortion_loss + out["bpp"][idx]
+                
+                if idx == 0:
+                    self.log_dict({
+                        "loss": loss, 
+                        "bpp": out["bpp"][idx],
+                        "psnr": out["psnr"][idx],
+                        "ms-ssim": out["ms_ssim"][idx]
+                    }, prog_bar=True, on_step=True, on_epoch=False, logger=False)
+                
+                self.log_dict({
+                    f"train/codec_{idx}.loss": loss,
+                    f"train/codec_{idx}.bpp": out["bpp"][idx],
+                    f"train/codec_{idx}.psnr": out["psnr"][idx],
+                    f"train/codec_{idx}.ms-ssim": out["ms_ssim"][idx],
+                }, on_epoch=False, logger=True, sync_dist=True, on_step=True)
+
+                total_loss += loss
+        else:
+            total_loss = 0.0
+            total_aux_loss = 0.0
+
+            for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
+                model_instance: Union[ImageCodec, CompressionModel]
+
+                out = model_instance.forward(
+                    ImageCodecForwardInput(
+                        x=batch
+                    )
                 )
-            )
+                
+                if self.distortion == "mse":
+                    distortion_loss = out.mse_loss * 255 ** 2
+                else:
+                    distortion_loss = out.ms_ssim_loss
+
+                loss = lmbda * distortion_loss + out.bpp
+                aux_loss = model_instance.aux_loss()
+
+                if self.training_mode == "slow":
+                    self.manual_backward(loss)
+                    torch.nn.utils.clip_grad_norm_(model_instance.parameters(), 1.0)
+                    self.manual_backward(aux_loss)
+                else:
+                    total_loss += loss
+                    total_aux_loss += aux_loss
+
+                # show metrics of the first model on the progress bar
+                if model_name == "codec_0":
+                    self.log_dict({"loss": loss, 
+                            "bpp": out.bpp,
+                            "psnr": out.psnr,
+                            "ms-ssim": out.ms_ssim}, prog_bar=True, on_step=True, on_epoch=False, logger=False)
             
-            if self.distortion == "mse":
-                distortion_loss = out.mse_loss * 255 ** 2
-            else:
-                distortion_loss = out.ms_ssim_loss
+                self.log_dict({
+                    f"train/{model_name}.loss": loss,
+                    f"train/{model_name}.bpp": out.bpp,
+                    f"train/{model_name}.psnr": out.psnr,
+                    f"train/{model_name}.ms-ssim": out.ms_ssim,
+                }, on_epoch=False, logger=True, sync_dist=True, on_step=True)
 
-            loss = lmbda * distortion_loss + out.bpp
-            aux_loss = model_instance.aux_loss()
-
-            # show metrics of the first model on the progress bar
-            if model_name == "codec_0":
-                self.log_dict({"loss": loss, 
-                        "bpp": out.bpp,
-                        "psnr": out.psnr,
-                        "ms-ssim": out.ms_ssim}, prog_bar=True, on_step=True, on_epoch=False, logger=False)
-        
-            self.log_dict({
-                f"train/{model_name}.loss": loss,
-                f"train/{model_name}.bpp": out.bpp,
-                f"train/{model_name}.psnr": out.psnr,
-                f"train/{model_name}.ms-ssim": out.ms_ssim,
-            }, on_epoch=False, logger=True, sync_dist=True, on_step=True)
-
-            total_loss += loss
-            total_aux_loss += aux_loss
-
-        self.manual_backward(total_loss)
-        torch.nn.utils.clip_grad_norm_(self.model_wrapper.parameters(), 1.0)
-        self.manual_backward(total_aux_loss)
+            if self.training_mode == "medium":
+                self.manual_backward(total_loss)
+                torch.nn.utils.clip_grad_norm_(self.model_wrapper.parameters(), 1.0)
+                self.manual_backward(total_aux_loss)
 
         optimizer.step()
         aux_optimizer.step()
+        
         
 
     def validation_step(self, batch, batch_idx):

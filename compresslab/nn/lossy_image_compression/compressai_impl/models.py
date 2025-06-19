@@ -42,7 +42,7 @@ import torch.nn.functional as F
 from torch import Tensor
 import types
 
-class FactorizedPrior(CompressionModel, ImageCodec):
+class FactorizedPrior(ImageCodec):
     r"""Factorized Prior model from J. Balle, D. Minnen, S. Singh, S.J. Hwang,
     N. Johnston: `"Variational Image Compression with a Scale Hyperprior"
     <https://arxiv.org/abs/1802.01436>`_, Int Conf. on Learning Representations
@@ -133,7 +133,7 @@ class FactorizedPrior(CompressionModel, ImageCodec):
         x_hat = self.g_s(y_hat).clamp_(0, 1)
         return ImageCodecDecompressOutput(x_hat=x_hat)
    
-class ScaleHyperprior(CompressionModel, ImageCodec):
+class ScaleHyperprior(ImageCodec):
     r"""Scale Hyperprior model from J. Balle, D. Minnen, S. Singh, S.J. Hwang,
     N. Johnston: `"Variational Image Compression with a Scale Hyperprior"
     <https://arxiv.org/abs/1802.01436>`_ Int. Conf. on Learning Representations
