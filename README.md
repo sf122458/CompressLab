@@ -90,6 +90,10 @@ Each folder in `dataset` has a `download.sh` script to download the dataset. Jus
 **Note: All models can be trained using the provided code, but the compression performance remains unverified.**
 
 
+### TODO
+- [] Set different training stage in video compression.
+- [] Finetine from checkpoints.
+
 ### Related links
 - [PyTorch Lightning](https://lightning.ai)
 - [CompressAI](https://github.com/InterDigitalInc/CompressAI)
