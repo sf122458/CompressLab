@@ -3,8 +3,6 @@ from compresslab.core.models import CompressionModel
 from compresslab.utils.logger import MetricLogger
 from compresslab.nn.video_compression.abc import *
 import torch
-import torch.nn as nn
-from copy import deepcopy
 from typing import Dict, Any, Union
 from compresslab.utils.wrapper import ModelWrapper
 
@@ -120,20 +118,20 @@ class VideoCodecTrainer(L.LightningModule):
         aux_optimizer.step()
 
 
-    # def validation_step(self, batch, batch_idx):
-    #     for model_name, model_instance in self.model_wrapper.items():
-    #         model_instance: Union[VideoCodec, CompressionModel]
+    def validation_step(self, batch, batch_idx):
+        for model_name, model_instance in self.model_wrapper.items():
+            model_instance: Union[VideoCodec, CompressionModel]
 
-    #         out = model_instance.forward(
-    #             VideoCodecForwardInput(
-    #                 frames=batch
-    #             )
-    #         )
+            out = model_instance.forward(
+                VideoCodecForwardInput(
+                    frames=batch
+                )
+            )
 
-    #         self.log_dict({
-    #             f"val/{model_name}.bpp": out.bpp,
-    #             f"val/{model_name}.psnr": out.psnr,
-    #         }, on_step=False, on_epoch=True, logger=True, sync_dist=True)
+            self.log_dict({
+                f"val/{model_name}.bpp": out.bpp,
+                f"val/{model_name}.psnr": out.psnr,
+            }, on_step=False, on_epoch=True, logger=True, sync_dist=True)
 
 
     def on_test_start(self):

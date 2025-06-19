@@ -7,10 +7,6 @@ from compresslab.nn.lossy_image_compression.abc import (
     ImageCodec
 )
 import torch
-import torch.nn as nn
-import numpy as np
-from copy import deepcopy
-from pytorch_msssim import ms_ssim
 from typing import Dict, List, Any, Union
 from compresslab.utils.wrapper import ModelWrapper
 

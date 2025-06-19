@@ -1,8 +1,4 @@
-"""
-    With the help of registry, we can dynamically load the instance from the configuration in .yaml files.
-"""
-
-from typing import Type, Generic, TypeVar, Dict, Union, List
+from typing import Type, Generic, TypeVar, Dict
 import torch
 import logging
 import functools
@@ -10,7 +6,6 @@ import yaml
 from io import StringIO
 import re
 import inspect
-from torch.utils.data import Dataset
 from rich.console import Console
 from rich.table import Table
 import lightning as L

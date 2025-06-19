@@ -1,13 +1,14 @@
 Global:
-  lmbda: &lmbda [0.0018, 0.0035, 0.0067, 0.0130, 0.0250, 0.0483, 0.0932, 0.1800]
+  lmbda: &lmbda [0.0018, 0.0035, 0.0067, 0.0130, 0.0250]
 
 Model:
   - Key: ScaleSpaceFlow
     ExtParams:
       lmbda: *lmbda
+      training_mode: fast
 
 Data:
-  Key: IPFrameVideoDataModule
+  Key: VideoDataModule
   Params:
     train_data_dir: dataset/vimeo_setuplet
     test_data_dir: dataset/UVG/images

@@ -4,29 +4,30 @@ import torch
 import time
 import contextlib
 import pickle
-import torch.distributed as dist
 
 class MetricLogger():
     """
     A simple logger to log metrics and save them to a CSV file.
     It also provides a context manager to time code blocks.
-    Usage:\n
-        1.initialize: 
-            ```
-            logger = MetricLogger(save_dir)
-            ```
-        2.recode time:
-            ```with logger.timer(name, metric_name):
-                    # Your code here
-            ```
-        3.log metrics:
-            ```
-            logger.log(name, {"metric_name": value})
-            ```
-        4.save metrics as a csv file:
-            ```
-            logger.save()
-            ```
+
+    Usage:
+
+    1.initialize: 
+    .. code-block:: python
+        logger = MetricLogger(save_dir)
+            
+    2.recode time:
+    .. code-block:: python
+        with logger.timer(name, metric_name):
+            # Your code here
+            
+    3.log metrics:
+    .. code-block:: python
+        logger.log(name, {"metric_name": value})
+            
+    4.save metrics as a csv file:
+    .. code-block:: python
+        logger.save()  
     """
     def __init__(self, save_dir):
         """
@@ -41,7 +42,9 @@ class MetricLogger():
         if name not in self.metrics:
             self.metrics[name] = {}
         for k, v in log_dict.items():
-            assert isinstance(v, (int, float)), f"Value {v} for key {k} in {name} is not a number."
+            # assert isinstance(v, (int, float)), f"Value {v} for key {k} in {name} is not a number."
+            if isinstance(v, torch.Tensor):
+                v = v.item()
             if k not in self.metrics[name]:
                 self.metrics[name][k] = []
             self.metrics[name][k].append(v)
