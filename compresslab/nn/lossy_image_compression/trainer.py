@@ -9,6 +9,7 @@ from compresslab.nn.lossy_image_compression.abc import (
 import torch
 from typing import Dict, List, Any, Union
 from compresslab.utils.wrapper import ModelWrapper
+from pytorch_msssim import ms_ssim
 
 class ImageCodecTrainer(L.LightningModule):
     def __init__(self, 
@@ -45,6 +46,7 @@ class ImageCodecTrainer(L.LightningModule):
             out = self.model_wrapper.forward(batch)
 
             total_loss = 0.0
+            total_aux_loss = 0.0
             for idx, lmbda in enumerate(self.lmbda):
                 if self.distortion == "mse":
                     distortion_loss = out["mse_loss"][idx] * 255 ** 2
@@ -69,6 +71,12 @@ class ImageCodecTrainer(L.LightningModule):
                 }, on_epoch=False, logger=True, sync_dist=True, on_step=True)
 
                 total_loss += loss
+
+            total_aux_loss = self.model_wrapper.aux_loss()
+            
+            self.manual_backward(total_loss)
+            torch.nn.utils.clip_grad_norm_(self.model_wrapper.parameters(), 1.0)
+            self.manual_backward(total_aux_loss)
         else:
             total_loss = 0.0
             total_aux_loss = 0.0
@@ -152,14 +160,29 @@ class ImageCodecTrainer(L.LightningModule):
                     )
                 )
             with self.metric.timer(model_name, "time_decompress") as timer:
-                model_instance.decompress(out_compress)
-            
-            self.metric.log(model_name, 
-                            {
-                                "bpp": out_compress.bpp, 
-                                "psnr": out_compress.psnr,
-                                "ms-ssim": out_compress.ms_ssim,
-                             })
+                out_decompress = model_instance.decompress(out_compress)
+
+            mse_loss = torch.nn.functional.mse_loss(out_decompress.x_hat, batch)
+
+            psnr = 10 * torch.log10(1 / mse_loss)
+            ms_ssim_metric = ms_ssim(
+                out_decompress.x_hat, 
+                batch, 
+                data_range=1.0, 
+                size_average=True
+            )
+
+            # self.metric.log(model_name, 
+            #                 {
+            #                     "bpp": out_compress.bpp, 
+            #                     "psnr": out_compress.psnr,
+            #                     "ms-ssim": out_compress.ms_ssim,
+            #                  })
+
+            self.metric.log(model_name, {
+                "bpp": out_compress.bpp,
+                "psnr": psnr,
+                "ms-ssim": ms_ssim_metric,})
 
     def on_test_end(self):
         self.metric.save()
