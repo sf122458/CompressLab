@@ -33,6 +33,7 @@ from typing import Any, Tuple
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from torch import Tensor
 from torch.autograd import Function
@@ -116,23 +117,71 @@ class SpectralConvTranspose2d(nn.ConvTranspose2d, _SpectralConvNdMixin):
         _SpectralConvNdMixin.__init__(self, dim=(-2, -1))
 
 
-class MaskedConv2d(nn.Conv2d):
+# class MaskedConv2d(nn.Conv2d):
+#     r"""Masked 2D convolution implementation, mask future "unseen" pixels.
+#     Useful for building auto-regressive network components.
+
+#     Introduced in `"Conditional Image Generation with PixelCNN Decoders"
+#     <https://arxiv.org/abs/1606.05328>`_.
+
+#     Inherits the same arguments as a `nn.Conv2d`. Use `mask_type='A'` for the
+#     first layer (which also masks the "current pixel"), `mask_type='B'` for the
+#     following layers.
+#     """
+
+#     def __init__(self, *args: Any, mask_type: str = "A", **kwargs: Any):
+#         super().__init__(*args, **kwargs)
+
+#         if mask_type not in ("A", "B"):
+#             raise ValueError(f'Invalid "mask_type" value "{mask_type}"')
+
+#         self.register_buffer("mask", torch.ones_like(self.weight.data))
+#         _, _, h, w = self.mask.size()
+#         self.mask[:, :, h // 2, w // 2 + (mask_type == "B") :] = 0
+#         self.mask[:, :, h // 2 + 1 :] = 0
+
+#     def forward(self, x: Tensor) -> Tensor:
+#         # TODO(begaintj): weight assigment is not supported by torchscript
+#         self.weight.data = self.weight.data * self.mask
+#         return super().forward(x)
+
+# vmap support
+class MaskedConv2d(nn.Module):
     r"""Masked 2D convolution implementation, mask future "unseen" pixels.
     Useful for building auto-regressive network components.
 
     Introduced in `"Conditional Image Generation with PixelCNN Decoders"
     <https://arxiv.org/abs/1606.05328>`_.
 
-    Inherits the same arguments as a `nn.Conv2d`. Use `mask_type='A'` for the
-    first layer (which also masks the "current pixel"), `mask_type='B'` for the
-    following layers.
+    Use `mask_type='A'` for the first layer (which also masks 
+    the "current pixel"), `mask_type='B'` for the following layers.
     """
 
-    def __init__(self, *args: Any, mask_type: str = "A", **kwargs: Any):
-        super().__init__(*args, **kwargs)
+    def __init__(self,
+                 in_channels: int,
+                 out_channels: int,
+                 kernel_size: int,
+                 stride: int = 1,
+                 padding: int = 0,
+                 bias: bool = True,
+                 mask_type: str = "A"
+    ):
+        super().__init__()
 
         if mask_type not in ("A", "B"):
             raise ValueError(f'Invalid "mask_type" value "{mask_type}"')
+        
+        self.stride = stride
+        self.padding = padding
+        
+        self.weight = nn.Parameter(
+            torch.randn(out_channels, in_channels, kernel_size, kernel_size)
+        )
+
+        if bias:
+            self.bias = nn.Parameter(torch.randn(out_channels))
+        else:
+            self.register_buffer("bias", None)
 
         self.register_buffer("mask", torch.ones_like(self.weight.data))
         _, _, h, w = self.mask.size()
@@ -140,10 +189,11 @@ class MaskedConv2d(nn.Conv2d):
         self.mask[:, :, h // 2 + 1 :] = 0
 
     def forward(self, x: Tensor) -> Tensor:
-        # TODO(begaintj): weight assigment is not supported by torchscript
-        self.weight.data = self.weight.data * self.mask
-        return super().forward(x)
-
+        with torch.no_grad():
+            masked_weight = self.weight * self.mask
+        return F.conv2d(
+            x, masked_weight, self.bias, stride=self.stride, padding=self.padding
+        )
 
 class CheckerboardMaskedConv2d(MaskedConv2d):
     r"""Checkerboard masked 2D convolution; mask future "unseen" pixels.

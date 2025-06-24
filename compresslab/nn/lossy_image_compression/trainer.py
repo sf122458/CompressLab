@@ -46,7 +46,6 @@ class ImageCodecTrainer(L.LightningModule):
             out = self.model_wrapper.forward(batch)
 
             total_loss = 0.0
-            total_aux_loss = 0.0
             for idx, lmbda in enumerate(self.lmbda):
                 if self.distortion == "mse":
                     distortion_loss = out["mse_loss"][idx] * 255 ** 2
