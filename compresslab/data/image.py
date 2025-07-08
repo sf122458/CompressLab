@@ -144,29 +144,37 @@ class Vimeo90kDataset(Dataset):
     
 @DataRegistry.register("Vimeo90kImageDataModule", define_path=__file__)
 class Vimeo90kImageDataModule(L.LightningDataModule):
-    def __init__(self, root: str, batch_size: int = 32, num_workers: int = 4):
+    def __init__(self, 
+                 train_data_dir: str, 
+                 test_data_dir: str,
+                 batch_size: int = 32, 
+                 num_workers: int = 4):
         super().__init__()
-        self.root = root
+        self.train_data_dir = train_data_dir
+        self.test_data_dir = test_data_dir
         self.batch_size = batch_size
         self.num_workers = num_workers
 
+        self.train_transform = transforms.Compose([
+            transforms.RandomCrop((256, 256)),
+            transforms.ToTensor(),
+        ])
+
+        self.test_transform = transforms.Compose([
+            transforms.ToTensor(),
+        ])
+
     def setup(self, stage):
         self.data_fit = Vimeo90kDataset(
-            root=self.root,
-            transform=transforms.Compose([
-                transforms.RandomCrop((256, 256)),
-                transforms.ToTensor(),
-            ]),
+            root=self.train_data_dir,
+            transform=self.train_transform,
             split="train",
             tuplet=7
         )
-        self.data_test = Vimeo90kDataset(
-            root=self.root,
-            transform=transforms.Compose([
-                transforms.ToTensor(),
-            ]),
-            split="test",
-            tuplet=7
+
+        self.data_test = BasicImageDataset(
+            self.test_data_dir, 
+            transform=self.test_transform
         )
 
     def train_dataloader(self):
