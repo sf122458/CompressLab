@@ -45,11 +45,6 @@ def main(args: Args):
 
 
         for model in config.Model:
-            if model.Params is None:
-                compressmodel = ModelRegistry.get(model.Key)()
-            else:
-                compressmodel = ModelRegistry.get(model.Key)(**model.Params)
-
             model_path = Path(getattr(compresslab.utils.registry, "ModelRegistry")._map.get(model.Key)["register_path"])
 
             module_file = model_path.parent / "trainer.py"
@@ -70,20 +65,24 @@ def main(args: Args):
 
             LightningModule = None
 
-            for module_class in lightning_classes:
-                init_method = getattr(module_class, '__init__', None)
-                if init_method is None:
-                    continue
-                signature = inspect.signature(init_method)
+            # for module_class in lightning_classes:
+            #     init_method = getattr(module_class, '__init__', None)
+            #     if init_method is None:
+            #         continue
+            #     signature = inspect.signature(init_method)
 
-                if "model" in signature.parameters.keys():
-                    if issubclass(compressmodel.__class__, signature.parameters["model"].annotation):
-                        LightningModule = module_class
-                        break
-            if LightningModule is None:
-                raise ValueError(f"No Trainer found in {module_file} that matches the model {compressmodel.__class__.__name__}")
+            #     if "model" in signature.parameters.keys():
+            #         if issubclass(compressmodel.__class__, signature.parameters["model"].annotation):
+            #             LightningModule = module_class
+            #             break
+            # if LightningModule is None:
+            #     raise ValueError(f"No Trainer found in {module_file} that matches the model {compressmodel.__class__.__name__}")
+
+            assert len(lightning_classes) == 1, f"Found multiple LightningModule classes in {module_file}. Please ensure only one class inherits from LightningModule."
             
-            modelmodule = LightningModule(model=compressmodel, ext_params=model.ExtParams)
+            LightningModule = lightning_classes[0]
+            
+            modelmodule = LightningModule(model_class=ModelRegistry.get(model.Key), params=model.Params, ext_params=model.ExtParams)
 
             exp_dir = os.path.join(config.Train.Output, Path(args.config).stem)
             os.makedirs(exp_dir, exist_ok=True)
@@ -132,7 +131,7 @@ def main(args: Args):
                             save_last=True,
                         ),
                         RichModelSummary(
-                            max_depth=2,
+                            max_depth=3,
                         )
                     ],
                     logger=TensorBoardLogger(save_dir=out_dir),
@@ -157,6 +156,9 @@ def main(args: Args):
                 )
 
             trainer.test(modelmodule, datamodule, ckpt_path="last")
+
+            # trainer.test(modelmodule, datamodule, ckpt_path=f"mse.ckpt")
+            # trainer.test(modelmodule, datamodule, ckpt_path=f"ms-ssim.ckpt")
 
         
         Benchmark(exp_dir, config.Train.Benchmark)

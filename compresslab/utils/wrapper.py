@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Sequence, Tuple, Union
+from typing import Any, Dict, List, Sequence, Tuple, Union, Type
 import torch
 from torch import nn, Tensor
 from torch.func import functional_call
@@ -63,13 +63,25 @@ class ModelWrapper(nn.Module):
     It support a vmap forward pass, which allows a parallel forward pass of multiple models.
     It also organizes the models in a ModuleList and ModuleDict format.
     """
-    def __init__(self, base_model: CompressionModel, num_models: int):
+    def __init__(self, model_class: Type[CompressionModel], params: Dict[str, Any], num_models: int):
         super().__init__()
 
-        self.models = nn.ModuleList([deepcopy(base_model) for _ in range(num_models)])
+        # judge the params
+        if params is None:
+            self.models = nn.ModuleList([model_class() for _ in range(num_models)])
+        else:
+            for k, v in params.items():
+                if not isinstance(v, list):
+                    params[k] = [v] * num_models
+                else:
+                    assert len(v) == num_models, f"Parameter {k} should have length {num_models}."
+
+            self.models = nn.ModuleList(
+                [model_class(**{k: v[i] for k, v in params.items()}) for i in range(num_models)]
+            )
 
         def fmodel(params, buffers, x):
-            return functional_call(base_model, (params, buffers), (x,))
+            return functional_call(deepcopy(self.models[0]), (params, buffers), (x,))
 
         self.vmap_forward = vmap(fmodel, in_dims=(0, 0, None), randomness="different")
 

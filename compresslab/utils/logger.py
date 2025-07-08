@@ -5,7 +5,7 @@ import time
 import contextlib
 import pickle
 
-class MetricLogger():
+class MetricLogger:
     """
     A simple logger to log metrics and save them to a CSV file.
     It also provides a context manager to time code blocks.
@@ -29,14 +29,16 @@ class MetricLogger():
     .. code-block:: python
         logger.save()  
     """
-    def __init__(self, save_dir):
+    def __init__(self, save_dir: str, filename: str = "metrics"):
         """
         Args:
             save_dir (str): Directory to save the CSV file.
+            filename (str): Name of the CSV file.
         """
         self.metrics = {}
         self.save_dir = save_dir
-        
+        self.filename = filename
+
 
     def log(self, name, log_dict: Dict[str, float]):
         if name not in self.metrics:
@@ -59,7 +61,7 @@ class MetricLogger():
                 self.metrics[name][key] = sum(values) / len(values)
 
 
-        with open(f"{self.save_dir}/metrics.csv", "w") as f:
+        with open(f"{self.save_dir}/{self.filename}.csv", "w") as f:
             # Write the header
             headers = ["name"] + list(next(iter(self.metrics.values())).keys())
             writer = csv.writer(f)
@@ -73,7 +75,7 @@ class MetricLogger():
                 writer.writerow(row)
                 
         # Save the metrics as a pickle file
-        with open(f"{self.save_dir}/metrics.pkl", "wb") as pkl_file:
+        with open(f"{self.save_dir}/{self.filename}.pkl", "wb") as pkl_file:
             pickle.dump(self.metrics, pkl_file)
 
 

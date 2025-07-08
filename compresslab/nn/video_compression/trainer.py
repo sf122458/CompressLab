@@ -3,19 +3,18 @@ from compresslab.core.models import CompressionModel
 from compresslab.utils.logger import MetricLogger
 from compresslab.nn.video_compression.abc import *
 import torch
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, Type
 from compresslab.utils.wrapper import ModelWrapper
 
 class VideoCodecTrainer(L.LightningModule):
     def __init__(self, 
-                 model: VideoCodec,
+                 model_class: Type[VideoCodec],
+                 params: Dict[str, Any],
                  ext_params: Dict[str, Any] = {}
                  ):
         super().__init__()
 
         self.automatic_optimization = False
-
-        self.training_mode = "fast"
 
         assert self.training_mode in ["fast", "medium", "slow"]
 
@@ -29,7 +28,7 @@ class VideoCodecTrainer(L.LightningModule):
         
         codec = ext_params.get("codec", None)
 
-        self.model_wrapper = ModelWrapper(model, len(self.lmbda))
+        self.model_wrapper = ModelWrapper(model_class, params, len(self.lmbda))
 
         for model_instance in self.model_wrapper.values():
             model_instance: Union[VideoCodec, CompressionModel]
