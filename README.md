@@ -13,14 +13,9 @@ A PyTorch-based framework for deep-learning-based data compression research.
 
 - **Multi-λ Training & Parallel Model Execution**
 
-  The framework supports configuring multiple λ values in the loss function to enable simultaneous training of multiple models, offering three training modes:
-  - `fast`: Leverages PyTorch `vmap` to perform batch-wise forward propagation for multiple models in a single forward pass.
-  - `medium`: Conducts individual forward propagation for each model and aggregates gradient backpropagation at the ends.
-  - `slow`: Executes forward propagation and gradient backpropagation sequentially for each model.
+  The framework supports configuring multiple λ values in the loss function to enable simultaneous training of multiple models. It also supports parallel forward and backward passes for multiple models with the help of `vmap`. Training progress is monitored in real time via `TensorBoard`.
   
-  **NOTE: `vmap` may not optimize training speed for certain GPUs, requiring a trade-off between `fast` and `medium` modes. For example, the training time per epoch of `fast` is reduced to 80% of `medium` mode on the 4090, while it increases on the 1080Ti. In terms of GPU memory consumption: `slow` < `medium` < `fast`.**
-
-  Training progress is monitored in real time via `TensorBoard`.
+  **NOTE: `vmap` is not capable of accelerating the training process under all circumstances.**
 
 - **Automatic Metric Calculation via Dataclass Encapsulation**
 
@@ -68,7 +63,7 @@ Each folder in `dataset` has a `download.sh` script to download the dataset. Jus
 - `CLIC 2020` is used for the training of the image compression models.
 - `Kodak` is used for the evaluation of the image compression models.
 - `Vimeo-90K` is used for the training of the video compression models.
-- `UVG` is used for the evaluation of the video compression models.
+- `UVG` is used for the evaluation of the video compression models. The preprocess currently follows [PyTorchVideoCompression](https://github.com/ZhihaoHu/PyTorchVideoCompression)
 
 ### Available models
 #### Lossy image compression
@@ -91,8 +86,16 @@ Each folder in `dataset` has a `download.sh` script to download the dataset. Jus
 
 
 ### TODO
-- [ ] Set different training stage in video compression.
+- [ ] Video compression pipeline, such as how to process the I-frame compression model and how to set the different training stages.
 - [ ] Finetine from checkpoints.
+- [ ] Implement traditional codecs like `VTM` and so on.
+- ...
+
+### Bug needed to fix
+- [ ] `benchmark.py` can't give the correct bd-rate curve.
+- [ ] `VTM` can't work properly, which may be caused by the corrupted version.
+- ...
+
 
 ### Related links
 - [PyTorch Lightning](https://lightning.ai)
