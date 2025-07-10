@@ -1,74 +1,88 @@
 Global:
-  ExtParams: &extparams
-    lmbda: [0.0018, 0.0035, 0.0067, 0.0130, 0.0250, 0.0483, 0.0932, 0.1800]
-    distortion: mse
+  lmbda1: &lmbda1 [0.0018, 0.0035, 0.0067, 0.0130, 0.0250, 0.0483, 0.0932, 0.1800]
+  lmbda2: &lmbda2 [0.0018, 0.0035, 0.0067, 0.0130, 0.0250, 0.0483]
 
 Model:
   - Name: balle2016
     Key: FactorizedPrior
     Params:
-      N: 128
-      M: 192
-    ExtParams: *extparams
+      N: [128, 128, 128, 128, 128, 192, 192, 192]
+      M: [192, 192, 192, 192, 192, 320, 320, 320]
+    ExtParams:
+      lmbda: *lmbda1
 
   - Name: balle2018
     Key: ScaleHyperprior
     Params:
-      N: 128
-      M: 192
-    ExtParams: *extparams
+      N: [128, 128, 128, 128, 128, 192, 192, 192]
+      M: [192, 192, 192, 192, 192, 320, 320, 320]
+    EExtParams:
+      lmbda: *lmbda1
 
   - Name: minnen2018-meanscale
     Key: MeanScaleHyperprior
     Params:
-      N: 128
-      M: 192
-    ExtParams: *extparams
+      N: [128, 128, 128, 128, 192, 192, 192, 192]
+      M: [192, 192, 192, 192, 320, 320, 320, 320]
+    ExtParams:
+      lmbda: *lmbda1
   
   - Name: minnen2018-autoregressive
     Key: JointAutoregressiveHierarchicalPriors
     Params:
-      N: 128
-      M: 192
-    ExtParams: *extparams
+      N: [128, 128, 128, 128, 192, 192, 192, 192]
+      M: [192, 192, 192, 192, 320, 320, 320, 320]
+    ExtParams:
+      lmbda: *lmbda1
 
   - Name: minnen2020
     Key: ChARM
     Params:
       N: 128
       M: 192
-    ExtParams: *extparams
+    ExtParams:
+      lmbda: *lmbda1
 
   - Name: cheng2020anchor
     Key: Cheng2020Anchor
     Params:
-      N: 192
-    ExtParams: *extparams
+      N: [128, 128, 128, 192, 192, 192]
+    ExtParams:
+      lmbda: *lmbda2
+
+  - Name: cheng2020attention
+    Key: Cheng2020Attention
+    Params:
+      N: [128, 128, 128, 192, 192, 192]
+    ExtParams:
+      lmbda: *lmbda2
 
   - Name: cheng2020checkerboard
     Key: Cheng2020AnchorCheckerboard
     Params:
       N: 192
-    ExtParams: *extparams
+    ExtParams:
+      lmbda: *lmbda1
 
   - Name: elic2022
     Key: Elic2022Official
     Params:
       N: 192
       M: 320
-    ExtParams: *extparams
+    ExtParams:
+      lmbda: *lmbda1
 
 
 Data:
-  Key: BasicImageDataModule
+  Key: Vimeo90kImageDataModule
   Params:
-    train_data_dir: dataset/clic2020_professional_train
+    train_data_dir: data/vimeo_setuplet
     test_data_dir: dataset/Kodak
-    batch_size: 4
+    batch_size: 16
 
 Train:
-  Epoch: 100
-  Valinterval: 10
+  Steps: 5_000_000
+  Valinterval: 1
   Benchmark: 
     - Key: BD_RATE
       Params:

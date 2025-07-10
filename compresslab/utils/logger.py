@@ -1,9 +1,10 @@
-from typing import List, Dict
+from typing import Dict
 import csv
 import torch
 import time
 import contextlib
 import pickle
+import os
 
 class MetricLogger:
     """
@@ -60,7 +61,7 @@ class MetricLogger:
             for key, values in metrics.items():
                 self.metrics[name][key] = sum(values) / len(values)
 
-
+        os.makedirs(self.save_dir, exist_ok=True)
         with open(f"{self.save_dir}/{self.filename}.csv", "w") as f:
             # Write the header
             headers = ["name"] + list(next(iter(self.metrics.values())).keys())

@@ -111,3 +111,7 @@ class ModelWrapper(nn.Module):
     
     def values(self):
         return self.models
+    
+    def update(self):
+        for model in self.models:
+            model.update()

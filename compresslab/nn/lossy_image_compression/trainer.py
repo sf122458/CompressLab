@@ -1,60 +1,42 @@
-import lightning as L
+import os, logging
 from compresslab.core.models import CompressionModel
-from compresslab.utils.logger import MetricLogger
 from compresslab.nn.lossy_image_compression.abc import (
     ImageCodecForwardInput,
+    ImageCodecForwardOutput,
     ImageCodecCompressInput,
     ImageCodec
 )
 import torch
-from typing import Dict, List, Any, Union, Type
-from compresslab.utils.wrapper import ModelWrapper
+from typing import Union
 from pytorch_msssim import ms_ssim
+from compresslab.utils.trainer import BaseTrainer
 
-class ImageCodecTrainer(L.LightningModule):
-    def __init__(self, 
-                 model_class: Type[ImageCodec],
-                 params: Dict[str, Any],
-                 ext_params: Dict[str, Any] = None
-                 ):
-        super().__init__()
-
-        # As there are two optimizers, we need to set the automatic optimization to False
-        self.automatic_optimization = False
-
-        # compression levels
-        if "lmbda" not in ext_params.keys():
-            raise ValueError("lmbda is required in ext_params")
-        self.lmbda = ext_params.get("lmbda")
-        if not isinstance(self.lmbda, list):
-            self.lmbda = [self.lmbda]
-        
-        # optimization parameters
-        self.lr = ext_params.get("lr", 1e-4)
-        self.gamma = ext_params.get("gamma", 0.5)
-        self.milestones = ext_params.get("milestones", [2_000_000])
-
-        # # loss function parameters
-        # self.distortion = ext_params.get("distortion", "mse")
-        # assert self.distortion in ["mse", "ms-ssim"], f"invalid distortion: {self.distortion}, only mse and ms-ssim are supported"
-
-        self.distortion = "mse"
-
-        # self.training_mode = ext_params.get("training_mode", "fast")
-        # assert self.training_mode in ["fast", "medium", "slow"]
-        self.model_wrapper = ModelWrapper(model_class, params, len(self.lmbda))
-
-    def on_train_batch_start(self, batch, batch_idx):
-        # switch to fine-tune the model after 1.5M steps to obtain the MS-SSIM model
-        if self.global_step == self.trainer.max_steps:
-            self.trainer.save_checkpoint(f"mse_{self.global_step}.ckpt")
-            self.distortion = "ms-ssim"
+class ImageCodecTrainer(BaseTrainer):
+    def loss_fn(self, lmbda, out: ImageCodecForwardOutput):
+        if self.global_step < self.key_step["fine_tune"]:
+            return lmbda * out.mse_loss * 255 ** 2 + out.bpp
+        else:
+            return lmbda * out.ms_ssim_loss + out.bpp
     
+    def on_train_batch_end(self, output, batch, batch_idx):
+        if self.global_step == self.key_step["lr_decay"]:
+            optimizer = self.optimizers()
+            optimizer.param_groups[0]["lr"] *= 0.1
+            logging.info(f"Learning rate decayed to {optimizer.param_groups[0]['lr']} at step {self.global_step}")
+        
+        if self.global_step == self.key_step["fine_tune"]:
+            self.model_wrapper.update()
+            self.trainer.save_checkpoint(os.path.join(self.trainer.default_root_dir, f"checkpoints/mse.ckpt"), weights_only=True)
+            logging.info(f"Saving checkpoint trained on `MSE` at step {self.global_step}.")
+
+        if self.global_step == self.trainer.max_steps and self.key_step["fine_tune"] != self.trainer.max_steps:
+            self.model_wrapper.update()
+            self.trainer.save_checkpoint(os.path.join(self.trainer.default_root_dir, f"checkpoints/ms-ssim.ckpt"), weights_only=True)
+            logging.info(f"Saving checkpoint fine-tuned on `MS-SSIM` at step {self.global_step}.")
+    
+
     def training_step(self, batch, batch_idx):
-        optimizer, aux_optimizer = self.optimizers()
-        optimizer.zero_grad()
-        aux_optimizer.zero_grad()
-        scheduler = self.lr_schedulers()
+        optimizer = self.optimizers()
 
         total_loss = 0.0
         total_aux_loss = 0.0
@@ -67,49 +49,37 @@ class ImageCodecTrainer(L.LightningModule):
                     x=batch
                 )
             )
-            
-            if self.distortion == "mse":
-                distortion_loss = out.mse_loss * 255 ** 2
-            else:
-                distortion_loss = out.ms_ssim_loss
 
-            loss = lmbda * distortion_loss + out.bpp
-            aux_loss = model_instance.aux_loss()
+            loss = self.loss_fn(lmbda, out)
 
-            if self.training_mode == "slow":
-                self.manual_backward(loss)
-                torch.nn.utils.clip_grad_norm_(model_instance.parameters(), 1.0)
-                self.manual_backward(aux_loss)
-            else:
-                total_loss += loss
-                total_aux_loss += aux_loss
+            total_loss += loss
+            total_aux_loss += model_instance.aux_loss()
 
             # show metrics of the first model on the progress bar
             if model_name == "codec_0":
-                self.log_dict({"loss": loss, 
-                        "bpp": out.bpp,
-                        "psnr": out.psnr,
-                        "ms-ssim": out.ms_ssim}, prog_bar=True, on_step=True, on_epoch=False, logger=False)
-        
-            self.log_dict({
-                f"train/{model_name}.loss": loss,
-                f"train/{model_name}.bpp": out.bpp,
-                f"train/{model_name}.psnr": out.psnr,
-                f"train/{model_name}.ms-ssim": out.ms_ssim,
-            }, on_epoch=False, logger=True, sync_dist=True, on_step=True)
+                self.bar_metrics({
+                    "loss": loss,
+                    "bpp": out.bpp,
+                    "psnr": out.psnr,
+                    "ms-ssim": out.ms_ssim
+                })
 
-        if self.training_mode == "medium":
-            self.manual_backward(total_loss)
-            torch.nn.utils.clip_grad_norm_(self.model_wrapper.parameters(), 1.0)
-            self.manual_backward(total_aux_loss)
+            self.log_train_metrics(model_name, {
+                "loss": loss,
+                "bpp": out.bpp,
+                "psnr": out.psnr,
+                "ms-ssim": out.ms_ssim
+            })
 
-        self.log_dict({
-            "train_monitor/lr": scheduler.get_last_lr()[0]
-        }, on_step=True, on_epoch=False, logger=True, sync_dist=True)
+        self.manual_backward(total_loss)
+        torch.nn.utils.clip_grad_norm_(self.model_wrapper.parameters(), 1.0)
+        self.manual_backward(total_aux_loss)
+
+        self.log_train_monitor({
+            "lr": optimizer.param_groups[0]["lr"],
+        })
 
         optimizer.step()
-        aux_optimizer.step()
-        scheduler.step()
 
     def validation_step(self, batch, batch_idx):
         for model_name, model_instance in self.model_wrapper.items():
@@ -119,34 +89,29 @@ class ImageCodecTrainer(L.LightningModule):
                     x=batch
                 )
             )
-            
-            self.log_dict({
-                f"val/{model_name}.bpp": out.bpp,
-                f"val/{model_name}.psnr": out.psnr,
-                f"val/{model_name}.ms-ssim": out.ms_ssim,
-            }, on_step=False, on_epoch=True, logger=True, sync_dist=True)
 
-    def on_test_start(self):
-        self.metric = MetricLogger(save_dir=self.trainer.default_root_dir,
-                                   filename=self.trainer.ckpt_path.split(".")[0])
-        for model_name, model_instance in self.model_wrapper.items():
-            model_instance.update()
+            self.log_val_metrics(model_name, {
+                "bpp": out.bpp,
+                "psnr": out.psnr,
+                "ms-ssim": out.ms_ssim
+            })
 
     def test_step(self, batch, batch_idx):
         for model_name, model_instance in self.model_wrapper.items():
             model_instance: Union[ImageCodec, CompressionModel]
-            with self.metric.timer(model_name, "time_compress") as timer:
+            with self.metric.timer(model_name, "encoding_time"):
                 out_compress = model_instance.compress(
                     ImageCodecCompressInput(
                         x=batch
                     )
                 )
-            with self.metric.timer(model_name, "time_decompress") as timer:
+            with self.metric.timer(model_name, "decoding_time"):
                 out_decompress = model_instance.decompress(out_compress)
 
             mse_loss = torch.nn.functional.mse_loss(out_decompress.x_hat, batch)
 
             psnr = 10 * torch.log10(1 / mse_loss)
+
             ms_ssim_metric = ms_ssim(
                 out_decompress.x_hat, 
                 batch, 
@@ -154,37 +119,8 @@ class ImageCodecTrainer(L.LightningModule):
                 size_average=True
             )
 
-            # self.metric.log(model_name, 
-            #                 {
-            #                     "bpp": out_compress.bpp, 
-            #                     "psnr": out_compress.psnr,
-            #                     "ms-ssim": out_compress.ms_ssim,
-            #                  })
-
-            self.metric.log(model_name, {
+            self.log_test_metrics(model_name, {
                 "bpp": out_compress.bpp,
                 "psnr": psnr,
-                "ms-ssim": ms_ssim_metric,})
-
-    def on_test_end(self):
-        self.metric.save()
-
-    def configure_optimizers(self):
-        parameters = []
-        aux_parameters = []
-        for model_name, model_instance in self.model_wrapper.items():
-            parameters += [p for n, p in model_instance.named_parameters() if p.requires_grad and not n.endswith(".quantiles")]
-            aux_parameters += [p for n, p in model_instance.named_parameters() if p.requires_grad and n.endswith(".quantiles")]
-        optimizer = torch.optim.Adam(parameters, lr=self.lr)
-        aux_optimizer = torch.optim.Adam(aux_parameters, lr=1e-3)
-        # return optimizer, aux_optimizer
-
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer,
-            milestones=self.milestones,
-            gamma=self.gamma
-        )
-
-        return [optimizer, aux_optimizer], [scheduler]
-        
-
+                "ms-ssim": ms_ssim_metric
+            })
