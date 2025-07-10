@@ -89,12 +89,13 @@ Each folder in `dataset` has a `download.sh` script to download the dataset. Jus
 - [ ] Video compression pipeline, such as how to process the I-frame compression model and how to set the different training stages.
 - [ ] Finetine from checkpoints.
 - [ ] Implement traditional codecs like `VTM` and so on.
-- ...
+- [ ] Load video dataset directly from `.yuv` files.
+- [ ] ...
 
 ### Bug needed to fix
 - [ ] `benchmark.py` can't give the correct bd-rate curve.
 - [ ] `VTM` can't work properly, which may be caused by the corrupted version.
-- ...
+- [ ] ...
 
 
 ### Related links
