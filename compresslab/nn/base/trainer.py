@@ -1,10 +1,9 @@
-import os
 import lightning as L
 from compresslab.core.models import CompressionModel
 from compresslab.utils.logger import MetricLogger
 import torch
 from typing import Dict, Any, Type
-from compresslab.nn.base import ModelWrapper
+from .wrapper import ModelWrapper
 
 class BaseTrainer(L.LightningModule):
     """

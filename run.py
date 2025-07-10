@@ -47,8 +47,6 @@ def main(args: Args):
 
         exp_dir = os.path.join(config.Train.Output, Path(args.config).stem)
         os.makedirs(exp_dir, exist_ok=True)
-
-        # if not os.path.exists(os.path.join(exp_dir, "config.yaml")):
         os.system(f"cp {args.config} {exp_dir}/config.yaml")
 
         for model in config.Model:
