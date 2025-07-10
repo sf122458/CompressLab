@@ -9,7 +9,7 @@ from compresslab.nn.lossy_image_compression.abc import (
 import torch
 from typing import Union
 from pytorch_msssim import ms_ssim
-from compresslab.utils.trainer import BaseTrainer
+from compresslab.nn.base import BaseTrainer
 
 class ImageCodecTrainer(BaseTrainer):
     def loss_fn(self, lmbda, out: ImageCodecForwardOutput):

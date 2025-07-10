@@ -6,13 +6,13 @@ import os
 import torch
 import math
 from compresslab.utils.config import Config
-from compresslab.utils.trainer import BaseTrainer
+from compresslab.nn.base import BaseTrainer
 from compresslab.utils.registry import Registry, DataRegistry, ModelRegistry
 from compresslab.utils.benchmark import Benchmark
 from compresslab.codec import TRADITIONAL_CODEC
 import lightning as L
 from lightning import Trainer
-from lightning.pytorch.loggers import TensorBoardLogger, CSVLogger
+from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.callbacks import ModelCheckpoint, RichProgressBar, RichModelSummary
 from argparse import Namespace
 import compresslab.nn

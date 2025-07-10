@@ -4,7 +4,7 @@ from compresslab.utils.logger import MetricLogger
 from compresslab.nn.video_compression.abc import *
 import torch
 from typing import Dict, Any, Union, Type
-from compresslab.utils.wrapper import ModelWrapper
+from compresslab.nn.base import ModelWrapper
 
 class VideoCodecTrainer(L.LightningModule):
     def __init__(self, 

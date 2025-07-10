@@ -4,7 +4,7 @@ from compresslab.core.models import CompressionModel
 from compresslab.utils.logger import MetricLogger
 import torch
 from typing import Dict, Any, Type
-from compresslab.utils.wrapper import ModelWrapper
+from compresslab.nn.base import ModelWrapper
 
 class BaseTrainer(L.LightningModule):
     """
@@ -42,8 +42,6 @@ class BaseTrainer(L.LightningModule):
             else:
                 assert isinstance(self._lmbda, list)
             num_models = len(self._lmbda)
-
-        print(self._lmbda)
 
         self.model_wrapper = ModelWrapper(model_class, params, num_models)
         
