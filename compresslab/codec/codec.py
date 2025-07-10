@@ -3,7 +3,7 @@ Modify from `compressai/utils/bench/codec.py`
 """
 
 from abc import ABC, abstractmethod
-import platform, os, io
+import platform, os, io, sys
 from typing import List, Union, Dict, Any
 import logging
 from PIL import Image
@@ -11,7 +11,7 @@ import numpy as np
 import time
 from compresslab.utils.logger import MetricLogger
 import torch
-import rich
+from rich.progress import Progress, BarColumn, TimeElapsedColumn, TimeRemainingColumn
 from tempfile import mkstemp
 from .utils import *
 
@@ -31,6 +31,8 @@ class Codec(ABC):
         self.data_dir = test_data_dir
         self.quality = quality if isinstance(quality, list) else [quality]
         self.save_dir = save_dir
+        os.makedirs(self.save_dir, exist_ok=True)
+        self.temp_dir = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), self.save_dir)
 
     def _load_img(self, img_path: str) -> np.array:
         return read_image(os.path.abspath(img_path))
@@ -54,19 +56,34 @@ class Codec(ABC):
     def run(self):
         self.logger = MetricLogger(self.save_dir)
 
-        for quality in self.quality:
-            print(f"Running {self.name} with quality level: {quality}")
-            for filename in os.listdir(self.data_dir):
-                if not filename.lower().endswith(tuple(IMG_EXTENSIONS)):
-                    continue
+        with Progress(
+            "[progress.description]{task.description}",
+            BarColumn(),
+            "{task.completed}/{task.total}",
+            TimeElapsedColumn(),
+            "•",
+            TimeRemainingColumn(),
 
-                img_path = os.path.join(self.data_dir, filename)
-                metrics = self._run_impl(img_path, quality)
+        ) as progress:
+            task1 = progress.add_task(f"[white]Codec: {self.name}", total=len(self.quality))
+            task2 = progress.add_task(f"[white]Level: ...", total=len(os.listdir(self.data_dir)))
+            for quality in self.quality:
+                progress.update(task1, description=f"[white]Codec: {self.name}")
+                progress.update(task2, completed=0, description=f"[white]Level: {quality}")
+                for filename in sorted(os.listdir(self.data_dir)):
+                    if not filename.lower().endswith(tuple(IMG_EXTENSIONS)):
+                        continue
 
-                self.logger.log(
-                    f"codec_q{quality}",
-                    metrics
-                )
+                    img_path = os.path.join(self.data_dir, filename)
+                    metrics = self._run_impl(img_path, quality)
+
+                    self.logger.log(
+                        f"codec_q{quality}",
+                        metrics
+                    )
+
+                    progress.advance(task2, advance=1)
+                progress.advance(task1, advance=1)
         
         self.logger.save()
 
@@ -123,8 +140,8 @@ class BinaryCodec(Codec):
     fmt = None
     
     def _run_impl(self, img_path: str, quality: int) -> Dict[str, Any]:
-        fd0, png_filepath = mkstemp(suffix=".png")
-        fd1, out_filepath = mkstemp(suffix=self.fmt)
+        fd0, png_filepath = mkstemp(suffix=".png", dir=self.temp_dir)
+        fd1, out_filepath = mkstemp(suffix=self.fmt, dir=self.temp_dir)
 
         # Encode
         start = time.time()
@@ -309,7 +326,7 @@ class HM(Codec):
         # Convert input image to yuv 444 file
         img = self._load_img(img_path)
         arr = np.asarray(img, dtype=np.uint8)
-        fd, yuv_path = mkstemp(suffix=".yuv")
+        fd, yuv_path = mkstemp(suffix=".yuv", dir=self.temp_dir)
         out_filepath = os.path.splitext(yuv_path)[0] + self.fmt
 
         arr = arr.transpose((2, 0, 1))  # color channel first
@@ -439,7 +456,7 @@ class VTM(Codec):
         img = self._load_img(img_path)
 
         arr = np.asarray(img, dtype=np.uint8)
-        fd, yuv_path = mkstemp(suffix=".yuv")
+        fd, yuv_path = mkstemp(suffix=".yuv", dir=self.temp_dir)
         out_filepath = os.path.splitext(yuv_path)[0] + self.fmt
 
         arr = arr.transpose((2, 0, 1)) # color channel first
@@ -499,7 +516,7 @@ class VTM(Codec):
         cmd = [self.decoder_path, "-b", out_filepath, "-o", yuv_path, "-d", 8]
         if self.rgb:
             # cmd += ["--OutputInternalColourSpace=GBRtoRGB"]
-            cmd += ["--OutputColourSpaceConvert=GDBtoRGB"]  # support version: VTM Decoder Version 23.10
+            cmd += ["--OutputColourSpaceConvert=GBRtoRGB"]  # support version: VTM Decoder Version 23.10
 
         start = time.time()
         run_command(cmd)
