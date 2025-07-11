@@ -1,0 +1,6 @@
+[submodule "third_party/VTM"]
+	path = third_party/VTM
+	url = https://vcgit.hhi.fraunhofer.de/jvet/VVCSoftware_VTM
+[submodule "third_party/HM"]
+	path = third_party/HM
+	url = https://vcgit.hhi.fraunhofer.de/jvet/HM.git

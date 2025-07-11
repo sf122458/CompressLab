@@ -159,11 +159,11 @@ def main(args: Args):
     
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='test')
-    parser.add_argument('-c', '--config', required=False, type=str,help ='Config file path.', default=None)
-    parser.add_argument('-l', '--list', action="store_true", help='List all available models.')
-    parser.add_argument('--test', action="store_true", help='Test only.')
-    parser.add_argument('--cpu', action="store_true", help='Use CPU in the inference.')
+    parser = argparse.ArgumentParser(description="CompressLab Training Script")
+    parser.add_argument('-c', '--config', required=False, type=str, help ='Config file path.', default=None)
+    parser.add_argument('-l', '--list', action="store_true", help='List all registered modules.')
+    parser.add_argument('--test', action="store_true", help='Skip training and only test the models.')
+    parser.add_argument('--cpu', action="store_true", help='Use CPU in the inference stage.')
     
     args = parser.parse_args()
     main(args)

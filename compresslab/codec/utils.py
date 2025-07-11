@@ -2,10 +2,14 @@ import torch
 import os
 import sys
 import subprocess
-from typing import Union, Dict, Type
+from typing import Union, Dict
 import numpy as np
 from PIL import Image
 from pytorch_msssim import ms_ssim
+
+
+HM_BUILD_DIR = "third_party/HM/bin"
+VTM_BUILD_DIR = "third_party/VTM/bin"
 
 IMG_EXTENSIONS = {
     ".jpg",

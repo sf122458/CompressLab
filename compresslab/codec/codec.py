@@ -302,7 +302,7 @@ class HM(Codec):
     def name(self) -> str:
         return "HM"
 
-    def __init__(self, build_dir, config: str, rgb: bool = False, **kwargs):
+    def __init__(self, config: str, build_dir: str = HM_BUILD_DIR, rgb: bool = False, **kwargs):
         """
         Args:
             build_dir (str): Directory containing the HM encoder and decoder executables.
@@ -313,7 +313,7 @@ class HM(Codec):
         super().__init__(**kwargs)
         self.encoder_path = os.path.join(build_dir, "TAppEncoderStatic")
         self.decoder_path = os.path.join(build_dir, "TAppDecoderStatic")
-        self.config_path = config
+        self.config_path = os.path.join(build_dir, "../cfg", config)
         self.rgb = rgb
 
     def _run_impl(self, img_path: str, quality: int) -> Dict[str, Any]:
@@ -342,6 +342,7 @@ class HM(Codec):
 
         # Encode
         height, width = arr.shape[1:]
+
         cmd = [
             self.encoder_path,
             "-i",
@@ -350,24 +351,24 @@ class HM(Codec):
             self.config_path,
             "-q",
             quality,
-            "-o", 
+            "-o",
             "/dev/null",
             "-b",
             out_filepath,
-            "-wdt", 
+            "-wdt",
             width,
-            "-hgt", 
+            "-hgt",
             height,
-            "-fr", 
+            "-fr",
             "1",
-            "-f", 
+            "-f",
             "1",
             "--InputChromaFormat=444",
             "--InputBitDepth=8",
             "--SEIDecodedPictureHash",
             "--Level=5.1",
-            "--CUNoSplitIntraACT=0",
-            "--ConformanceMode=1",
+            # "--CUNoSplitIntraACT=0",
+            "--ConformanceWindowMode=1",
         ]
 
         if self.rgb:
@@ -389,7 +390,7 @@ class HM(Codec):
         cmd = [self.decoder_path, "-b", out_filepath, "-o", yuv_path, "-d", "8"]
 
         if self.rgb:
-            cmd += ["--OutputInternalColourSpace=GBRtoRGB"]
+            cmd += ["--OutputColourSpaceConvert=GBRtoRGB"]
 
         start = time.time()
         run_command(cmd)
@@ -433,7 +434,7 @@ class VTM(Codec):
     def name(self) -> str:
         return "VTM"
 
-    def __init__(self, build_dir: str, config: str, rgb: bool = False, **kwargs):
+    def __init__(self, config: str, build_dir: str = VTM_BUILD_DIR, rgb: bool = False, **kwargs):
         """
         Args:
             build_dir (str): Directory containing the VTM encoder and decoder executables.
@@ -443,7 +444,7 @@ class VTM(Codec):
         super().__init__(**kwargs)
         self.encoder_path = self.get_encoder_path(build_dir)
         self.decoder_path = self.get_decoder_path(build_dir)
-        self.config_path = config
+        self.config_path = os.path.join(build_dir, "../cfg", config)
         self.rgb = rgb
 
     def _run_impl(self, img_path: str, quality: int) -> Dict[str, Any]:
