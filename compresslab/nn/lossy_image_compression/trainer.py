@@ -23,16 +23,22 @@ class ImageCodecTrainer(BaseTrainer):
             optimizer = self.optimizers()
             optimizer.param_groups[0]["lr"] *= 0.1
             logging.info(f"Learning rate decayed to {optimizer.param_groups[0]['lr']} at step {self.global_step}")
-        
-        if self.global_step == self.key_step["fine_tune"]:
-            self.model_wrapper.update()
-            self.trainer.save_checkpoint(os.path.join(self.trainer.default_root_dir, f"checkpoints/mse.ckpt"), weights_only=True)
-            logging.info(f"Saving checkpoint trained on `MSE` at step {self.global_step}.")
 
-        if self.global_step == self.trainer.max_steps and self.key_step["fine_tune"] != self.trainer.max_steps:
-            self.model_wrapper.update()
-            self.trainer.save_checkpoint(os.path.join(self.trainer.default_root_dir, f"checkpoints/ms-ssim.ckpt"), weights_only=True)
-            logging.info(f"Saving checkpoint fine-tuned on `MS-SSIM` at step {self.global_step}.")
+        if self.key_step["fine_tune"] > self.trainer.max_steps:
+            if self.global_step == self.trainer.max_steps:
+                self.model_wrapper.update()
+                self.trainer.save_checkpoint(os.path.join(self.trainer.default_root_dir, f"checkpoints/mse.ckpt"), weights_only=True)
+                logging.info(f"Saving checkpoint trained on `MSE` at step {self.global_step}.")
+        else:
+            if self.global_step == self.key_step["fine_tune"]:
+                self.model_wrapper.update()
+                self.trainer.save_checkpoint(os.path.join(self.trainer.default_root_dir, f"checkpoints/mse.ckpt"), weights_only=True)
+                logging.info(f"Saving checkpoint trained on `MSE` at step {self.global_step}.")
+
+            if self.global_step == self.trainer.max_steps:
+                self.model_wrapper.update()
+                self.trainer.save_checkpoint(os.path.join(self.trainer.default_root_dir, f"checkpoints/ms-ssim.ckpt"), weights_only=True)
+                logging.info(f"Saving checkpoint fine-tuned on `MS-SSIM` at step {self.global_step}.")
     
 
     def training_step(self, batch, batch_idx):

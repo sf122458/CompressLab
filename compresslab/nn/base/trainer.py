@@ -91,16 +91,16 @@ class BaseTrainer(L.LightningModule):
         self.key_step = {
             "lr_decay": int(self.trainer.max_steps * 0.4),
             "fine_tune": int(self.trainer.max_steps * 0.95) if isinstance(self._lmbda, dict) \
-                else int(self.trainer.max_steps)
+                else int(self.trainer.max_steps) + 1
         }
 
     def on_train_batch_end(self, output, batch, batch_idx):
         """
-        I think there are some operations can be done here:
-        - Save the checkpoint of the model trained on mse-loss
+        There are some operations can be implemented here:
+        - Save the checkpoint of the model trained on mse-loss.
         - Switch to fine-tune the model on ms-ssim-loss after a certain number of steps.
         - Adjust the learning rate or other hyperparameters if needed.
-        - Multi stage training(Loss function modification)
+        - Multi stage training (Loss function modification).
         """
         pass
 
