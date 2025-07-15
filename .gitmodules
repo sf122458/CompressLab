@@ -4,3 +4,6 @@
 [submodule "third_party/HM"]
 	path = third_party/HM
 	url = https://vcgit.hhi.fraunhofer.de/jvet/HM.git
+[submodule "third_party/BPG"]
+	path = third_party/BPG
+	url = https://github.com/mirrorer/libbpg.git
