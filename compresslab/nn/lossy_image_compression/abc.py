@@ -89,7 +89,7 @@ class ImageCodecCompressOutput:
     def __post_init__(self):
         N, _, H, W = self.x.shape
         num_pixels = N * H * W
-        total_bits = sum(len(s) * 8 for s in self.y_strings + self.z_strings)
+        total_bits = sum(len(s) * 8 if isinstance(s, bytes) else len(s[0]) * 8 for s in self.y_strings + self.z_strings)
         self.bpp = total_bits / num_pixels
 
         if self.x_hat is not None:
