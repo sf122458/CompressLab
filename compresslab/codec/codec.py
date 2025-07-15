@@ -227,7 +227,7 @@ class BPG(BinaryCodec):
     @property
     def name(self) -> str:
         return (
-            f"BPG {self.bitdepth}b {self.subsampling_mode} {self.encoder}"
+            f"BPG {self.bitdepth}b {self.subsampling_mode} {self.encoder} "
             f"{self.color_mode}"
         )
     
@@ -243,6 +243,7 @@ class BPG(BinaryCodec):
             bitdepth: int = 8,
             color_mode: str = "ycbcr",
             encoder: str = "x265",
+            **kwargs
         ):
         """
         Args:
@@ -253,6 +254,7 @@ class BPG(BinaryCodec):
             color_mode (str): Color mode, either "ycbcr" or "rgb".
             encoder (str): Encoder to use, either "x265" or "jctvc
         """
+        super().__init__(**kwargs)
 
         assert subsampling_mode in ["444", "420"]
         assert bitdepth in [8, 10]

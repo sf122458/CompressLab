@@ -64,7 +64,11 @@ def main(args: Args):
 
 
             # neural codec
-            model_path = Path(getattr(compresslab.utils.registry, "ModelRegistry")._map.get(model.Key)["register_path"])
+            try:
+                model_path = Path(getattr(compresslab.utils.registry, "ModelRegistry")._map.get(model.Key)["register_path"])
+            except Exception as e:
+                logging.error(f"{model.Key} isn't registered. Skipping...")
+                continue
 
             module_file = model_path.parent / "trainer.py"
             if not module_file.exists():
