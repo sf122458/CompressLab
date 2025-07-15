@@ -1,9 +1,12 @@
 [submodule "third_party/VTM"]
 	path = third_party/VTM
 	url = https://vcgit.hhi.fraunhofer.de/jvet/VVCSoftware_VTM
+	ignore = all
 [submodule "third_party/HM"]
 	path = third_party/HM
 	url = https://vcgit.hhi.fraunhofer.de/jvet/HM.git
+	ignore = all
 [submodule "third_party/BPG"]
 	path = third_party/BPG
 	url = https://github.com/mirrorer/libbpg.git
+	ignore = all
