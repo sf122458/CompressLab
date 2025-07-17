@@ -43,6 +43,7 @@ class ImageCodecTrainer(BaseTrainer):
 
     def training_step(self, batch, batch_idx):
         optimizer = self.optimizers()
+        optimizer.zero_grad()
 
         total_loss = 0.0
         total_aux_loss = 0.0
