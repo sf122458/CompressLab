@@ -113,7 +113,7 @@ def main(args: Args):
                 raise ValueError("Please specify either Train.Steps or Train.Epoch in the config file.")
 
             num_epoch = config.Train.Epoch if config.Train.Epoch is not None \
-                else math.ceil(config.Train.Steps / len(datamodule.train_dataloader()))
+                else math.ceil(config.Train.Steps / len(datamodule.train_dataloader()) * len(config.Env.Devices))
 
             if not args.test:
                 trainer = Trainer(
