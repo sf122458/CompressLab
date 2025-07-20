@@ -42,7 +42,7 @@ def main(args: Args):
         
         config = parse_yaml_file_as(Config, args.config)
 
-        datamodule = DataRegistry.get(config.Data.Key)(**config.Data.Params)
+        datamodule = DataRegistry.get(config.Data.Key)(**config.Data.Params, num_devices=len(config.Env.Devices))
         datamodule.setup(None)
 
         exp_dir = os.path.join(config.Train.Output, Path(args.config).stem)
