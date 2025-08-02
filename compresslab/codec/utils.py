@@ -72,7 +72,7 @@ def ycbcr2rgb(ycbcr: torch.Tensor) -> torch.Tensor:
     return rgb
 
 
-def filesize(filepath: str) -> int:
+def get_filesize(filepath: str) -> int:
     """Return file size in bits of `filepath`."""
     if not os.path.isfile(filepath):
         raise ValueError(f'Invalid file "{filepath}".')

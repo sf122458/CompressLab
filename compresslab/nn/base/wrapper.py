@@ -63,48 +63,23 @@ class ModelWrapper(nn.Module):
     It support a vmap forward pass, which allows a parallel forward pass of multiple models.
     It also organizes the models in a ModuleList and ModuleDict format.
     """
-    def __init__(self, model_class: Type[CompressionModel], params: Dict[str, Any], num_models: int):
+    def __init__(self, model_class: Type[nn.Module], params: Dict[str, Any], num_models: int):
         super().__init__()
 
-        # judge the params
-        if params is None:
-            self.models = nn.ModuleList([model_class() for _ in range(num_models)])
-        else:
-            for k, v in params.items():
-                if not isinstance(v, list):
-                    params[k] = [v] * num_models
-                else:
-                    assert len(v) == num_models, f"Parameter {k} should have length {num_models}."
+        for k, v in params.items():
+            if not isinstance(v, list):
+                params[k] = [v] * num_models
+            else:
+                assert len(v) == num_models, f"Parameter {k} should have length {num_models}."
 
-            self.models = nn.ModuleList(
-                [model_class(**{k: v[i] for k, v in params.items()}) for i in range(num_models)]
-            )
+        self.models = nn.ModuleList(
+            [model_class(**{k: v[i] for k, v in params.items()}) for i in range(num_models)]
+        )
 
         def fmodel(params, buffers, x):
             return functional_call(deepcopy(self.models[0]), (params, buffers), (x,))
 
         self.vmap_forward = vmap(fmodel, in_dims=(0, 0, None), randomness="different")
-
-    def forward(self, input):
-        """
-        vmap forward pass for all models.
-        
-        warning: `vmap` only supports the `forward` method with tensor inputs and tensor outputs.
-        """
-        param, buffer = stack_module_state(self.models)
-        return self.vmap_forward(param, buffer, input)
-    
-    def aux_loss(self) -> torch.Tensor:
-        """
-        This function sums the auxiliary loss for all models.
-        """
-        aux_loss = 0.0
-        for model in self.models:
-            aux_loss += model.aux_loss()
-        return aux_loss
-    
-    def items(self):
-        return {f"codec_{idx}": model for idx, model in enumerate(self.models)}.items()
     
     def keys(self):
         return [f"codec_{idx}" for idx in range(len(self.models))]
@@ -112,6 +87,35 @@ class ModelWrapper(nn.Module):
     def values(self):
         return self.models
     
+    def items(self):
+        return {f"codec_{idx}": model for idx, model in enumerate(self.models)}.items()
+    
+    # CompressAI feature
+    def _assert_compressmodel(self):
+        assert isinstance(self.models[0], CompressionModel), \
+            "ModelWrapper only supports `CompressionModel` instances."
+
     def update(self):
+        self._assert_compressmodel()
         for model in self.models:
             model.update()
+
+    def aux_loss(self) -> torch.Tensor:
+        """
+        This function sums the auxiliary loss for all models.
+        """
+        self._assert_compressmodel()
+        aux_loss = 0.0
+        for model in self.models:
+            aux_loss += model.aux_loss()
+        return aux_loss
+    
+    def forward(self, input):
+        """
+        vmap forward pass for all models, only supports `CompressionModel`.
+        
+        warning: `vmap` only supports the `forward` method with tensor inputs and tensor outputs.
+        """
+        self._assert_compressmodel()
+        param, buffer = stack_module_state(self.models)
+        return self.vmap_forward(param, buffer, input)

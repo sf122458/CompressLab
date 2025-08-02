@@ -1,51 +1,29 @@
 import lightning as L
-from compresslab.core.models import CompressionModel
+from compresslab.core.models import CompressionModel, update_registered_buffers
+from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
 from compresslab.utils.logger import MetricLogger
 import torch
+import torch.nn as nn
 from typing import Dict, Any, Type
 from .wrapper import ModelWrapper
+from compresslab.utils.config import (
+    GeneralCodecExtParams,
+    CompressAICodecExtParams
+)
 
-class BaseTrainer(L.LightningModule):
+class BasicTrainer(L.LightningModule):
     """
     A trainer class inherits from PyTorch Lightning's LightningModule.
     """
-    def __init__(self, 
-                 model_class: Type[CompressionModel],
-                 params: Dict[str, Any],
-                 ext_params: Dict[str, Any] = None
-                 ):
-        """
-        Args:
-            model_class (Type[CompressionModel]): The model class to be trained.
-            params (Dict[str, Any]): Parameters used in the model instantiation.
-            ext_params (Dict[str, Any], optional): Additional parameters for the trainer.
-                Defaults to None.
-        """
+    def __init__(self, ext_params: GeneralCodecExtParams):
         super().__init__()
 
-        # As there are two optimizers, we need to set the automatic optimization to False
+        # Set automatic optimization to False, as we will handle it manually
         self.automatic_optimization = False
 
-        # compression levels
-        if "lmbda" not in ext_params.keys():
-            raise ValueError("key `lmbda` is required in `ext_params`")
-        
-        self._lmbda = ext_params.get("lmbda")
+        self.save_recon_imgs = ext_params.SaveRecon
 
-        if isinstance(self._lmbda, dict):
-            assert "mse" in self._lmbda.keys() and "ms-ssim" in self._lmbda.keys()
-            num_models = len(self._lmbda["mse"])
-        else:
-            if isinstance(self._lmbda, (int, float)):
-                self._lmbda = [self._lmbda]
-            else:
-                assert isinstance(self._lmbda, list)
-            num_models = len(self._lmbda)
-
-        self.model_wrapper = ModelWrapper(model_class, params, num_models)
-        
-        # optimization parameters
-        self.lr = ext_params.get("lr", 1e-4)
+        self.metric = MetricLogger()
 
         # some functions to log metrics
         self.bar_metrics = lambda metrics: self.log_dict(
@@ -74,25 +52,95 @@ class BaseTrainer(L.LightningModule):
         self.log_train_monitor = lambda monitor: self.log_dict(
             {f"train_monitor/{k}": v for k, v in monitor.items()},
             on_step=False, on_epoch=True, logger=True, 
-            sync_dist=False, rank_zero_only=True
+            sync_dist=True, rank_zero_only=True
         )
+
+    def on_train_batch_end(self, output, batch, batch_idx):
+        """
+        There are some operations can be implemented here:
+        - Save the checkpoint of the model trained on mse-loss.
+        - Switch to fine-tune the model on ms-ssim-loss after a certain number of steps.
+        - Adjust the learning rate or other hyperparameters if needed.
+        - Multi stage training (Loss function modification).
+        """
+        raise NotImplementedError("Please implement the `on_train_batch_end` method in your trainer class.")
+
+    def training_step(self, batch, batch_idx):
+        raise NotImplementedError("Please implement the `training_step` method in your trainer class.")
+
+    def validation_step(self, batch, batch_idx):
+        raise NotImplementedError("Please implement the `validation_step` method in your trainer class.")
+
+    def on_test_start(self):
+        raise NotImplementedError("Please implement the `on_test_start` method in your trainer class.")
+
+    def test_step(self, batch, batch_idx):
+        raise NotImplementedError("Please implement the `test_step` method in your trainer class.")
+
+    def on_test_end(self):
+        raise NotImplementedError("Please implement the `on_test_end` method in your trainer class.")
+
+    def configure_optimizers(self):
+        raise NotImplementedError("Please implement the `configure_optimizers` method in your trainer class.")
+    
+
+class CompressAICodecTrainer(BasicTrainer):
+    """This is used in the training for end-to-end lossy image compression and video compression.
+    """
+    def __init__(self, 
+                 model_class: Type[CompressionModel],
+                 params: Dict[str, Any],
+                 ext_params: CompressAICodecExtParams
+                 ):
+        """
+        Args:
+            model_class (Type[CompressionModel]): The model class to be trained.
+            params (Dict[str, Any]): Parameters used in the model instantiation.
+            ext_params (Dict[str, Any], optional): Additional parameters for the trainer.
+                Defaults to None.
+        """
+        super().__init__(ext_params=ext_params)
+
+        self.ext_params = ext_params
+
+        self.automatic_optimization = False
+
+        # compression levels
+        self._lmbda = ext_params.Lmbda
+
+        if isinstance(self._lmbda, dict):
+            assert "mse" in self._lmbda.keys() and "ms-ssim" in self._lmbda.keys()
+            num_models = len(self._lmbda["mse"])
+        else:
+            if isinstance(self._lmbda, (int, float)):
+                self._lmbda = [self._lmbda]
+            else:
+                assert isinstance(self._lmbda, list)
+            num_models = len(self._lmbda)
+
+        self.model_wrapper = ModelWrapper(model_class, params, num_models)
+        
+        # optimization parameters
+        self.lr = ext_params.Lr
+
+    def on_train_start(self):
+        # FIXME: `self.finetune_step` must be defined here due to `Trainer` isn't attached before this step.
+        # fine-tuning steps
+        if isinstance(self._lmbda, dict) and "ms-ssim" in self._lmbda.keys():
+            self.finetune_step = self.ext_params.FinetuneStep if self.ext_params.FinetuneStep > 0 else \
+                int(self.ext_params.FinetuneRatio * self.trainer.max_steps) + 1 # when `FinetuneRatio` is 1, ms-ssim model won't be saved
+        else:
+            self.finetune_step = self.trainer.max_steps + 1
 
     @property
     def lmbda(self):
         if not isinstance(self._lmbda, dict):
             return self._lmbda
         
-        if self.global_step < self.key_step["fine_tune"]:
+        if self.global_step < self.finetune_step:
             return self._lmbda["mse"]
         else:
             return self._lmbda["ms-ssim"]
-        
-    def on_train_start(self):
-        self.key_step = {
-            "lr_decay": int(self.trainer.max_steps * 0.4),
-            "fine_tune": int(self.trainer.max_steps * 0.95) if isinstance(self._lmbda, dict) \
-                else int(self.trainer.max_steps) + 1
-        }
 
     def on_train_batch_end(self, output, batch, batch_idx):
         """
@@ -111,15 +159,17 @@ class BaseTrainer(L.LightningModule):
         raise NotImplementedError("Please implement the `validation_step` method in your trainer class.")
 
     def on_test_start(self):
-        if "mse" in self.trainer.ckpt_path:
-            filename = "metrics_mse"
-        elif "ms-ssim" in self.trainer.ckpt_path:
-            filename = "metrics_ms_ssim"
-        else:
-            filename = "metrics"
+        self.model_type = "last"
+        if self.trainer.ckpt_path is not None:
+            if "mse" in self.trainer.ckpt_path:
+                self.model_type = "mse"
+            elif "ms-ssim" in self.trainer.ckpt_path:
+                self.model_type = "ms-ssim"
 
-        self.metric = MetricLogger(save_dir=self.trainer.default_root_dir,
-                                   filename=filename)
+        self.metric.reset_dir_and_filename(
+            save_dir=self.trainer.default_root_dir,
+            filename=f"metrics_{self.model_type}"
+        )
         
         self.model_wrapper.update()
 
@@ -145,3 +195,40 @@ class BaseTrainer(L.LightningModule):
         ])
 
         return optimizer
+    
+    def load_state_dict(self, state_dict, strict = True, assign = False):
+        for name, module in self.named_modules():
+            if not any(x.startswith(name) for x in state_dict.keys()):
+                continue
+
+            if isinstance(module, EntropyBottleneck):
+                update_registered_buffers(
+                    module,
+                    name,
+                    ["_quantized_cdf", "_offset", "_cdf_length"],
+                    state_dict,
+                    policy="resize"
+                )
+
+            if isinstance(module, GaussianConditional):
+                update_registered_buffers(
+                    module,
+                    name,
+                    ["_quantized_cdf", "_offset", "_cdf_length", "scale_table"],
+                    state_dict,
+                    policy="resize"
+                )
+
+        return nn.Module.load_state_dict(self, state_dict, strict=strict)
+    
+# TODO
+class VQCodecTrainer(BasicTrainer):
+    pass
+
+
+class LosslessImageCodec(BasicTrainer):
+    pass
+
+
+class OverfitImageCodec(BasicTrainer):
+    pass

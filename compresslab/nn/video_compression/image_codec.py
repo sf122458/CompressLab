@@ -240,48 +240,6 @@ class Cheng2020(CompressionModel):
         self.gaussian_conditional.update()
         super().update(force=force)
 
-    # def get_y_z(self, x):
-    #     y = self.g_a(x)
-    #     z = self.h_a(y)
-    #     return y, z
-
-    # def get_recon_wo_stream(self, y, z):
-    #     z_hat, z_likelihoods = self.entropy_bottleneck(z)
-    #     gaussian_params = self.h_s(z_hat)
-    #     scales_hat, means_hat = gaussian_params.chunk(2, 1)
-    #     y_hat, y_likelihoods = self.gaussian_conditional(y, scales_hat, means=means_hat)
-    #     x_hat = self.g_s(y_hat)
-
-    #     bit = (torch.log(y_likelihoods).sum() + torch.log(z_likelihoods).sum()) / (-math.log(2))
-    #     return x_hat, bit
-
-    # def encode_decode(self, x, output_path=None, pic_width=None, pic_height=None):
-    #     # pic_width and pic_height may be different from x's size. X here is after padding
-    #     # x_hat has the same size with x
-    #     y, z = self.get_y_z(x)
-    #     if output_path is None:
-    #         x_hat, bit = self.get_recon_wo_stream(y, z)
-    #         bit = bit.item()
-    #     else:
-    #         assert pic_height is not None
-    #         assert pic_width is not None
-    #         compressed = self.compress(y=y, z=z)
-    #         y_string = compressed['strings'][0][0]
-    #         z_string = compressed['strings'][1][0]
-    #         encode_i(pic_height, pic_width, y_string, z_string, output_path)
-    #         bit = filesize(output_path) * 8
-
-    #         height, width, y_string, z_string = decode_i(output_path)
-    #         shape = get_downsampled_shape(height, width, 64)
-    #         decompressed = self.decompress([[y_string], [z_string]], shape)
-    #         x_hat = decompressed['x_hat']
-
-    #     result = {
-    #         'bit': bit,
-    #         'x_hat': x_hat,
-    #     }
-    #     return result
-
     def compress(self, x):
         y = self.g_a(x)
         z = self.h_a(y)

@@ -6,7 +6,7 @@ import os
 import torch
 import math
 from compresslab.utils.config import Config
-from compresslab.nn.base import BaseTrainer
+from compresslab.nn.base import BasicTrainer
 from compresslab.utils.registry import Registry, DataRegistry, ModelRegistry
 from compresslab.utils.benchmark import Benchmark
 from compresslab.codec import TRADITIONAL_CODEC
@@ -42,28 +42,33 @@ def main(args: Args):
         
         config = parse_yaml_file_as(Config, args.config)
 
-        datamodule = DataRegistry.get(config.Data.Key)(**config.Data.Params, num_devices=len(config.Env.Devices))
-        datamodule.setup(None)
-
         exp_dir = os.path.join(config.Train.Output, Path(args.config).stem)
         os.makedirs(exp_dir, exist_ok=True)
         os.system(f"cp {args.config} {exp_dir}/config.yaml")
 
         for model in config.Model:
             out_dir = os.path.join(exp_dir, model.Name if model.Name is not None else model.Key) 
-            
+
             # traditional codec
             if model.Key in TRADITIONAL_CODEC:
-                codec = TRADITIONAL_CODEC[model.Key](
-                    save_dir=out_dir,
-                    **config.Data.Params,
-                    **model.Params
-                    )
-                codec.run()
+                if not args.test:
+                    test_data_dir = model.Params.pop("test_data_dir", config.Data.Params["test_data_dir"])
+                    codec = TRADITIONAL_CODEC[model.Key](
+                        save_dir=out_dir,
+                        test_data_dir=test_data_dir,
+                        save_recon_imgs=model.ExtParams.SaveRecon,
+                        **model.Params,
+                        )
+                    codec.run()
                 continue
 
+            try:
+                datamodule = DataRegistry.get(config.Data.Key)(num_devices=len(config.Env.Devices), **config.Data.Params)
+                datamodule.setup(None)
+            except:
+                raise ValueError(f"Data module {config.Data.Key} is not registered or has invalid parameters.")
 
-            # neural codec
+            # learning-based codec
             try:
                 model_path = Path(getattr(compresslab.utils.registry, "ModelRegistry")._map.get(model.Key)["register_path"])
             except Exception as e:
@@ -80,13 +85,13 @@ def main(args: Args):
 
             lightning_classes = [
                 cls for name, cls in inspect.getmembers(module, inspect.isclass)
-                if issubclass(cls, BaseTrainer) and cls.__module__ == module.__name__
+                if issubclass(cls, BasicTrainer) and cls.__module__ == module.__name__
             ]
 
             if not lightning_classes:
-                raise ValueError(f"No class inherits from `BaseTrainer` found in {module_file}")
+                raise ValueError(f"No class inherits from `BasicTrainer` found in {module_file}")
 
-            assert len(lightning_classes) == 1, f"Found multiple Trainers in {module_file}. Please ensure only one class inherits from `BaseTrainer`."
+            assert len(lightning_classes) == 1, f"Found multiple Trainers in {module_file}. Please ensure only one class inherits from `BasicTrainer`."
             
             LightningModule = lightning_classes[0]
             
@@ -106,7 +111,7 @@ def main(args: Args):
             else:
                 with open(model_pkl_path, "rb") as pkl_file:
                     hparams = pickle.load(pkl_file)
-                if hparams != model:
+                if hparams.Key != model.Key and hparams.Params != model.Params:
                     raise ValueError(f"Model hyperparams mismatch: {hparams} vs {model}")
             
             if config.Train.Steps is None and config.Train.Epoch is None:
@@ -169,5 +174,7 @@ if __name__ == "__main__":
     parser.add_argument('--test', action="store_true", help='Skip training and only test the models.')
     parser.add_argument('--cpu', action="store_true", help='Use CPU in the inference stage.')
     
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
     args = parser.parse_args()
     main(args)

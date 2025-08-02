@@ -9,15 +9,15 @@ Model:
       N: [128, 128, 128, 128, 128, 192, 192, 192]
       M: [192, 192, 192, 192, 192, 320, 320, 320]
     ExtParams:
-      lmbda: *lmbda1
+      Lmbda: *lmbda1
 
   - Name: balle2018
     Key: ScaleHyperprior
     Params:
       N: [128, 128, 128, 128, 128, 192, 192, 192]
       M: [192, 192, 192, 192, 192, 320, 320, 320]
-    EExtParams:
-      lmbda: *lmbda1
+    ExtParams:
+      Lmbda: *lmbda1
 
   - Name: minnen2018-meanscale
     Key: MeanScaleHyperprior
@@ -25,7 +25,7 @@ Model:
       N: [128, 128, 128, 128, 192, 192, 192, 192]
       M: [192, 192, 192, 192, 320, 320, 320, 320]
     ExtParams:
-      lmbda: *lmbda1
+      Lmbda: *lmbda1
   
   - Name: minnen2018-autoregressive
     Key: JointAutoregressiveHierarchicalPriors
@@ -33,7 +33,7 @@ Model:
       N: [128, 128, 128, 128, 192, 192, 192, 192]
       M: [192, 192, 192, 192, 320, 320, 320, 320]
     ExtParams:
-      lmbda: *lmbda1
+      Lmbda: *lmbda1
 
   - Name: minnen2020
     Key: ChARM
@@ -41,28 +41,28 @@ Model:
       N: 128
       M: 192
     ExtParams:
-      lmbda: *lmbda1
+      Lmbda: *lmbda1
 
   - Name: cheng2020anchor
     Key: Cheng2020Anchor
     Params:
       N: [128, 128, 128, 192, 192, 192]
     ExtParams:
-      lmbda: *lmbda2
+      Lmbda: *lmbda1
 
   - Name: cheng2020attention
     Key: Cheng2020Attention
     Params:
       N: [128, 128, 128, 192, 192, 192]
     ExtParams:
-      lmbda: *lmbda2
+      Lmbda: *lmbda1
 
   - Name: cheng2020checkerboard
     Key: Cheng2020AnchorCheckerboard
     Params:
       N: 192
     ExtParams:
-      lmbda: *lmbda1
+      Lmbda: *lmbda1
 
   - Name: elic2022
     Key: Elic2022Official
@@ -70,7 +70,7 @@ Model:
       N: 192
       M: 320
     ExtParams:
-      lmbda: *lmbda1
+      Lmbda: *lmbda1
 
 
 Data:

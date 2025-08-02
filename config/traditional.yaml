@@ -1,0 +1,54 @@
+Model:
+  - Key: JPEG
+    Params:
+      quality: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95]
+    ExtParams:
+      SaveRecon: True
+
+  - Key: WebP
+    Params:
+      quality: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95]
+    ExtParams:
+      SaveRecon: True
+
+  - Key: JPEG2000
+    Params:
+      quality: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95]
+    ExtParams:
+      SaveRecon: True
+
+  - Key: BPG
+    Params:
+      quality: [12, 17, 22, 27, 32, 37, 42, 47]
+    ExtParams:
+      SaveRecon: True
+
+  - Name: HM
+    Key: HM
+    Params:
+      quality: [12, 17, 22, 27, 32, 37, 42, 47]
+      config: encoder_intra_main_rext.cfg
+    ExtParams:
+      SaveRecon: True
+      
+  - Name: VTM
+    Key: VTM
+    Params:
+      quality: [12, 17, 22, 27, 32, 37, 42, 47]
+      config: encoder_intra_vtm.cfg
+    ExtParams:
+      SaveRecon: True
+
+
+Data:
+  Key: BasicImageDataModule
+  Params:
+    test_data_dir: dataset/Kodak
+
+Train:
+  Benchmark: 
+    - Key: BD_RATE
+      Params:
+        mode: 1
+        baseline: "JPEG"
+    - Key: BD_CURVE

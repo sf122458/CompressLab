@@ -5,6 +5,7 @@ import time
 import contextlib
 import pickle
 import os
+import numpy as np
 
 class MetricLogger:
     """
@@ -30,32 +31,43 @@ class MetricLogger:
     .. code-block:: python
         logger.save()  
     """
-    def __init__(self, save_dir: str, filename: str = "metrics"):
+    def __init__(self, save_dir: str = None, filename: str = "metrics"):
         """
         Args:
             save_dir (str): Directory to save the CSV file.
             filename (str): Name of the CSV file.
         """
-        self.metrics = {}
+        self.metrics = dict()
         self.save_dir = save_dir
         self.filename = filename
-
+    
+    def reset_dir_and_filename(self, save_dir: str, filename: str = "metrics"):
+        self.save_dir = save_dir
+        self.filename = filename
+        self.metrics = dict()
 
     def log(self, name, log_dict: Dict[str, float]):
+        if self.save_dir is None:
+            raise ValueError("Please set the save_dir before saving the metrics.")
         if name not in self.metrics:
-            self.metrics[name] = {}
+            self.metrics[name] = dict()
         for k, v in log_dict.items():
             # assert isinstance(v, (int, float)), f"Value {v} for key {k} in {name} is not a number."
             if isinstance(v, torch.Tensor):
                 v = v.item()
+            if isinstance(v, (np.float32, np.float64, np.float16)):
+                v = float(v)
+            
             if k not in self.metrics[name]:
-                self.metrics[name][k] = []
+                self.metrics[name][k] = list()
             self.metrics[name][k].append(v)
     
     def save(self):
         """
         Save the metrics to a CSV file and a pkl file(used in benchmark test).
         """
+        if self.save_dir is None:
+            raise ValueError("Please set the save_dir before saving the metrics.")
         # Compute the average of all lists in the metrics
         for name, metrics in self.metrics.items():
             for key, values in metrics.items():
@@ -85,7 +97,8 @@ class MetricLogger:
         """
         A context manager to time a code block.
         """
-        # FIXME: the test time maybe not accurate
+        if self.save_dir is None:
+            raise ValueError("Please set the save_dir before saving the metrics.")
         if cuda_sync:
             start_event = torch.cuda.Event(enable_timing=True)
             end_event = torch.cuda.Event(enable_timing=True)

@@ -9,37 +9,36 @@ from compresslab.nn.lossy_image_compression.abc import (
 import torch
 from typing import Union
 from pytorch_msssim import ms_ssim
-from compresslab.nn.base import BaseTrainer
+from compresslab.nn.base import CompressAICodecTrainer
+from torchvision import transforms
 
-class ImageCodecTrainer(BaseTrainer):
+class ImageCodecTrainer(CompressAICodecTrainer):
     def loss_fn(self, lmbda, out: ImageCodecForwardOutput):
-        if self.global_step < self.key_step["fine_tune"]:
+        if self.global_step < self.finetune_step:
             return lmbda * out.mse_loss * 255 ** 2 + out.bpp
         else:
             return lmbda * out.ms_ssim_loss + out.bpp
     
+    # def on_train_batch_end(self, output, batch, batch_idx):
+    #     if self.global_step == self.key_step["lr_decay"]:
+    #         optimizer = self.optimizers()
+    #         optimizer.param_groups[0]["lr"] *= 0.1
+    #         logging.info(f"Learning rate decayed to {optimizer.param_groups[0]['lr']} at step {self.global_step}")
+
     def on_train_batch_end(self, output, batch, batch_idx):
-        if self.global_step == self.key_step["lr_decay"]:
-            optimizer = self.optimizers()
-            optimizer.param_groups[0]["lr"] *= 0.1
-            logging.info(f"Learning rate decayed to {optimizer.param_groups[0]['lr']} at step {self.global_step}")
-
-        if self.key_step["fine_tune"] > self.trainer.max_steps:
-            if self.global_step == self.trainer.max_steps:
-                self.model_wrapper.update()
-                self.trainer.save_checkpoint(os.path.join(self.trainer.default_root_dir, f"checkpoints/mse.ckpt"), weights_only=True)
-                logging.info(f"Saving checkpoint trained on `MSE` at step {self.global_step}.")
-        else:
-            if self.global_step == self.key_step["fine_tune"]:
-                self.model_wrapper.update()
-                self.trainer.save_checkpoint(os.path.join(self.trainer.default_root_dir, f"checkpoints/mse.ckpt"), weights_only=True)
-                logging.info(f"Saving checkpoint trained on `MSE` at step {self.global_step}.")
-
-            if self.global_step == self.trainer.max_steps:
-                self.model_wrapper.update()
-                self.trainer.save_checkpoint(os.path.join(self.trainer.default_root_dir, f"checkpoints/ms-ssim.ckpt"), weights_only=True)
-                logging.info(f"Saving checkpoint fine-tuned on `MS-SSIM` at step {self.global_step}.")
-    
+        if self.global_step == self.finetune_step - 1:
+            self.trainer.save_checkpoint(
+                os.path.join(self.trainer.default_root_dir, f"checkpoints/mse.ckpt"), 
+                weights_only=True
+            )
+            logging.info(f"Saving checkpoint trained on `MSE` at step {self.global_step}.")
+        
+        if self.global_step == self.trainer.max_steps and self.finetune_step < self.trainer.max_steps:
+            self.trainer.save_checkpoint(
+                os.path.join(self.trainer.default_root_dir, f"checkpoints/ms-ssim.ckpt"), 
+                weights_only=True
+            )
+            logging.info(f"Saving checkpoint fine-tuned on `MS-SSIM` at step {self.global_step}.")
 
     def training_step(self, batch, batch_idx):
         optimizer = self.optimizers()
@@ -131,3 +130,22 @@ class ImageCodecTrainer(BaseTrainer):
                 "psnr": psnr,
                 "ms-ssim": ms_ssim_metric
             })
+
+            if self.save_recon_imgs:
+                to_pil = transforms.ToPILImage()
+
+                img_tensor = out_decompress.x_hat[0].clamp(0, 1)
+                img_pil = to_pil(img_tensor.cpu())
+
+                output_dir = os.path.join(
+                    self.trainer.default_root_dir, 
+                    "recon_imgs", 
+                    model_name
+                )
+                os.makedirs(output_dir, exist_ok=True)
+
+                img_path = os.path.join(
+                    output_dir, 
+                    f"recon_{batch_idx:04d}_{self.model_type}_{out_compress.bpp:.4f}_{psnr:.2f}_{ms_ssim_metric:.4f}.png"
+                )
+                img_pil.save(img_path)

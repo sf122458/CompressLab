@@ -21,7 +21,8 @@ class Codec(ABC):
             test_data_dir: str, 
             quality: Union[int, List[int]], 
             save_dir: str,
-            *args, **kwargs):
+            save_recon_imgs: bool = False
+        ):
         """
         Args:
             data_dir (str): Directory containing the images to be processed.
@@ -31,6 +32,7 @@ class Codec(ABC):
         self.data_dir = test_data_dir
         self.quality = quality if isinstance(quality, list) else [quality]
         self.save_dir = save_dir
+        self.save_recon_imgs = save_recon_imgs
         os.makedirs(self.save_dir, exist_ok=True)
         self.temp_dir = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), self.save_dir)
 
@@ -107,10 +109,18 @@ class PillowCodec(Codec):
         rec.load()
         dec_time = time.time() - start
 
+        bpp = float(bits) / (img.size[0] * img.size[1])
         psnr, ms_ssim = compute_metrics(img, rec)
 
+        if self.save_recon_imgs:
+            filename = os.path.splitext(os.path.basename(img_path))[0]
+            rec_path = os.path.join(self.save_dir, f"q{quality}", f"{filename}_{bpp}_{psnr}_{ms_ssim}.png")
+            os.makedirs(os.path.dirname(rec_path), exist_ok=True)
+            rec.save(rec_path)
+
+
         return {
-            "bpp": float(bits) / (img.size[0] * img.size[1]),
+            "bpp": bpp,
             "psnr": psnr,
             "ms-ssim": ms_ssim,
             "encoding_time": enc_time,
@@ -147,7 +157,7 @@ class BinaryCodec(Codec):
         start = time.time()
         run_command(self._get_encode_cmd(img_path, quality, out_filepath))
         enc_time = time.time() - start
-        size = filesize(out_filepath)
+        size = get_filesize(out_filepath)
 
         # Decode
         start = time.time()
@@ -162,12 +172,18 @@ class BinaryCodec(Codec):
         os.remove(out_filepath)
 
         img = self._load_img(img_path)
-        bpp_val = float(size) * 8 / (img.size[0] * img.size[1])
+        bpp = float(size) * 8 / (img.size[0] * img.size[1])
 
         psnr, ms_ssim = compute_metrics(img, rec)
 
+        if self.save_recon_imgs:
+            filename = os.path.splitext(os.path.basename(img_path))[0]
+            rec_path = os.path.join(self.save_dir, f"q{quality}", f"{filename}_{bpp}_{psnr}_{ms_ssim}.png")
+            os.makedirs(os.path.dirname(rec_path), exist_ok=True)
+            rec.save(rec_path)
+
         return {
-            "bpp": bpp_val,
+            "bpp": bpp,
             "psnr": psnr,
             "ms-ssim": ms_ssim,
             "encoding_time": enc_time,
@@ -407,7 +423,7 @@ class HM(Codec):
             arr = ycbcr2rgb(torch.from_numpy(arr.copy())).numpy()
             rec_arr = ycbcr2rgb(torch.from_numpy(rec_arr.copy())).numpy()
 
-        bpp = filesize(out_filepath) * 8.0 / (arr.shape[1] * arr.shape[2])
+        bpp = get_filesize(out_filepath) * 8.0 / (arr.shape[1] * arr.shape[2])
         # cleanup
         os.unlink(yuv_path)
         os.unlink(out_filepath)
@@ -417,6 +433,12 @@ class HM(Codec):
         )
 
         psnr, ms_ssim = compute_metrics(img, rec)
+
+        if self.save_recon_imgs:
+            filename = os.path.splitext(os.path.basename(img_path))[0]
+            rec_path = os.path.join(self.save_dir, f"q{quality}", f"{filename}_{bpp}_{psnr}_{ms_ssim}.png")
+            os.makedirs(os.path.dirname(rec_path), exist_ok=True)
+            rec.save(rec_path)
 
         return {
             "bpp": bpp,
@@ -436,7 +458,12 @@ class VTM(Codec):
     def name(self) -> str:
         return "VTM"
 
-    def __init__(self, config: str, build_dir: str = VTM_BUILD_DIR, rgb: bool = False, **kwargs):
+    def __init__(
+            self, 
+            config: str, 
+            build_dir: str = VTM_BUILD_DIR, 
+            rgb: bool = False, 
+            **kwargs):
         """
         Args:
             build_dir (str): Directory containing the VTM encoder and decoder executables.
@@ -536,7 +563,7 @@ class VTM(Codec):
             arr = ycbcr2rgb(torch.from_numpy(arr.copy())).numpy()
             rec_arr = ycbcr2rgb(torch.from_numpy(rec_arr.copy())).numpy()
 
-        bpp = filesize(out_filepath) * 8.0 / (arr.shape[1] * arr.shape[2])
+        bpp = get_filesize(out_filepath) * 8.0 / (arr.shape[1] * arr.shape[2])
 
         # cleanup
         os.unlink(yuv_path)
@@ -547,6 +574,12 @@ class VTM(Codec):
         )
 
         psnr, ms_ssim = compute_metrics(img, rec)
+
+        if self.save_recon_imgs:
+            filename = os.path.splitext(os.path.basename(img_path))[0]
+            rec_path = os.path.join(self.save_dir, f"q{quality}", f"{filename}_{bpp}_{psnr}_{ms_ssim}.png")
+            os.makedirs(os.path.dirname(rec_path), exist_ok=True)
+            rec.save(rec_path)
 
         return {
             "bpp": bpp,
