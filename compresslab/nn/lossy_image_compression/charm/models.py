@@ -9,18 +9,11 @@ from compresslab.core.models import CompressionModel
 from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
 from compresslab.core.layers import GDN, conv3x3, conv, deconv
 from compresslab.ans import BufferedRansEncoder, RansDecoder
-from compresslab.nn.lossy_image_compression.abc import (
-    ImageCodec,
-    ImageCodecForwardInput,
-    ImageCodecForwardOutput,
-    ImageCodecCompressInput,
-    ImageCodecCompressOutput,
-    ImageCodecLikelihoods,
-    ImageCodecDecompressOutput)
 import torch.nn as nn
 import torch
+from torch import Tensor
 
-class ChARM_wo_LRP(ImageCodec):
+class ChARM_wo_LRP(CompressionModel):
     '''
     Channel-wise Context Model proposed in David Minnen&Saurabh Singh, Channel-wise Autoregressive Entropy Models for Learned Image Compression. ICIP 2020. 
     *WITHOUT* LRP(Latent Residual Prediction) module. 
@@ -86,8 +79,8 @@ class ChARM_wo_LRP(ImageCodec):
         self.entropy_bottleneck = EntropyBottleneck(N)
         self.gaussian_conditional = GaussianConditional(None)
 
-    def forward(self, input: ImageCodecForwardInput) -> ImageCodecForwardOutput:
-        y = self.g_a(input.x)
+    def forward(self, x: Tensor):
+        y = self.g_a(x)
         z = self.h_a(y)
         z_hat, z_likelihoods = self.entropy_bottleneck(z)
         hyper_params = self.h_s(z_hat)
@@ -119,17 +112,16 @@ class ChARM_wo_LRP(ImageCodec):
         means_all = torch.cat(means_hat_list, dim = 1)
         _, y_likelihoods = self.gaussian_conditional(y, scales_all, means=means_all)
         x_hat = self.g_s(y_hat_cumul)
-    
-        return ImageCodecForwardOutput(
-            x=input.x,
-            x_hat=x_hat,
-            likelihoods=ImageCodecLikelihoods(
-                y=y_likelihoods,
-                z=z_likelihoods
-            )
-        )
+        
+        return {
+            "x_hat": x_hat,
+            "likelihoods": {
+                "y": y_likelihoods,
+                "z": z_likelihoods
+            }
+        }
 
-    def compress(self, input: ImageCodecCompressInput) -> ImageCodecCompressOutput:
+    def compress(self, x: Tensor):
         encoder = BufferedRansEncoder()
         cdf = self.gaussian_conditional.quantized_cdf.tolist()
         cdf_lengths = self.gaussian_conditional.cdf_length.tolist()
@@ -137,7 +129,7 @@ class ChARM_wo_LRP(ImageCodec):
         indexes_list = []
         symbols_list = []
         y_strings = []        
-        y = self.g_a(input.x)
+        y = self.g_a(x)
         z = self.h_a(y)
 
         z_strings = self.entropy_bottleneck.compress(z)
@@ -148,7 +140,7 @@ class ChARM_wo_LRP(ImageCodec):
         for i in range(self.slice - 1):
             list_sliced_y.append(y[:,(self.slice_size * i):self.slice_size * (i + 1),:,:])
         list_sliced_y.append(y[:,self.slice_size * (self.slice - 1):,:,:])
-        y_hat = torch.Tensor().to(input.x.device)
+        y_hat = torch.Tensor().to(x.device)
         for i in range(self.slice):
             y_sliced = list_sliced_y[i] #size[1, M/S * i, H', W']
             if i == 0 :
@@ -176,22 +168,18 @@ class ChARM_wo_LRP(ImageCodec):
 
         y_string = encoder.flush()
         y_strings.append(y_string)
-        return ImageCodecCompressOutput(
-            x=input.x,
-            y_strings=y_strings,
-            z_strings=z_strings,
-            shape=z.size()[-2:]
-        )    
+        
+        return {"strings": [y_strings, z_strings], "shape": z.size()[-2:]}
 
-    def decompress(self, input: ImageCodecCompressOutput) -> ImageCodecDecompressOutput:
-        assert isinstance(input.y_strings, list) and isinstance(input.z_strings, list)
-        z_hat = self.entropy_bottleneck.decompress(input.z_strings, input.shape)
+    def decompress(self, strings, shape):
+        assert isinstance(strings, list) and len(strings) == 2, "Input strings should be a list of two elements: [y_strings, z_strings]"
+        z_hat = self.entropy_bottleneck.decompress(strings[1], shape)
         hyper_params = self.h_s(z_hat)
         cdf = self.gaussian_conditional.quantized_cdf.tolist()
         cdf_lengths = self.gaussian_conditional.cdf_length.tolist()
         offsets = self.gaussian_conditional.offset.tolist()
         decoder = RansDecoder()
-        decoder.set_stream(input.y_strings[0])
+        decoder.set_stream(strings[0])
 
         y_hat = torch.Tensor().to(z_hat.device)
         for i in range(self.slice):
@@ -211,9 +199,9 @@ class ChARM_wo_LRP(ImageCodec):
             y_hat = torch.cat([y_hat, y_sliced_hat], dim = 1)
             
         x_hat = self.g_s(y_hat)
-        return ImageCodecDecompressOutput(
-            x_hat=x_hat
-        )
+        return {
+            "x_hat": x_hat
+        }
     
 
 class ChARM(ChARM_wo_LRP):
@@ -266,8 +254,8 @@ class ChARM(ChARM_wo_LRP):
             self.LRPlist.append(LRP)
             #The in/out channel for LRP layers are designed to agree the values shown in paper when N = 192 and M = 320. 
     
-    def forward(self, input: ImageCodecForwardInput) -> ImageCodecForwardOutput:
-        y = self.g_a(input.x)
+    def forward(self, x: Tensor):
+        y = self.g_a(x)
         z = self.h_a(y)
         z_hat, z_likelihoods = self.entropy_bottleneck(z)
         hyper_params = self.h_s(z_hat)
@@ -311,16 +299,15 @@ class ChARM(ChARM_wo_LRP):
         x_hat = self.g_s(y_hat)
     
 
-        return ImageCodecForwardOutput(
-            x=input.x,
-            x_hat=x_hat,
-            likelihoods=ImageCodecLikelihoods(
-                y=y_likelihoods,
-                z=z_likelihoods
-            )
-        )
+        return {
+            "x_hat": x_hat,
+            "likelihoods": {
+                "y": y_likelihoods,
+                "z": z_likelihoods
+            }
+        }
 
-    def compress(self, input: ImageCodecCompressInput) -> ImageCodecCompressOutput:
+    def compress(self, x: Tensor):
         encoder = BufferedRansEncoder()
         cdf = self.gaussian_conditional.quantized_cdf.tolist()
         cdf_lengths = self.gaussian_conditional.cdf_length.tolist()
@@ -328,7 +315,7 @@ class ChARM(ChARM_wo_LRP):
         indexes_list = []
         symbols_list = []
         
-        y = self.g_a(input.x)
+        y = self.g_a(x)
         z = self.h_a(y)
 
         z_strings = self.entropy_bottleneck.compress(z)
@@ -376,23 +363,19 @@ class ChARM(ChARM_wo_LRP):
         y_strings = []
         y_string = encoder.flush()
         y_strings.append(y_string)
-        return ImageCodecCompressOutput(
-            x=input.x,
-            y_strings=y_strings,
-            z_strings=z_strings,
-            shape=z.size()[-2:]
-        )     
+        
+        return {"strings": [y_strings, z_strings], "shape": z.size()[-2:]}
 
-    def decompress(self, input: ImageCodecCompressOutput) -> ImageCodecDecompressOutput:
-        assert isinstance(input.y_strings, list) and isinstance(input.z_strings, list)
-        z_hat = self.entropy_bottleneck.decompress(input.z_strings, input.shape)
+    def decompress(self, strings, shape):
+        assert isinstance(strings, list) and len(strings) == 2, "Input strings should be a list of two elements: [y_strings, z_strings]"
+        z_hat = self.entropy_bottleneck.decompress(strings[1], shape)
         hyper_params = self.h_s(z_hat)
         hyper_scale, hyper_mean = hyper_params.chunk(2,1)
         cdf = self.gaussian_conditional.quantized_cdf.tolist()
         cdf_lengths = self.gaussian_conditional.cdf_length.tolist()
         offsets = self.gaussian_conditional.offset.tolist()
         decoder = RansDecoder()
-        decoder.set_stream(input.y_strings[0])
+        decoder.set_stream(strings[0])
 
         y_hat = torch.Tensor().to(z_hat.device)
         for i in range(self.slice):
@@ -424,6 +407,7 @@ class ChARM(ChARM_wo_LRP):
             y_hat = torch.cat([y_hat, y_hat_sliced], dim = 1)
             
         x_hat = self.g_s(y_hat)
-        return ImageCodecDecompressOutput(
-            x_hat=x_hat
-        )
+        
+        return {
+            "x_hat": x_hat
+        }

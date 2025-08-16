@@ -10,13 +10,12 @@ from compresslab.nn.base import BasicTrainer
 from compresslab.utils.registry import Registry, DataRegistry, ModelRegistry
 from compresslab.utils.benchmark import Benchmark
 from compresslab.codec import TRADITIONAL_CODEC
-import lightning as L
 from lightning import Trainer
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.callbacks import ModelCheckpoint, RichProgressBar, RichModelSummary
 from argparse import Namespace
-import compresslab.nn
-import compresslab.data
+import compresslab.nn   # register all models
+import compresslab.data # register all datamodules
 from pydantic_yaml import parse_yaml_file_as
 import pickle
 import compresslab.utils.registry
@@ -64,38 +63,45 @@ def main(args: Args):
 
             try:
                 datamodule = DataRegistry.get(config.Data.Key)(num_devices=len(config.Env.Devices), **config.Data.Params)
-                datamodule.setup(None)
             except:
                 raise ValueError(f"Data module {config.Data.Key} is not registered or has invalid parameters.")
 
             # learning-based codec
             try:
-                model_path = Path(getattr(compresslab.utils.registry, "ModelRegistry")._map.get(model.Key)["register_path"])
+                model_path = Path(getattr(compresslab.utils.registry, "ModelRegistry")._map.get(model.Key)["define_path"])
             except Exception as e:
                 logging.error(f"{model.Key} isn't registered. Skipping...")
                 continue
-
-            module_file = model_path.parent / "trainer.py"
-            if not module_file.exists():
-                raise FileNotFoundError(f"trainer.py not found in {model_path.parent}")
-
-            module_spec = importlib.util.spec_from_file_location("trainer", module_file)
-            module = importlib.util.module_from_spec(module_spec)
-            module_spec.loader.exec_module(module)
-
-            lightning_classes = [
-                cls for name, cls in inspect.getmembers(module, inspect.isclass)
-                if issubclass(cls, BasicTrainer) and cls.__module__ == module.__name__
-            ]
-
-            if not lightning_classes:
-                raise ValueError(f"No class inherits from `BasicTrainer` found in {module_file}")
-
-            assert len(lightning_classes) == 1, f"Found multiple Trainers in {module_file}. Please ensure only one class inherits from `BasicTrainer`."
             
-            LightningModule = lightning_classes[0]
+            model_class = ModelRegistry.get(model.Key)
             
-            modelmodule = LightningModule(model_class=ModelRegistry.get(model.Key), params=model.Params, ext_params=model.ExtParams)
+            if issubclass(model_class, BasicTrainer):
+                modelmodule = model_class(**model.Params, ext_params=model.ExtParams)
+            else:
+                if Path(model_path.parent/"trainer.py").exists():
+                    module_file = model_path.parent / "trainer.py"        # A specific trainer
+                elif Path(model_path.parent.parent/"trainer.py").exists():
+                    module_file = model_path.parent.parent / "trainer.py" # A general trainer
+                else:
+                    raise FileNotFoundError(f"trainer.py not found in {model_path.parent.parent} and {model_path.parent.parent}")
+
+                module_spec = importlib.util.spec_from_file_location("trainer", module_file)
+                module = importlib.util.module_from_spec(module_spec)
+                module_spec.loader.exec_module(module)
+
+                lightning_classes = [
+                    cls for name, cls in inspect.getmembers(module, inspect.isclass)
+                    if issubclass(cls, BasicTrainer) and cls.__module__ == module.__name__
+                ]
+
+                if not lightning_classes:
+                    raise ValueError(f"No class inherits from `BasicTrainer` found in {module_file}")
+
+                assert len(lightning_classes) == 1, f"Found multiple Trainers in {module_file}. Please ensure only one class inherits from `BasicTrainer`."
+                
+                LightningModule = lightning_classes[0]
+                
+                modelmodule = LightningModule(model_class=ModelRegistry.get(model.Key), params=model.Params, ext_params=model.ExtParams)
 
             model_pkl_path = os.path.join(out_dir, "hparams.pkl")
             
@@ -119,13 +125,15 @@ def main(args: Args):
 
             num_epoch = config.Train.Epoch if config.Train.Epoch is not None \
                 else math.ceil(config.Train.Steps / len(datamodule.train_dataloader()) * len(config.Env.Devices))
+                
+            num_steps = num_epoch * len(datamodule.train_dataloader()) // len(config.Env.Devices)
 
             if not args.test:
                 trainer = Trainer(
                     accelerator="gpu" if torch.cuda.is_available() else "cpu",
                     devices=config.Env.Devices,
                     strategy="ddp_find_unused_parameters_true",
-                    max_steps=config.Train.Steps,
+                    max_steps=num_steps,
                     max_epochs=num_epoch,
                     check_val_every_n_epoch=config.Train.Valinterval,
                     default_root_dir=out_dir,

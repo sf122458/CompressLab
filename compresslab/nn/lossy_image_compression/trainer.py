@@ -1,19 +1,17 @@
 import os, logging
 from compresslab.core.models import CompressionModel
-from compresslab.nn.lossy_image_compression.abc import (
-    ImageCodecForwardInput,
-    ImageCodecForwardOutput,
-    ImageCodecCompressInput,
-    ImageCodec
-)
 import torch
 from typing import Union
 from pytorch_msssim import ms_ssim
-from compresslab.nn.base import CompressAICodecTrainer
+from compresslab.nn.base import CompressAIImageCodecTrainer
+from compresslab.nn.base.metrics import ImageMetricsOutput
 from torchvision import transforms
+import math
+import torch.nn.functional as F
+from torchvision.utils import save_image
 
-class ImageCodecTrainer(CompressAICodecTrainer):
-    def loss_fn(self, lmbda, out: ImageCodecForwardOutput):
+class ImageCodecTrainer(CompressAIImageCodecTrainer):
+    def loss_fn(self, lmbda, out: ImageMetricsOutput):
         if self.global_step < self.finetune_step:
             return lmbda * out.mse_loss * 255 ** 2 + out.bpp
         else:
@@ -35,7 +33,7 @@ class ImageCodecTrainer(CompressAICodecTrainer):
         
         if self.global_step == self.trainer.max_steps and self.finetune_step < self.trainer.max_steps:
             self.trainer.save_checkpoint(
-                os.path.join(self.trainer.default_root_dir, f"checkpoints/ms-ssim.ckpt"), 
+                os.path.join(self.trainer.default_root_dir, f"checkpoints/ms_ssim.ckpt"), 
                 weights_only=True
             )
             logging.info(f"Saving checkpoint fine-tuned on `MS-SSIM` at step {self.global_step}.")
@@ -48,15 +46,28 @@ class ImageCodecTrainer(CompressAICodecTrainer):
         total_aux_loss = 0.0
 
         for lmbda, (model_name, model_instance) in zip(self.lmbda, self.model_wrapper.items()):
-            model_instance: Union[ImageCodec, CompressionModel]
+            model_instance: CompressionModel
 
-            out = model_instance.forward(
-                ImageCodecForwardInput(
-                    x=batch
-                )
-            )
+            out = model_instance(batch)
 
-            loss = self.loss_fn(lmbda, out)
+            metrics = self.metrics_collector.forward(out, {"x": batch})
+            loss = self.loss_fn(lmbda, metrics)
+            
+            # bpp = sum(
+            #     torch.log(likelihood).sum() / (-math.log(2))
+            #     for likelihood in out["likelihoods"].values()
+            # ) / batch.size(0) / batch.size(2) / batch.size(3)
+            
+            # mse_loss = F.mse_loss(out["x_hat"], batch)
+            # psnr = 10 * torch.log10(1 / mse_loss)
+            # loss = mse_loss * 255 ** 2 * lmbda + bpp
+            
+            # if model_name == "codec_0":
+            #     self.bar_metrics({
+            #         "loss": loss,
+            #         "bpp": bpp,
+            #         "psnr": psnr,
+            #     })
 
             total_loss += loss
             total_aux_loss += model_instance.aux_loss()
@@ -65,17 +76,17 @@ class ImageCodecTrainer(CompressAICodecTrainer):
             if model_name == "codec_0":
                 self.bar_metrics({
                     "loss": loss,
-                    "bpp": out.bpp,
-                    "psnr": out.psnr,
-                    "ms-ssim": out.ms_ssim
+                    "bpp": metrics.bpp,
+                    "psnr": metrics.psnr,
+                    "ms-ssim": metrics.ms_ssim
                 })
 
-            self.log_train_metrics(model_name, {
-                "loss": loss,
-                "bpp": out.bpp,
-                "psnr": out.psnr,
-                "ms-ssim": out.ms_ssim
-            })
+            # self.log_train_metrics(model_name, {
+            #     "loss": loss,
+            #     "bpp": metrics.bpp,
+            #     "psnr": metrics.psnr,
+            #     "ms-ssim": metrics.ms_ssim
+            # })
 
         self.manual_backward(total_loss)
         torch.nn.utils.clip_grad_norm_(self.model_wrapper.parameters(), 1.0)
@@ -89,63 +100,58 @@ class ImageCodecTrainer(CompressAICodecTrainer):
 
     def validation_step(self, batch, batch_idx):
         for model_name, model_instance in self.model_wrapper.items():
-            model_instance: Union[ImageCodec, CompressionModel]
-            out = model_instance.forward(
-                ImageCodecForwardInput(
-                    x=batch
-                )
-            )
+            model_instance: CompressionModel
+            out = model_instance(batch)
+            
+            metrics = self.metrics_collector(out, {"x": batch})
 
             self.log_val_metrics(model_name, {
-                "bpp": out.bpp,
-                "psnr": out.psnr,
-                "ms-ssim": out.ms_ssim
+                "bpp": metrics.bpp,
+                "psnr": metrics.psnr,
+                "ms-ssim": metrics.ms_ssim
             })
 
     def test_step(self, batch, batch_idx):
+        x = batch
         for model_name, model_instance in self.model_wrapper.items():
-            model_instance: Union[ImageCodec, CompressionModel]
-            with self.metric.timer(model_name, "encoding_time"):
-                out_compress = model_instance.compress(
-                    ImageCodecCompressInput(
-                        x=batch
-                    )
-                )
-            with self.metric.timer(model_name, "decoding_time"):
-                out_decompress = model_instance.decompress(out_compress)
-
-            mse_loss = torch.nn.functional.mse_loss(out_decompress.x_hat, batch)
-
-            psnr = 10 * torch.log10(1 / mse_loss)
-
-            ms_ssim_metric = ms_ssim(
-                out_decompress.x_hat, 
-                batch, 
-                data_range=1.0, 
-                size_average=True
-            )
+            model_instance: CompressionModel
+            with self.metric_logger.timer(model_name, "encoding_time"):
+                out_compress = model_instance.compress(x)
+            with self.metric_logger.timer(model_name, "decoding_time"):
+                out_decompress = model_instance.decompress(**out_compress)
+                
+            metrics = self.metrics_collector(out_compress, out_decompress, {"x": batch})
 
             self.log_test_metrics(model_name, {
-                "bpp": out_compress.bpp,
-                "psnr": psnr,
-                "ms-ssim": ms_ssim_metric
+                "bpp": metrics.bpp,
+                "psnr": metrics.psnr,
+                "ms-ssim": metrics.ms_ssim
             })
 
             if self.save_recon_imgs:
-                to_pil = transforms.ToPILImage()
-
-                img_tensor = out_decompress.x_hat[0].clamp(0, 1)
-                img_pil = to_pil(img_tensor.cpu())
-
-                output_dir = os.path.join(
-                    self.trainer.default_root_dir, 
-                    "recon_imgs", 
-                    model_name
+                save_image(
+                    out_decompress["x_hat"].clamp(0, 1),
+                    os.path.join(
+                        self.trainer.default_root_dir,
+                        "recon_imgs",
+                        model_name,
+                        f"recon_{batch_idx:04d}_{self.model_type}_{metrics.bpp:.4f}_{metrics.psnr:.2f}_{metrics.ms_ssim:.4f}.png"
+                    )
                 )
-                os.makedirs(output_dir, exist_ok=True)
+                # to_pil = transforms.ToPILImage()
 
-                img_path = os.path.join(
-                    output_dir, 
-                    f"recon_{batch_idx:04d}_{self.model_type}_{out_compress.bpp:.4f}_{psnr:.2f}_{ms_ssim_metric:.4f}.png"
-                )
-                img_pil.save(img_path)
+                # img_tensor = out_decompress.x_hat[0].clamp(0, 1)
+                # img_pil = to_pil(img_tensor.cpu())
+
+                # output_dir = os.path.join(
+                #     self.trainer.default_root_dir, 
+                #     "recon_imgs", 
+                #     model_name
+                # )
+                # os.makedirs(output_dir, exist_ok=True)
+
+                # img_path = os.path.join(
+                #     output_dir, 
+                #     f"recon_{batch_idx:04d}_{self.model_type}_{out_compress.bpp:.4f}_{metrics.psnr:.2f}_{metrics.ms_ssim:.4f}.png"
+                # )
+                # img_pil.save(img_path)

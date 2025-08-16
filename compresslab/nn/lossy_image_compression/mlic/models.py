@@ -3,7 +3,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import time
 from compresslab.core.models import CompressionModel
 from compresslab.core.entropy_models import EntropyBottleneck
 from compresslab.core.ops import quantize_ste
@@ -11,17 +10,8 @@ from compresslab.ans import BufferedRansEncoder, RansDecoder
 from compresslab.nn.lossy_image_compression.mlic.utils.func import update_registered_buffers, get_scale_table
 from compresslab.nn.lossy_image_compression.mlic.utils.ckbd import *
 from compresslab.nn.lossy_image_compression.mlic.transform import *
-from compresslab.nn.lossy_image_compression.abc import (
-    ImageCodec,
-    ImageCodecForwardInput,
-    ImageCodecForwardOutput,
-    ImageCodecCompressInput,
-    ImageCodecCompressOutput,
-    ImageCodecLikelihoods,
-    ImageCodecDecompressOutput
-)
 
-class MLICPlusPlus(ImageCodec):
+class MLICPlusPlus(CompressionModel):
     def __init__(self, N=192, M=320, slice_num=10, context_window=5, **kwargs):
         super().__init__(**kwargs)
         slice_ch = M // slice_num
@@ -86,9 +76,9 @@ class MLICPlusPlus(ImageCodec):
         )
 
 
-    def forward(self, input: ImageCodecForwardInput) -> ImageCodecForwardOutput:
-        self.update_resolutions(input.x.size(2) // 16, input.x.size(3) // 16)
-        y = self.g_a(input.x)
+    def forward(self, x: Tensor):
+        self.update_resolutions(x.size(2) // 16, x.size(3) // 16)
+        y = self.g_a(x)
         z = self.h_a(y)
         _, z_likelihoods = self.entropy_bottleneck(z)
         z_offset = self.entropy_bottleneck._get_medians()
@@ -175,15 +165,14 @@ class MLICPlusPlus(ImageCodec):
         y_hat = torch.cat(y_hat_slices, dim=1)
         y_likelihoods = torch.cat(y_likelihoods, dim=1)
         x_hat = self.g_s(y_hat)
-
-        return ImageCodecForwardOutput(
-            x=input.x,
-            x_hat=x_hat,
-            likelihoods=ImageCodecLikelihoods(
-                y=y_likelihoods,
-                z=z_likelihoods
-            )
-        )
+        
+        return {
+            "x_hat": x_hat,
+            "likelihoods": {
+                "y": y_likelihoods,
+                "z": z_likelihoods,
+            }
+        }
 
     def update_resolutions(self, H, W):
         for i in range(len(self.global_intra_context)):
@@ -192,9 +181,9 @@ class MLICPlusPlus(ImageCodec):
             else:
                 self.local_context[i].update_resolution(H, W, next(self.parameters()).device, mask=self.local_context[0].attn_mask)
 
-    def compress(self, input: ImageCodecCompressInput) -> ImageCodecCompressOutput:
-        self.update_resolutions(input.x.size(2) // 16, input.x.size(3) // 16)
-        y = self.g_a(input.x)
+    def compress(self, x: Tensor):
+        self.update_resolutions(x.size(2) // 16, x.size(3) // 16)
+        y = self.g_a(x)
         z = self.h_a(y)
         z_strings = self.entropy_bottleneck.compress(z)
         z_hat = self.entropy_bottleneck.decompress(z_strings, z.size()[-2:])
@@ -273,18 +262,14 @@ class MLICPlusPlus(ImageCodec):
         encoder.encode_with_indexes(symbols_list, indexes_list, cdf, cdf_lengths, offsets)
         y_string = encoder.flush()
         y_strings.append(y_string)
+        
+        return {"strings": [y_strings, z_strings], "shape": z.size()[-2:]}
 
-        return ImageCodecCompressOutput(
-            x=input.x,
-            y_strings=y_strings,
-            z_strings=z_strings,
-            shape=(input.x.size(2), input.x.size(3))
-        )
-
-    def decompress(self, input: ImageCodecCompressOutput) -> ImageCodecDecompressOutput:
-        y_strings = input.y_strings[0]
-        z_strings = input.z_strings
-        z_hat = self.entropy_bottleneck.decompress(z_strings, input.shape)
+    def decompress(self, strings, shape):
+        assert isinstance(strings, list) and len(strings) == 2, "Input strings must be a list of two elements: [y_strings, z_strings]"
+        y_strings = strings[0]
+        z_strings = strings[1]
+        z_hat = self.entropy_bottleneck.decompress(z_strings, shape)
 
         self.update_resolutions(z_hat.size(2) * 4, z_hat.size(3) * 4)
         hyper_params = self.h_s(z_hat)
@@ -359,7 +344,7 @@ class MLICPlusPlus(ImageCodec):
         y_hat = torch.cat(y_hat_slices, dim=1)
         x_hat = self.g_s(y_hat)
 
-        return ImageCodecDecompressOutput(x_hat=x_hat)
+        return {"x_hat": x_hat}
 
     def load_state_dict(self, state_dict):
         update_registered_buffers(

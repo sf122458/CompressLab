@@ -21,12 +21,10 @@ class BasicDataModule(L.LightningDataModule):
         self.test_data_dir = test_data_dir
         self.batch_size_per_device = batch_size // num_devices
         self.num_workers = num_workers
-
-    def setup(self, stage=None):
+        
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
-        raise NotImplementedError("This method should be overridden by subclasses.")
     
     def train_dataloader(self):
         return DataLoader(self.train_dataset, 

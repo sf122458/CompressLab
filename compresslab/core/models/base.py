@@ -171,6 +171,12 @@ class CompressionModel(nn.Module):
         """
         loss = sum(m.loss() for m in self.modules() if isinstance(m, EntropyBottleneck))
         return cast(Tensor, loss)
+    
+    def compress(self, *args, **kwargs):
+        raise NotImplementedError
+    
+    def decompress(self, *args, **kwargs):
+        raise NotImplementedError
 
 
 class SimpleVAECompressionModel(CompressionModel):

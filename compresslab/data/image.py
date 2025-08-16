@@ -1,6 +1,6 @@
 import lightning as L
 import os
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from torchvision import transforms
 from PIL import Image
 from compresslab.utils.registry import DataRegistry
@@ -11,10 +11,12 @@ class BasicImageDataset(Dataset):
     """
     A simplest image dataset.
     """
-    def __init__(self,
-                 path: str,
-                 transform=None,
-                 **kwargs):
+    def __init__(
+        self,
+        path: str,
+        transform=None,
+        **kwargs
+    ):
         
         self.path = path
         if transform is None:
@@ -37,30 +39,31 @@ class BasicImageDataModule(BasicDataModule):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.train_transform = transforms.Compose([
+        train_transform = transforms.Compose([
             transforms.RandomCrop((256, 256)),
+            transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
         ])
 
-        self.test_transform = transforms.Compose([
+        test_transform = transforms.Compose([
             transforms.ToTensor(),
         ])
-
-    def setup(self, stage):
+        
         self.train_dataset = BasicImageDataset(
             self.train_data_dir, 
-            transform=self.train_transform
+            transform=train_transform
         )
 
         self.val_dataset = BasicImageDataset(
             self.test_data_dir, 
-            transform=self.test_transform
+            transform=test_transform
         )
 
         self.test_dataset = BasicImageDataset(
             self.test_data_dir, 
-            transform=self.test_transform
+            transform=test_transform
         )
+        
 
 
 # https://github.com/InterDigitalInc/CompressAI/blob/master/compressai/datasets/vimeo90k.py
@@ -131,29 +134,29 @@ class Vimeo90kImageDataModule(BasicDataModule):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.train_transform = transforms.Compose([
+        train_transform = transforms.Compose([
             transforms.RandomCrop((256, 256)),
+            transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
         ])
 
-        self.test_transform = transforms.Compose([
+        test_transform = transforms.Compose([
             transforms.ToTensor(),
         ])
 
-    def setup(self, stage):
         self.train_dataset = Vimeo90kDataset(
             root=self.train_data_dir,
-            transform=self.train_transform,
+            transform=train_transform,
             split="train",
             tuplet=7
         )
 
         self.val_dataset = BasicImageDataset(
             self.test_data_dir, 
-            transform=self.test_transform
+            transform=test_transform
         )
 
         self.test_dataset = BasicImageDataset(
             self.test_data_dir, 
-            transform=self.test_transform
+            transform=test_transform
         )

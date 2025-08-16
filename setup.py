@@ -66,6 +66,8 @@ setup(
         "torch==2.6.0",
         "torchvision==0.21.0",
         "tensorboard",
+        "transformers",
+        "diffusers",
     ],
     ext_modules=get_extensions(),
     cmdclass={"build_ext": build_ext},

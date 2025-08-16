@@ -26,15 +26,6 @@ from compresslab.core.layers import (
 from compresslab.ans import BufferedRansEncoder, RansDecoder
 from compresslab.core.models import SimpleVAECompressionModel
 from compresslab.core.layers import ResidualBottleneckBlock
-from compresslab.nn.lossy_image_compression.abc import (
-    ImageCodec, 
-    ImageCodecForwardInput,
-    ImageCodecForwardOutput,
-    ImageCodecCompressInput,
-    ImageCodecCompressOutput,
-    ImageCodecLikelihoods,
-    ImageCodecDecompressOutput
-)
 import torch.nn as nn
 import torch
 import warnings
@@ -42,7 +33,7 @@ import torch.nn.functional as F
 from torch import Tensor
 import types
 
-class FactorizedPrior(ImageCodec):
+class FactorizedPrior(CompressionModel):
     r"""Factorized Prior model from J. Balle, D. Minnen, S. Singh, S.J. Hwang,
     N. Johnston: `"Variational Image Compression with a Scale Hyperprior"
     <https://arxiv.org/abs/1802.01436>`_, Int Conf. on Learning Representations
@@ -105,35 +96,34 @@ class FactorizedPrior(ImageCodec):
         self.N = N
         self.M = M
         
-    def forward(self, input: ImageCodecForwardInput) -> ImageCodecForwardOutput:
-        y = self.g_a(input.x)
+    @property
+    def downsampling_factor(self) -> int:
+        return 2 ** 4
+        
+    def forward(self, x):
+        y = self.g_a(x)
         y_hat, y_likelihoods = self.entropy_bottleneck(y)
         x_hat = self.g_s(y_hat)
-        return ImageCodecForwardOutput(
-            x=input.x,
-            x_hat=x_hat,
-            likelihoods= ImageCodecLikelihoods(
-                y=y_likelihoods
-                )
-            )
+        return {
+            "x_hat": x_hat,
+            "likelihoods": {
+                "y": y_likelihoods
+            }
+        }
     
-    def compress(self, input: ImageCodecCompressInput) -> ImageCodecCompressOutput:
-        y = self.g_a(input.x)
+    def compress(self, x):
+        y = self.g_a(x)
         y_strings = self.entropy_bottleneck.compress(y)
-        return ImageCodecCompressOutput(
-            x=input.x,
-            y_strings=y_strings,
-            shape=y.size()[-2:]
-        )
+        return {"strings": [y_strings], "shape": y.size()[-2:]}
             
 
-    def decompress(self, input: ImageCodecCompressOutput) -> ImageCodecDecompressOutput:
-        assert isinstance(input.y_strings, list) and len(input.y_strings) == 1
-        y_hat = self.entropy_bottleneck.decompress(input.y_strings, input.shape)
+    def decompress(self, strings, shape):
+        assert isinstance(strings, list) and len(strings) == 1
+        y_hat = self.entropy_bottleneck.decompress(strings[0], shape)
         x_hat = self.g_s(y_hat).clamp_(0, 1)
-        return ImageCodecDecompressOutput(x_hat=x_hat)
+        return {"x_hat": x_hat}
    
-class ScaleHyperprior(ImageCodec):
+class ScaleHyperprior(CompressionModel):
     r"""Scale Hyperprior model from J. Balle, D. Minnen, S. Singh, S.J. Hwang,
     N. Johnston: `"Variational Image Compression with a Scale Hyperprior"
     <https://arxiv.org/abs/1802.01436>`_ Int. Conf. on Learning Representations
@@ -220,25 +210,21 @@ class ScaleHyperprior(ImageCodec):
     def downsampling_factor(self) -> int:
         return 2 ** (4 + 2)
 
-    def forward(self, input: ImageCodecForwardInput) -> ImageCodecForwardOutput:
-        y = self.g_a(input.x)
+    def forward(self, x: Tensor):
+        y = self.g_a(x)
         z = self.h_a(torch.abs(y))
         z_hat, z_likelihoods = self.entropy_bottleneck(z)
         scales_hat = self.h_s(z_hat)
         y_hat, y_likelihoods = self.gaussian_conditional(y, scales_hat)
         x_hat = self.g_s(y_hat)
 
-        return ImageCodecForwardOutput(
-            x=input.x,
-            x_hat=x_hat,
-            likelihoods=ImageCodecLikelihoods(
-                y=y_likelihoods,
-                z=z_likelihoods
-            )
-        )
+        return {
+            "x_hat": x_hat,
+            "likelihoods": {"y": y_likelihoods, "z": z_likelihoods},
+        }
 
-    def compress(self, input: ImageCodecCompressInput) -> ImageCodecCompressOutput:
-        y = self.g_a(input.x)
+    def compress(self, x: Tensor):
+        y = self.g_a(x)
         z = self.h_a(torch.abs(y))
 
         z_strings = self.entropy_bottleneck.compress(z)
@@ -247,21 +233,16 @@ class ScaleHyperprior(ImageCodec):
         scales_hat = self.h_s(z_hat)
         indexes = self.gaussian_conditional.build_indexes(scales_hat)
         y_strings = self.gaussian_conditional.compress(y, indexes)
-        return ImageCodecCompressOutput(
-            x=input.x,
-            y_strings=y_strings,
-            z_strings=z_strings,
-            shape=z.size()[-2:]
-        )
+        return {"strings": [y_strings, z_strings], "shape": z.size()[-2:]}
 
-    def decompress(self, input: ImageCodecCompressOutput) -> ImageCodecDecompressOutput:
-        assert isinstance(input.z_strings, list) and isinstance(input.y_strings, list)
-        z_hat = self.entropy_bottleneck.decompress(input.z_strings, input.shape)
+    def decompress(self, strings, shape):
+        assert isinstance(strings, list) and len(strings) == 2
+        z_hat = self.entropy_bottleneck.decompress(strings[1], shape)
         scales_hat = self.h_s(z_hat)
         indexes = self.gaussian_conditional.build_indexes(scales_hat)
-        y_hat = self.gaussian_conditional.decompress(input.y_strings, indexes, z_hat.dtype)
+        y_hat = self.gaussian_conditional.decompress(strings[0], indexes, z_hat.dtype)
         x_hat = self.g_s(y_hat).clamp_(0, 1)
-        return ImageCodecDecompressOutput(x_hat=x_hat)
+        return {"x_hat": x_hat}
 
 class MeanScaleHyperprior(ScaleHyperprior):
     r"""Scale Hyperprior with non zero-mean Gaussian conditionals from D.
@@ -319,8 +300,8 @@ class MeanScaleHyperprior(ScaleHyperprior):
             conv(M * 3 // 2, M * 2, stride=1, kernel_size=3),
         )
 
-    def forward(self, input: ImageCodecForwardInput) -> ImageCodecForwardOutput:
-        y = self.g_a(input.x)
+    def forward(self, x: Tensor):
+        y = self.g_a(x)
         z = self.h_a(y)
         z_hat, z_likelihoods = self.entropy_bottleneck(z)
         gaussian_params = self.h_s(z_hat)
@@ -328,17 +309,13 @@ class MeanScaleHyperprior(ScaleHyperprior):
         y_hat, y_likelihoods = self.gaussian_conditional(y, scales_hat, means=means_hat)
         x_hat = self.g_s(y_hat)
 
-        return ImageCodecForwardOutput(
-            x=input.x,
-            x_hat=x_hat,
-            likelihoods=ImageCodecLikelihoods(
-                y=y_likelihoods,
-                z=z_likelihoods
-            )
-        )
+        return {
+            "x_hat": x_hat,
+            "likelihoods": {"y": y_likelihoods, "z": z_likelihoods},
+        }
 
-    def compress(self, input: ImageCodecCompressInput) -> ImageCodecCompressOutput:
-        y = self.g_a(input.x)
+    def compress(self, x: Tensor):
+        y = self.g_a(x)
         z = self.h_a(y)
 
         z_strings = self.entropy_bottleneck.compress(z)
@@ -348,25 +325,20 @@ class MeanScaleHyperprior(ScaleHyperprior):
         scales_hat, means_hat = gaussian_params.chunk(2, 1)
         indexes = self.gaussian_conditional.build_indexes(scales_hat)
         y_strings = self.gaussian_conditional.compress(y, indexes, means=means_hat)
-        return ImageCodecCompressOutput(
-            x=input.x,
-            y_strings=y_strings,
-            z_strings=z_strings,
-            shape=z.size()[-2:]
-        )
+        return {"strings": [y_strings, z_strings], "shape": z.size()[-2:]}
 
 
-    def decompress(self, input: ImageCodecCompressOutput) -> ImageCodecDecompressOutput:
-        assert isinstance(input.y_strings, list) and isinstance(input.z_strings, list)
-        z_hat = self.entropy_bottleneck.decompress(input.z_strings, input.shape)
+    def decompress(self, strings, shape):
+        assert isinstance(strings, list) and len(strings) == 2
+        z_hat = self.entropy_bottleneck.decompress(strings[1], shape)
         gaussian_params = self.h_s(z_hat)
         scales_hat, means_hat = gaussian_params.chunk(2, 1)
         indexes = self.gaussian_conditional.build_indexes(scales_hat)
         y_hat = self.gaussian_conditional.decompress(
-            input.y_strings, indexes, means=means_hat
+            strings[0], indexes, means=means_hat
         )
         x_hat = self.g_s(y_hat).clamp_(0, 1)
-        return ImageCodecDecompressOutput(x_hat=x_hat)
+        return {"x_hat": x_hat}
 
 class JointAutoregressiveHierarchicalPriors(MeanScaleHyperprior):
     r"""Joint Autoregressive Hierarchical Priors model from D.
@@ -468,8 +440,8 @@ class JointAutoregressiveHierarchicalPriors(MeanScaleHyperprior):
     def downsampling_factor(self) -> int:
         return 2 ** (4 + 2)
 
-    def forward(self, input: ImageCodecForwardInput) -> ImageCodecForwardOutput:
-        y = self.g_a(input.x)
+    def forward(self, x):
+        y = self.g_a(x)
         z = self.h_a(y)
         z_hat, z_likelihoods = self.entropy_bottleneck(z)
         params = self.h_s(z_hat)
@@ -485,16 +457,12 @@ class JointAutoregressiveHierarchicalPriors(MeanScaleHyperprior):
         _, y_likelihoods = self.gaussian_conditional(y, scales_hat, means=means_hat)
         x_hat = self.g_s(y_hat)
 
-        return ImageCodecForwardOutput(
-            x=input.x,
-            x_hat=x_hat,
-            likelihoods=ImageCodecLikelihoods(
-                y=y_likelihoods,
-                z=z_likelihoods
-            )
-        )
+        return {
+            "x_hat": x_hat,
+            "likelihoods": {"y": y_likelihoods, "z": z_likelihoods},
+        }
 
-    def compress(self, input: ImageCodecCompressInput) -> ImageCodecCompressOutput:
+    def compress(self, x):
         if next(self.parameters()).device != torch.device("cpu"):
             warnings.warn(
                 "Inference on GPU is not recommended for the autoregressive "
@@ -502,7 +470,7 @@ class JointAutoregressiveHierarchicalPriors(MeanScaleHyperprior):
                 stacklevel=2,
             )
 
-        y = self.g_a(input.x)
+        y = self.g_a(x)
         z = self.h_a(y)
 
         z_strings = self.entropy_bottleneck.compress(z)
@@ -531,12 +499,7 @@ class JointAutoregressiveHierarchicalPriors(MeanScaleHyperprior):
             )
             y_strings.append(string)
 
-        return ImageCodecCompressOutput(
-            x=input.x,
-            y_strings=y_strings,
-            z_strings=z_strings,
-            shape=z.size()[-2:],
-        )
+        return {"strings": [y_strings, z_strings], "shape": z.size()[-2:]}
 
     def _compress_ar(self, y_hat, params, height, width, kernel_size, padding):
         cdf = self.gaussian_conditional.quantized_cdf.tolist()
@@ -582,8 +545,8 @@ class JointAutoregressiveHierarchicalPriors(MeanScaleHyperprior):
         string = encoder.flush()
         return string
 
-    def decompress(self, input: ImageCodecCompressOutput) -> ImageCodecDecompressOutput:
-        assert isinstance(input.z_strings, list) and isinstance(input.y_strings, list)
+    def decompress(self, strings, shape):
+        assert isinstance(strings, list) and len(strings) == 2
 
         if next(self.parameters()).device != torch.device("cpu"):
             warnings.warn(
@@ -595,7 +558,7 @@ class JointAutoregressiveHierarchicalPriors(MeanScaleHyperprior):
         # FIXME: we don't respect the default entropy coder and directly call the
         # range ANS decoder
 
-        z_hat = self.entropy_bottleneck.decompress(input.z_strings, input.shape)
+        z_hat = self.entropy_bottleneck.decompress(strings[1], shape)
         params = self.h_s(z_hat)
 
         s = 4  # scaling factor between z and y
@@ -612,7 +575,7 @@ class JointAutoregressiveHierarchicalPriors(MeanScaleHyperprior):
             device=z_hat.device,
         )
 
-        for i, y_string in enumerate(input.y_strings):
+        for i, y_string in enumerate(strings[0]):
             self._decompress_ar(
                 y_string,
                 y_hat[i : i + 1],
@@ -625,7 +588,7 @@ class JointAutoregressiveHierarchicalPriors(MeanScaleHyperprior):
 
         y_hat = F.pad(y_hat, (-padding, -padding, -padding, -padding))
         x_hat = self.g_s(y_hat).clamp_(0, 1)
-        return ImageCodecDecompressOutput(x_hat=x_hat)
+        return {"x_hat": x_hat}
 
     def _decompress_ar(
         self, y_string, y_hat, params, height, width, kernel_size, padding
@@ -770,7 +733,7 @@ class Cheng2020Attention(Cheng2020Anchor):
         )
 
 
-class Cheng2020AnchorCheckerboard(SimpleVAECompressionModel, ImageCodec):
+class Cheng2020AnchorCheckerboard(SimpleVAECompressionModel, CompressionModel):
     """Cheng2020 anchor model with checkerboard context model.
 
     Base transform model from [Cheng2020]. Context model from [He2021].
@@ -865,32 +828,8 @@ class Cheng2020AnchorCheckerboard(SimpleVAECompressionModel, ImageCodec):
             },
         )
 
-    def forward(self, input: ImageCodecForwardInput) -> ImageCodecForwardOutput:
-        out = super().forward(input.x)
-        return ImageCodecForwardOutput(
-            x=input.x,
-            x_hat=out["x_hat"],
-            likelihoods=ImageCodecLikelihoods(
-                y=out["likelihoods"]["y"],
-                z=out["likelihoods"]["z"]
-            )
-        )
-    
-    def compress(self, input: ImageCodecCompressInput) -> ImageCodecCompressOutput:
-        out = super().compress(input.x)
-        return ImageCodecCompressOutput(
-            x=input.x,
-            y_strings=out["strings"][0:-1],
-            z_strings=out["strings"][-1],
-            shape=out["shape"]
-        )
-    
-    def decompress(self, input: ImageCodecCompressOutput) -> ImageCodecDecompressOutput:
-        out = super().decompress(strings=[*input.y_strings, input.z_strings], 
-                                 shape=input.shape)
-        return ImageCodecDecompressOutput(x_hat=out["x_hat"])
 
-class Elic2022Official(SimpleVAECompressionModel, ImageCodec):
+class Elic2022Official(SimpleVAECompressionModel, CompressionModel):
     """ELIC 2022; uneven channel groups with checkerboard spatial context.
 
     Context model from [He2022].
@@ -1050,32 +989,7 @@ class Elic2022Official(SimpleVAECompressionModel, ImageCodec):
             },
         )
 
-    def forward(self, input: ImageCodecForwardInput) -> ImageCodecForwardOutput:
-        out = super().forward(input.x)
-        return ImageCodecForwardOutput(
-            x=input.x,
-            x_hat=out["x_hat"],
-            likelihoods=ImageCodecLikelihoods(
-                y=out["likelihoods"]["y"],
-                z=out["likelihoods"]["z"]
-            )
-        )
-    
-    def compress(self, input: ImageCodecCompressInput) -> ImageCodecCompressOutput:
-        out = super().compress(input.x)
-        return ImageCodecCompressOutput(
-            x=input.x,
-            y_strings=out["strings"][0:-1],
-            z_strings=out["strings"][-1],
-            shape=out["shape"]
-        )
-    
-    def decompress(self, input: ImageCodecCompressOutput) -> ImageCodecDecompressOutput:
-        out = super().decompress(strings=[*input.y_strings, input.z_strings], 
-                                 shape=input.shape)
-        return ImageCodecDecompressOutput(x_hat=out["x_hat"])
-
-class Elic2022Chandelier(SimpleVAECompressionModel, ImageCodec):
+class Elic2022Chandelier(SimpleVAECompressionModel, CompressionModel):
     """ELIC 2022; simplified context model using only first and most recent groups.
 
     Context model from [He2022], with simplifications and parameters
@@ -1269,28 +1183,3 @@ class Elic2022Chandelier(SimpleVAECompressionModel, ImageCodec):
         chan_groups_latent_codec = self.latent_codec["y"]
         obj = chan_groups_latent_codec
         obj.merge_y = types.MethodType(merge_y, obj)
-
-    def forward(self, input: ImageCodecForwardInput) -> ImageCodecForwardOutput:
-        out = super().forward(input.x)
-        return ImageCodecForwardOutput(
-            x=input.x,
-            x_hat=out["x_hat"],
-            likelihoods=ImageCodecLikelihoods(
-                y=out["likelihoods"]["y"],
-                z=out["likelihoods"]["z"]
-            )
-        )
-    
-    def compress(self, input: ImageCodecCompressInput) -> ImageCodecCompressOutput:
-        out = super().compress(input.x)
-        return ImageCodecCompressOutput(
-            x=input.x,
-            y_strings=out["strings"][0:-1],
-            z_strings=out["strings"][-1],
-            shape=out["shape"]
-        )
-    
-    def decompress(self, input: ImageCodecCompressOutput) -> ImageCodecDecompressOutput:
-        out = super().decompress(strings=[*input.y_strings, input.z_strings], 
-                                 shape=input.shape)
-        return ImageCodecDecompressOutput(x_hat=out["x_hat"])

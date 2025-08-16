@@ -19,6 +19,29 @@ class GeneralCodecExtParams(BaseModel):
     SaveRecon: bool = Field(
         default=False, description="Whether to save reconstructed images/videos.",
     )
+    
+    # Extra parameters for the trainable codec.
+    Lr: Optional[float] = Field(default=1e-4, description="Learning rate.")
+    FinetuneRatio: Optional[float] = Field(
+        default=1.0, description="The ratio of training steps for MS-SSIM model fine-tuning."
+    )
+    FinetuneStep: Optional[int] = Field(
+        default=-1, description="The ratio of training steps for MS-SSIM model fine-tuning." \
+        "If `FinetuneStep` <= 0, `FinetuneRatio` will be used else `FinetuneStep` will override the `FinetuneRatio`."
+    )
+    
+    # Compression levels
+    Lmbda: Union[float, List[float], Dict[str, List[float]]] = Field(
+        default=0.0018,
+        description="Compression levels for the codec." \
+        "It supports a single float value, a list of floats, or a dictionary with keys 'mse' and 'ms-ssim'." \
+        "If you set the fine-tuning step with `FinetuneRatio` or `FinetuneStep`, `Lmbda` must be a dictionary with keys 'mse' and 'ms-ssim'." \
+    )
+    
+    # NOTE: `vmap` can't always accelerate the forward pass, use with caution.
+    VmapForward: bool = Field(
+        default=False, description="Whether to use vmap for forward pass."
+    )
 
 class GeneralCodec(BaseModel):
     """Base class for general codecs.
@@ -33,50 +56,6 @@ class GeneralCodec(BaseModel):
     ExtParams: Optional[GeneralCodecExtParams] = Field(
         default_factory=GeneralCodecExtParams,
         description="Additional parameters for the codec.",
-    )
-
-class TrainableCodecExtParams(GeneralCodecExtParams):
-    """Extra parameters for the trainable codec.
-    """
-    Lr: Optional[float] = Field(default=1e-4, description="Learning rate.")
-    FinetuneRatio: Optional[float] = Field(
-        default=1.0, description="The ratio of training steps for MS-SSIM model fine-tuning."
-    )
-    FinetuneStep: Optional[int] = Field(
-        default=-1, description="The ratio of training steps for MS-SSIM model fine-tuning." \
-        "If `FinetuneStep` <= 0, `FinetuneRatio` will be used else `FinetuneStep` will override the `FinetuneRatio`."
-    )
-
-class TrainableCodec(GeneralCodec):
-    """Base class for trainable codecs.
-    """
-    ExtParams: Optional[TrainableCodecExtParams] = Field(
-        default_factory=TrainableCodecExtParams,
-        description="Additional parameters for the trainable codec."
-    )
-
-
-
-class CompressAICodecExtParams(TrainableCodecExtParams):
-    """Extra parameters for the CompressAI codec."""
-    # Compression levels
-    Lmbda: Union[float, List[float], Dict[str, List[float]]] = Field(
-        description="Compression levels for the codec." \
-        "It supports a single float value, a list of floats, or a dictionary with keys 'mse' and 'ms-ssim'." \
-        "If you set the fine-tuning step with `FinetuneRatio` or `FinetuneStep`, `Lmbda` must be a dictionary with keys 'mse' and 'ms-ssim'." \
-    )
-    
-    # NOTE: `vmap` can't always accelerate the forward pass, use with caution.
-    VmapForward: bool = Field(
-        default=False, description="Whether to use vmap for forward pass."
-    )
-    
-class CompressAICodec(TrainableCodec):
-    """Base class for CompressAI codecs.
-    """
-    ExtParams: Optional[CompressAICodecExtParams] = Field(
-        default_factory=CompressAICodecExtParams,
-        description="Additional parameters for the CompressAI codec."
     )
 
 
@@ -110,7 +89,7 @@ class EnvClass(BaseModel):
 
 class Config(BaseModel):
     Global: Optional[Dict[str, Any]] = None
-    Model: List[Union[GeneralCodec, TrainableCodec, CompressAICodec]]
+    Model: List[GeneralCodec]
     Data: DataSetting
     Train: TrainClass
     Env: EnvClass

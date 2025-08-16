@@ -7,9 +7,9 @@ import torch.nn as nn
 from typing import Dict, Any, Type
 from .wrapper import ModelWrapper
 from compresslab.utils.config import (
-    GeneralCodecExtParams,
-    CompressAICodecExtParams
+    GeneralCodecExtParams
 )
+from compresslab.nn.base.metrics import MetricsCollector
 
 class BasicTrainer(L.LightningModule):
     """
@@ -23,7 +23,7 @@ class BasicTrainer(L.LightningModule):
 
         self.save_recon_imgs = ext_params.SaveRecon
 
-        self.metric = MetricLogger()
+        self.metric_logger = MetricLogger()
 
         # some functions to log metrics
         self.bar_metrics = lambda metrics: self.log_dict(
@@ -43,8 +43,8 @@ class BasicTrainer(L.LightningModule):
             on_step=False, on_epoch=True, logger=True, sync_dist=True
         )
 
-        self.log_test_metrics = lambda model_name, metrics: self.metric.log(model_name, metrics) \
-            if self.metric is not None else self.log_dict(
+        self.log_test_metrics = lambda model_name, metrics: self.metric_logger.log(model_name, metrics) \
+            if self.metric_logger is not None else self.log_dict(
             {f"test/{model_name}.{k}": v for k, v in metrics.items()},
             on_step=False, on_epoch=True, logger=True, sync_dist=True
         )
@@ -54,6 +54,10 @@ class BasicTrainer(L.LightningModule):
             on_step=False, on_epoch=True, logger=True, 
             sync_dist=True, rank_zero_only=True
         )
+        
+        
+        # metrics collector
+        self.metrics_collector = MetricsCollector()
 
     def on_train_batch_end(self, output, batch, batch_idx):
         """
@@ -63,7 +67,7 @@ class BasicTrainer(L.LightningModule):
         - Adjust the learning rate or other hyperparameters if needed.
         - Multi stage training (Loss function modification).
         """
-        raise NotImplementedError("Please implement the `on_train_batch_end` method in your trainer class.")
+        pass
 
     def training_step(self, batch, batch_idx):
         raise NotImplementedError("Please implement the `training_step` method in your trainer class.")
@@ -72,25 +76,30 @@ class BasicTrainer(L.LightningModule):
         raise NotImplementedError("Please implement the `validation_step` method in your trainer class.")
 
     def on_test_start(self):
-        raise NotImplementedError("Please implement the `on_test_start` method in your trainer class.")
+        self.metric_logger.reset_dir_and_filename(
+            save_dir=self.trainer.default_root_dir,
+        )
 
     def test_step(self, batch, batch_idx):
         raise NotImplementedError("Please implement the `test_step` method in your trainer class.")
 
     def on_test_end(self):
-        raise NotImplementedError("Please implement the `on_test_end` method in your trainer class.")
+        """
+        Save the metrics into a csv file and a pkl file.
+        """
+        self.metric_logger.save()
 
     def configure_optimizers(self):
         raise NotImplementedError("Please implement the `configure_optimizers` method in your trainer class.")
     
 
-class CompressAICodecTrainer(BasicTrainer):
-    """This is used in the training for end-to-end lossy image compression and video compression.
+class CompressAIImageCodecTrainer(BasicTrainer):
+    """This is used in the training for end-to-end lossy image compression.
     """
     def __init__(self, 
                  model_class: Type[CompressionModel],
                  params: Dict[str, Any],
-                 ext_params: CompressAICodecExtParams
+                 ext_params: GeneralCodecExtParams
                  ):
         """
         Args:
@@ -163,10 +172,10 @@ class CompressAICodecTrainer(BasicTrainer):
         if self.trainer.ckpt_path is not None:
             if "mse" in self.trainer.ckpt_path:
                 self.model_type = "mse"
-            elif "ms-ssim" in self.trainer.ckpt_path:
-                self.model_type = "ms-ssim"
+            elif "ms_ssim" in self.trainer.ckpt_path:
+                self.model_type = "ms_ssim"
 
-        self.metric.reset_dir_and_filename(
+        self.metric_logger.reset_dir_and_filename(
             save_dir=self.trainer.default_root_dir,
             filename=f"metrics_{self.model_type}"
         )
@@ -175,12 +184,6 @@ class CompressAICodecTrainer(BasicTrainer):
 
     def test_step(self, batch, batch_idx):
         raise NotImplementedError("Please implement the `test_step` method in your trainer class.")
-
-    def on_test_end(self):
-        """
-        Save the metrics into a csv file and a pkl file.
-        """
-        self.metric.save()
 
     def configure_optimizers(self):
         parameters = []
