@@ -164,9 +164,9 @@ def main(args: Args):
 
             if os.path.exists(os.path.join(out_dir, f"checkpoints/mse.ckpt")):
                 trainer.test(modelmodule, datamodule, ckpt_path=os.path.join(out_dir, f"checkpoints/mse.ckpt"))
-            if os.path.exists(os.path.join(out_dir, f"checkpoints/ms-ssim.ckpt")):
-                trainer.test(modelmodule, datamodule, ckpt_path=os.path.join(out_dir, f"checkpoints/ms-ssim.ckpt"))
-            if not os.path.exists(os.path.join(out_dir, "checkpoints/mse.ckpt")) and not os.path.exists(os.path.join(out_dir, "checkpoints/ms-ssim.ckpt")):
+            if os.path.exists(os.path.join(out_dir, f"checkpoints/ms_ssim.ckpt")):
+                trainer.test(modelmodule, datamodule, ckpt_path=os.path.join(out_dir, f"checkpoints/ms_ssim.ckpt"))
+            if not os.path.exists(os.path.join(out_dir, "checkpoints/mse.ckpt")) and not os.path.exists(os.path.join(out_dir, "checkpoints/ms_ssim.ckpt")):
                 trainer.test(modelmodule, datamodule, ckpt_path="last")
 
         
