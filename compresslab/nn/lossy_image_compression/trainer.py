@@ -1,13 +1,8 @@
 import os, logging
 from compresslab.core.models import CompressionModel
 import torch
-from typing import Union
-from pytorch_msssim import ms_ssim
 from compresslab.nn.base import CompressAIImageCodecTrainer
 from compresslab.nn.base.metrics import ImageMetricsOutput
-from torchvision import transforms
-import math
-import torch.nn.functional as F
 from torchvision.utils import save_image
 
 class ImageCodecTrainer(CompressAIImageCodecTrainer):
@@ -52,22 +47,6 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
 
             metrics = self.metrics_collector.forward(out, {"x": batch})
             loss = self.loss_fn(lmbda, metrics)
-            
-            # bpp = sum(
-            #     torch.log(likelihood).sum() / (-math.log(2))
-            #     for likelihood in out["likelihoods"].values()
-            # ) / batch.size(0) / batch.size(2) / batch.size(3)
-            
-            # mse_loss = F.mse_loss(out["x_hat"], batch)
-            # psnr = 10 * torch.log10(1 / mse_loss)
-            # loss = mse_loss * 255 ** 2 * lmbda + bpp
-            
-            # if model_name == "codec_0":
-            #     self.bar_metrics({
-            #         "loss": loss,
-            #         "bpp": bpp,
-            #         "psnr": psnr,
-            #     })
 
             total_loss += loss
             total_aux_loss += model_instance.aux_loss()
@@ -81,12 +60,12 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
                     "ms-ssim": metrics.ms_ssim
                 })
 
-            # self.log_train_metrics(model_name, {
-            #     "loss": loss,
-            #     "bpp": metrics.bpp,
-            #     "psnr": metrics.psnr,
-            #     "ms-ssim": metrics.ms_ssim
-            # })
+            self.log_train_metrics(model_name, {
+                "loss": loss,
+                "bpp": metrics.bpp,
+                "psnr": metrics.psnr,
+                "ms-ssim": metrics.ms_ssim
+            })
 
         self.manual_backward(total_loss)
         torch.nn.utils.clip_grad_norm_(self.model_wrapper.parameters(), 1.0)
@@ -129,6 +108,12 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
             })
 
             if self.save_recon_imgs:
+                output_dir = os.path.join(
+                    self.trainer.default_root_dir, 
+                    "recon_imgs", 
+                    model_name
+                )
+                os.makedirs(output_dir, exist_ok=True)
                 save_image(
                     out_decompress["x_hat"].clamp(0, 1),
                     os.path.join(
@@ -138,20 +123,3 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
                         f"recon_{batch_idx:04d}_{self.model_type}_{metrics.bpp:.4f}_{metrics.psnr:.2f}_{metrics.ms_ssim:.4f}.png"
                     )
                 )
-                # to_pil = transforms.ToPILImage()
-
-                # img_tensor = out_decompress.x_hat[0].clamp(0, 1)
-                # img_pil = to_pil(img_tensor.cpu())
-
-                # output_dir = os.path.join(
-                #     self.trainer.default_root_dir, 
-                #     "recon_imgs", 
-                #     model_name
-                # )
-                # os.makedirs(output_dir, exist_ok=True)
-
-                # img_path = os.path.join(
-                #     output_dir, 
-                #     f"recon_{batch_idx:04d}_{self.model_type}_{out_compress.bpp:.4f}_{metrics.psnr:.2f}_{metrics.ms_ssim:.4f}.png"
-                # )
-                # img_pil.save(img_path)

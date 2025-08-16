@@ -1,8 +1,8 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import math
-from typing import List, Dict, Any, Union
+from torch import Tensor
+from typing import List, Dict, Any, Union, Optional
 from dataclasses import dataclass, field
 from pytorch_msssim import ms_ssim as ms_ssim_func
 # TODO: use torchmetrics if possible
@@ -12,6 +12,7 @@ from torchmetrics.functional.image import (
 )
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.kid import KernelInceptionDistance
+from lightning import LightningModule
 
 @dataclass
 class MetricsConfig:
@@ -38,7 +39,7 @@ class ImageMetricsOutput:
     dists: torch.Tensor = field(default=None)
         
 
-class MetricsCollector(nn.Module):
+class MetricsCollector(LightningModule):
     def __init__(
         self, 
         config: Dict[str, Any] = MetricsConfig.VAE_IMAGE_COMPRESSION,
@@ -46,26 +47,25 @@ class MetricsCollector(nn.Module):
         super().__init__()
         self.config = config
         
-        # self.kid_metric = KernelInceptionDistance(normalize=True)
-        # self.fid_metric = FrechetInceptionDistance(normalize=True)
         
-        # self._modules.pop('kid_metric', None)
-        # self._modules.pop('fid_metric', None)
-        
-        # self.kid_metric
-    
     def reset_config(self, config: Dict[str, Any]):
         """
         Reset the configuration for the metrics collector.
         """
         self.config = config
     
-    
     def forward(self, *args: List[Dict[str, Any]]) -> ImageMetricsOutput:
+        # if "KID" in self.config["eval"]:
+        #     if not hasattr(self, 'kid_metric'):
+        #         self.kid_metric = KernelInceptionDistance(normalize=True).to(self.device)
+        
+        # if "FID" in self.config["eval"]:
+        #     if not hasattr(self, 'fid_metric'):
+        #         self.fid_metric = FrechetInceptionDistance(normalize=True).to(self.device)
+
         metrics_enabled = self.config["train"] if self.training else self.config["eval"]
             
         collected_dict = args[0]
-        # print(collected_dict.keys())
         for arg in args[1:]:
             if isinstance(arg, dict):
                 collected_dict.update(arg)
@@ -134,4 +134,33 @@ class MetricsCollector(nn.Module):
             
         return ImageMetricsOutput(**output_metrics)
     
-    # def state_
+
+    # def update_patch(self, input_images: Tensor, pred: Tensor, 
+    #                  metrics_fn: Union[KernelInceptionDistance, FrechetInceptionDistance], 
+    #                  patch_size=256):
+    #     real = self.image_to_255_scale(
+    #         F.unfold(input_images, kernel_size=patch_size, stride=patch_size)
+    #         .permute(0, 2, 1)
+    #         .reshape(-1, 3, patch_size, patch_size),
+    #         dtype=torch.uint8
+    #     )
+    #     fake = self.image_to_255_scale(
+    #         F.unfold(pred, kernel_size=patch_size, stride=patch_size)
+    #         .permute(0, 2, 1)
+    #         .reshape(-1, 3, patch_size, patch_size),
+    #         dtype=torch.uint8
+    #     )
+    #     patch_count = real.shape[0]
+    #     metrics_fn.update(real, real=True)
+    #     metrics_fn.update(fake, real=False)
+
+    # def image_to_255_scale(image: Tensor, dtype: Optional[torch.dtype] = None):
+    #     if image.max() > 1.0 or image.min() < 0.0:
+    #         raise ValueError("Image tensor values must be in the range [0, 1].")
+        
+    #     image = torch.round(image * 255.0)
+        
+    #     if dtype is not None:
+    #         image = image.to(dtype)
+        
+    #     return image
