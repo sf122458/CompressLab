@@ -20,7 +20,7 @@ from pydantic_yaml import parse_yaml_file_as
 import pickle
 import compresslab.utils.registry
 import importlib.util
-
+from compresslab.utils.constant import *
 
 class Args(Namespace):
     config: str = None
@@ -41,7 +41,7 @@ def main(args: Args):
         
         config = parse_yaml_file_as(Config, args.config)
 
-        exp_dir = os.path.join(config.Train.Output, Path(args.config).stem)
+        exp_dir = os.path.join(OUTPUT_DIR, Path(args.config).stem)
         os.makedirs(exp_dir, exist_ok=True)
         os.system(f"cp {args.config} {exp_dir}/config.yaml")
 
@@ -78,14 +78,14 @@ def main(args: Args):
             if issubclass(model_class, BasicTrainer):
                 modelmodule = model_class(**model.Params, ext_params=model.ExtParams)
             else:
-                if Path(model_path.parent/"trainer.py").exists():
-                    module_file = model_path.parent / "trainer.py"        # A specific trainer
-                elif Path(model_path.parent.parent/"trainer.py").exists():
-                    module_file = model_path.parent.parent / "trainer.py" # A general trainer
+                if Path(model_path.parent / TRAINER_DEFAULT_FILENAME).exists():
+                    module_file = model_path.parent / TRAINER_DEFAULT_FILENAME        # A specific trainer
+                elif Path(model_path.parent.parent / TRAINER_DEFAULT_FILENAME).exists():
+                    module_file = model_path.parent.parent / TRAINER_DEFAULT_FILENAME # A general trainer
                 else:
-                    raise FileNotFoundError(f"trainer.py not found in {model_path.parent.parent} and {model_path.parent.parent}")
+                    raise FileNotFoundError(f"{TRAINER_DEFAULT_FILENAME} not found in {model_path.parent.parent} and {model_path.parent.parent}")
 
-                module_spec = importlib.util.spec_from_file_location("trainer", module_file)
+                module_spec = importlib.util.spec_from_file_location(TRAINER_DEFAULT_FILENAME, module_file)
                 module = importlib.util.module_from_spec(module_spec)
                 module_spec.loader.exec_module(module)
 

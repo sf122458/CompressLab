@@ -16,12 +16,22 @@ class GeneralCodecExtParams(BaseModel):
     model_config = {
         "extra": "forbid"
     }
+    
     SaveRecon: bool = Field(
         default=False, description="Whether to save reconstructed images/videos.",
     )
     
+    Bitstream: bool = Field(
+        default=False, description="Whether to save the bitstream during testing. \
+            The time cost of writing and reading the bitstream may also be contained in the final metrics."
+    )
+    
     # Extra parameters for the trainable codec.
     Lr: Optional[float] = Field(default=1e-4, description="Learning rate.")
+    Auxlr: Optional[float] = Field(default=1e-3, description="Auxiliary learning rate for the entropy models.")
+    
+    
+    # TODO: a more elegant way?
     FinetuneRatio: Optional[float] = Field(
         default=1.0, description="The ratio of training steps for MS-SSIM model fine-tuning."
     )
@@ -76,9 +86,6 @@ class TrainClass(BaseModel):
     Steps: int = Field(default=-1, description="Number of steps to train the model.")
     Valinterval: Optional[int] = Field(
         default=1, description="Validation interval in epochs."
-    )
-    Output: str = Field(
-        default="output", description="Output directory for the training results."
     )
     Benchmark: Optional[List[BenchmarkItem]] = None
 

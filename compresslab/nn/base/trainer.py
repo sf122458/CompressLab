@@ -22,6 +22,8 @@ class BasicTrainer(L.LightningModule):
         self.automatic_optimization = False
 
         self.save_recon_imgs = ext_params.SaveRecon
+        self.learning_rate = ext_params.Lr
+        self.aux_learning_rate = ext_params.Auxlr
 
         self.metric_logger = MetricLogger()
 
@@ -129,8 +131,6 @@ class CompressAIImageCodecTrainer(BasicTrainer):
 
         self.model_wrapper = ModelWrapper(model_class, params, num_models)
         
-        # optimization parameters
-        self.lr = ext_params.Lr
 
     def on_train_start(self):
         # FIXME: `self.finetune_step` must be defined here due to `Trainer` isn't attached before this step.
@@ -193,8 +193,8 @@ class CompressAIImageCodecTrainer(BasicTrainer):
             aux_parameters += [p for n, p in model_instance.named_parameters() if p.requires_grad and n.endswith(".quantiles")]
         
         optimizer = torch.optim.Adam([
-            {"params": parameters, "lr": self.lr, "name": "model_params"},
-            {"params": aux_parameters, "lr": 1e-3, "name": "entropy_model_params"}
+            {"params": parameters, "lr": self.learning_rate, "name": "model_params"},
+            {"params": aux_parameters, "lr": self.aux_learning_rate, "name": "entropy_model_params"}
         ])
 
         return optimizer

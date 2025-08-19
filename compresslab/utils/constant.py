@@ -1,0 +1,5 @@
+CACHE_DIR = "cache"
+PRETRAINED_CACHE_DIR = f"{CACHE_DIR}/pretrained_models"
+OUTPUT_DIR = "output"
+MODEL_DEFAULT_FILENAME = "models.py"
+TRAINER_DEFAULT_FILENAME = "trainer.py"

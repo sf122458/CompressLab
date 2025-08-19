@@ -6,6 +6,7 @@ import contextlib
 import pickle
 import os
 import numpy as np
+import logging
 
 class MetricLogger:
     """
@@ -74,22 +75,25 @@ class MetricLogger:
                 self.metrics[name][key] = sum(values) / len(values)
 
         os.makedirs(self.save_dir, exist_ok=True)
-        with open(f"{self.save_dir}/{self.filename}.csv", "w") as f:
-            # Write the header
-            headers = ["name"] + list(next(iter(self.metrics.values())).keys())
-            writer = csv.writer(f)
-            writer.writerow(headers)
-            
-            # Write the data
-            for name, metrics in self.metrics.items():
-                row = [name]
-                for key in headers[1:]:
-                    row.append(f"{metrics[key]:.6f}" if key in metrics else "")
-                writer.writerow(row)
+        if not self.metrics == {}:
+            with open(f"{self.save_dir}/{self.filename}.csv", "w") as f:
+                # Write the header
+                headers = ["name"] + list(next(iter(self.metrics.values())).keys())
+                writer = csv.writer(f)
+                writer.writerow(headers)
                 
-        # Save the metrics as a pickle file
-        with open(f"{self.save_dir}/{self.filename}.pkl", "wb") as pkl_file:
-            pickle.dump(self.metrics, pkl_file)
+                # Write the data
+                for name, metrics in self.metrics.items():
+                    row = [name]
+                    for key in headers[1:]:
+                        row.append(f"{metrics[key]:.6f}" if key in metrics else "")
+                    writer.writerow(row)
+                    
+            # Save the metrics as a pickle file
+            with open(f"{self.save_dir}/{self.filename}.pkl", "wb") as pkl_file:
+                pickle.dump(self.metrics, pkl_file)
+        else:
+            logging.warning("No metrics to save. The metrics dictionary is empty.")
 
 
     @contextlib.contextmanager

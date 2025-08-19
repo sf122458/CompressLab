@@ -33,7 +33,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-KEY_MAP = {"_bias": "biases", "_core": "matrices", "_factor": "factors"}
+KEY_MAP = {"_bias": "biases", "_core": "matrices", "_factor": "factors", "_matrix": "matrices"}
 
 
 def find_named_module(module, query):

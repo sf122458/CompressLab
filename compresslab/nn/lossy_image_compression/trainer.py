@@ -91,7 +91,7 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
             })
 
     def test_step(self, batch, batch_idx):
-        x = batch
+        x, filename = batch["image"], batch["filename"][0]
         for model_name, model_instance in self.model_wrapper.items():
             model_instance: CompressionModel
             with self.metric_logger.timer(model_name, "encoding_time"):
@@ -120,6 +120,6 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
                         self.trainer.default_root_dir,
                         "recon_imgs",
                         model_name,
-                        f"recon_{batch_idx:04d}_{self.model_type}_{metrics.bpp:.4f}_{metrics.psnr:.2f}_{metrics.ms_ssim:.4f}.png"
+                        f"{filename}_{self.model_type}_{metrics.bpp:.4f}_{metrics.psnr:.2f}_{metrics.ms_ssim:.4f}.png"
                     )
                 )
