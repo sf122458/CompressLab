@@ -1,14 +1,18 @@
 import inspect
 from pathlib import Path
+import compresslab.utils.logging
 import argparse
 import logging
 import os
 import torch
 import math
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
 from compresslab.utils.config import Config
 from compresslab.nn.base import BasicTrainer
-from compresslab.utils.registry import Registry, DataRegistry, ModelRegistry
+from compresslab.utils.registry import Registry, ModelRegistry
 from compresslab.utils.benchmark import Benchmark
+from compresslab.data import DataModule
 from compresslab.codec import TRADITIONAL_CODEC
 from lightning import Trainer
 from lightning.pytorch.loggers import TensorBoardLogger
@@ -61,11 +65,15 @@ def main(args: Args):
                     codec.run()
                 continue
 
-            try:
-                datamodule = DataRegistry.get(config.Data.Key)(num_devices=len(config.Env.Devices), **config.Data.Params)
-            except:
-                raise ValueError(f"Data module {config.Data.Key} is not registered or has invalid parameters.")
-
+            datamodule = DataModule(
+                train=config.Data.Train,
+                val=config.Data.Val,
+                test=config.Data.Test,
+                num_devices=len(config.Env.Devices),
+                batch_size=config.Data.BatchSize,
+                num_workers=config.Data.NumWorkers
+            )
+            
             # learning-based codec
             try:
                 model_path = Path(getattr(compresslab.utils.registry, "ModelRegistry")._map.get(model.Key)["define_path"])

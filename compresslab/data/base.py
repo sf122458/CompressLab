@@ -1,5 +1,9 @@
 import lightning as L
-from torch.utils.data import DataLoader
+from typing import Dict, Any
+from torch.utils.data import DataLoader, Dataset
+from compresslab.utils.config import DatasetConfig
+from compresslab.utils.registry import DataRegistry
+from torchvision import transforms
 
 class BasicDataModule(L.LightningDataModule):
     def __init__(self, 
@@ -25,6 +29,61 @@ class BasicDataModule(L.LightningDataModule):
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
+    
+    def train_dataloader(self):
+        return DataLoader(self.train_dataset, 
+                          batch_size=self.batch_size_per_device,
+                          shuffle=True,
+                          num_workers=self.num_workers)
+    
+    def val_dataloader(self):
+        return DataLoader(self.val_dataset,
+                          batch_size=1, # avoid OOM in validation
+                          shuffle=False,
+                          num_workers=self.num_workers)
+    
+    def test_dataloader(self):
+        return DataLoader(self.test_dataset,
+                          batch_size=1,
+                          shuffle=False,
+                          num_workers=self.num_workers)
+
+class BaseDataset(Dataset):
+    """A dataset base class that processes the transformations for images.
+    """
+    def __init__(
+        self,
+        root: str,
+        transform: Dict[str, Any] = None,
+    ):
+        self.root = root
+        transform_list = []
+        if transform is not None:
+            for key, value in transform.items():
+                if value is not None:
+                    transform_list.append(getattr(transforms, key)(**value))
+                else:
+                    transform_list.append(getattr(transforms, key)())
+        transform_list.append(transforms.ToTensor())    
+        self.transform = transforms.Compose(transform_list)
+            
+        
+class DataModule(L.LightningDataModule):
+    def __init__(self, 
+                 train: DatasetConfig,
+                 val: DatasetConfig,
+                 test: DatasetConfig,
+                 # dataloader parameters
+                 num_devices: int,
+                 batch_size: int = 32, 
+                 num_workers: int = 4):
+        super().__init__()
+        self.batch_size_per_device = batch_size // num_devices
+        self.num_workers = num_workers
+        
+        self.train_dataset = DataRegistry.get(train.Key)(**train.Params)
+        self.val_dataset = DataRegistry.get(val.Key)(**val.Params)
+        self.test_dataset = DataRegistry.get(test.Key)(**test.Params)
     
     def train_dataloader(self):
         return DataLoader(self.train_dataset, 

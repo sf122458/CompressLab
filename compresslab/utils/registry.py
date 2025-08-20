@@ -8,7 +8,7 @@ import re
 import inspect
 from rich.console import Console
 from rich.table import Table
-import lightning as L
+from torch.utils.data import Dataset
 
 
 # from the implementation in vlutils
@@ -75,19 +75,19 @@ class Registry(Generic[T]):
         cls._map: Dict[str, T] = dict()
 
     @classmethod
-    def register(cls, key, define_path = None):
+    def register(cls, class_type, key = None):
         """Decorator for register anything into registry.
 
         Args:
             key (str): The key for registering an object.
         """
-        if isinstance(key, str):
-            def insert(value):
-                cls._map[key] = {"cls": value, "register_path": inspect.stack()[1].filename, "define_path": define_path}
-            return insert
-        else:
-            cls._map[key.__name__] = key
-            return key
+        assert isinstance(class_type, type), "Registered object must be a class."
+        cls._map[key or class_type.__name__] = {"cls": class_type, "define_path": inspect.getfile(class_type)}
+        # def insert(value):
+        #     assert isinstance(value, type), "Registered object must be a class."
+        #     cls._map[key or value.__name__] = {"cls": value, "define_path": define_path or inspect.getfile(value)}
+        # return insert
+    
 
     @classmethod
     def get(cls, key: str, default = None, logger: logging.Logger = logging.root) -> T:
@@ -112,7 +112,7 @@ class Registry(Generic[T]):
         table = Table(title=cls.__name__)
 
         table.add_column("Name", justify="left", style="cyan", no_wrap=True)
-        table.add_column("Definition Path", justify="left", style="green")
+        table.add_column("Path", justify="left", style="green")
 
         for k, v in cls._map.items():
             table.add_row(
@@ -139,5 +139,5 @@ Example:
 class ModelRegistry(Registry[Type["torch.nn.Module"]]):
     pass
 
-class DataRegistry(Registry[Type["L.LightningDataModule"]]):
+class DataRegistry(Registry[Type[Dataset]]):
     pass
