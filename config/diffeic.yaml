@@ -1,0 +1,41 @@
+Model:
+  - Name: diffeic
+    Key: DiffEIC
+    Params:
+      pretrained_target_rate: 0.06
+
+Data:
+  Train:
+    Key: Vimeo90kDataset
+    Params:
+      root: /mnt/sdb/lyx/dataset/vimeo_setuplet
+      transform:
+        RandomCrop: 
+          size: [256, 256]
+        RandomHorizontalFlip: ~
+      split: train
+      tuplet: 7
+  Val:
+    Key: BasicImageDataset
+    Params:
+      root: dataset/Kodak
+  Test:
+    Key: BasicImageDataset
+    Params:
+      root: dataset/Kodak
+      return_img_info: true
+  BatchSize: 16
+
+Train:
+  Steps: 1_200_000
+  Valinterval: 1
+  # Benchmark: 
+  #   - Key: BD_RATE
+  #     Params:
+  #       mode: 1
+  #       baseline: "JPEG"
+  #   - Key: BD_CURVE
+
+
+Env:
+  Devices: [0]
