@@ -6,7 +6,7 @@ from typing import Union, Dict
 import numpy as np
 from PIL import Image
 from pytorch_msssim import ms_ssim
-
+import logging
 
 HM_BUILD_DIR = "third_party/HM/bin"
 VTM_BUILD_DIR = "third_party/VTM/bin"
@@ -93,7 +93,7 @@ def run_command(cmd, ignore_returncodes=None):
     except subprocess.CalledProcessError as err:
         if ignore_returncodes is not None and err.returncode in ignore_returncodes:
             return err.output
-        print(err.output.decode("utf-8"))
+        logging.error(err.output.decode("utf-8"))
         sys.exit(1)
 
 

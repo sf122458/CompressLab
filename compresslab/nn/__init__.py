@@ -1,18 +1,3 @@
-"""
-When a new training task is added, use this script to automatically register the model classes defined in models.py files.
-
-The file structure is expected to be like this:
-├─ lossy_image_compression
-│  ├─ charm
-│  │  └─ models.py (** models needed to be registered **)
-│  ├─ compressai_impl
-│  │  └─ models.py
-│  ├─ ...
-│  ├─ module.py (** training and validating steps **)
-└─ video_compression
-   └─ ... (similar with lossy_image_compression)
-"""
-
 import os
 import importlib
 from compresslab.utils.registry import ModelRegistry
@@ -31,10 +16,14 @@ for task_dir in os.listdir(current_dir):
             for file in files:
                 if file == MODEL_DEFAULT_FILENAME:
                     models_dir = os.path.join(root, file)
+                    
+                    # Convert path to module format and find compresslab
+                    module_path = models_dir.replace(os.sep, '.').replace('.py', '')
+                    compresslab_index = module_path.rfind('compresslab')
+                    if compresslab_index != -1:
+                        module_path = module_path[compresslab_index:]
 
-                    spec = importlib.util.spec_from_file_location(MODEL_DEFAULT_FILENAME, models_dir)
-                    models_module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(models_module)
+                    models_module = importlib.import_module(module_path)
 
                     classes = [
                         cls for name, cls in inspect.getmembers(models_module, inspect.isclass)
@@ -42,4 +31,4 @@ for task_dir in os.listdir(current_dir):
                     ]
 
                     for cls in classes:
-                        ModelRegistry.register(cls.__name__, define_path=models_dir)(cls)
+                        ModelRegistry.register(cls)

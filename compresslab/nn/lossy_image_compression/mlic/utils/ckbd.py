@@ -1,8 +1,7 @@
 # https://github.com/JiangWeibeta/MLIC/blob/main/MLIC%2B%2B/utils/ckbd.py
 
 import torch
-import torch.nn as nn
-from compresslab.core.entropy_models import GaussianConditional, EntropyModel
+from compresslab.core.entropy_models import EntropyModel
 
 
 def ckbd_split(y):
