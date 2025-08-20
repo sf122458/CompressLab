@@ -2,14 +2,21 @@ from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional, List, Union
 
 ########## Data Setting ##########
-class DataSetting(BaseModel):
-    """Dataset setting for the datamodule."""
-    Key: str = Field(description="Registered name of the datamodule")
+class DatasetConfig(BaseModel):
+    Key: str = Field(description="Registered name of the dataset")
     Params: Optional[Dict[str, Any]] = Field(default_factory=dict,
-                                             description="Parameters for the datamodule, " \
+                                             description="Parameters for the dataset, " \
                                              "provided as a dictionary.",
                                              kw_only=True
                                              )
+
+class DataSetting(BaseModel):
+    """Dataset setting for the datamodule."""
+    Train: DatasetConfig = Field(description="Configuration for the training dataset.")
+    Val: DatasetConfig = Field(description="Configuration for the validation dataset.")
+    Test: DatasetConfig = Field(description="Configuration for the testing dataset.")
+    BatchSize: int = Field(default=32, description="Batch size for training.")
+    NumWorkers: int = Field(default=4, description="Number of workers for data loading.")
 
 ########## Codec Classes ##########
 class GeneralCodecExtParams(BaseModel):

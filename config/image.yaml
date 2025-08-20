@@ -74,12 +74,26 @@ Model:
 
 
 Data:
-  Key: Vimeo90kImageDataModule
-  Params:
-    train_data_dir: data/vimeo_setuplet
-    test_data_dir: dataset/Kodak
-    batch_size: 16
-
+  Train:
+    Key: Vimeo90kDataset
+    Params:
+      root: dataset/vimeo_setuplet
+      transform:
+        RandomCrop: 
+          size: [256, 256]
+        RandomHorizontalFlip: ~
+      split: train
+      tuplet: 7
+  Val:
+    Key: BasicImageDataset
+    Params:
+      root: dataset/Kodak
+  Test:
+    Key: BasicImageDataset
+    Params:
+      root: dataset/Kodak
+  BatchSize: 16
+  
 Train:
   Steps: 5_000_000
   Valinterval: 1
