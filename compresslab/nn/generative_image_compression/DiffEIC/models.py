@@ -4,13 +4,13 @@ https://arxiv.org/pdf/2404.18820
 """
 
 import torch
-
+import torch.nn.functional as F
 from typing import Mapping, Any, List, Tuple
 import logging
 import os
 import math
 import pyiqa
-import einops
+from typing import NamedTuple
 import numpy as np
 from pathlib import Path
 from torchvision.utils import save_image
@@ -26,14 +26,19 @@ from compresslab.nn.base import BasicTrainer
 from compresslab.utils.constant import PRETRAINED_CACHE_DIR
 from compresslab.utils.config import GeneralCodecExtParams
 
+class PreprocessOutput(NamedTuple):
+    z_guidance: torch.Tensor
+    z_content: torch.Tensor
+    c_crossattn: torch.Tensor
+    bpp: torch.Tensor
+    q_bpp: torch.Tensor
+
 class DiffEIC(BasicTrainer, LatentDiffusion):
     def __init__(
         self, 
         *args, 
         channels: int = 4,
-        control_key: str = "hint",
-        learning_rate: float = 1e-4,
-        aux_learning_rate: float = 1e-3,
+        l_simple_weight: float = 1.0,
         l_bpp_weight: float = 1.0,
         l_guide_weight: float = 2.0,
         sync_path: str = f"{PRETRAINED_CACHE_DIR}/sd_2.1/v2-1_512-ema-pruned.ckpt", 
@@ -47,10 +52,22 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
         # test stage
         sampler: str = "ddpm",
         sampling_steps: int = 50,
-        ext_params: GeneralCodecExtParams = GeneralCodecExtParams(),
         **kwargs
     ):
-        super().__init__(ext_params=ext_params, *args, **kwargs)
+        super().__init__(*args, **kwargs)
+        
+        # latent feature-guided compression module
+        self.preprocess_model = LFGCM(
+            in_nc=3,
+            enc_mid=[64, 128, 192, 192],
+            out_nc=channels,
+            N=192,
+            M=320,
+            prior_nc=64,
+            sft_ks=3,
+            slice_num=10,
+            slice_ch=[8,8,8,8,16,16,32,32,96,96]
+        )
         
         # conditional diffusion decoding module
         self.control_model = CDDM(
@@ -89,9 +106,8 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
             self.sync_control_weights_from_base_checkpoint(sync_path, synch_control=synch_control)
             
         if pretrained_target_rate is not None:
-            ckpt_path_pre = f"{PRETRAINED_CACHE_DIR}/DiffEIC/{pretrained_target_rate}/lc.ckpt",
-            if ckpt_path_pre is not None:
-                self.load_preprocess_ckpt(ckpt_path_pre=ckpt_path_pre)
+            ckpt_path_pre = f"{PRETRAINED_CACHE_DIR}/DiffEIC/{pretrained_target_rate}/lc.ckpt"
+            self.load_preprocess_ckpt(ckpt_path_pre=ckpt_path_pre)
 
         self.channels = channels
 
@@ -112,10 +128,6 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
             name = mopt.pop('type', None)
             mopt.pop('better', None)
             self.metric_funcs[name] = pyiqa.create_metric(name, device=self.device, **mopt)
-
-    def apply_condition_encoder(self, control, x):
-        c_latent, likelihoods, q_likelihoods = self.preprocess_model(control, x)
-        return c_latent, likelihoods, q_likelihoods
     
     @torch.no_grad()
     def apply_condition_compress(self, control, stream_path, H, W):
@@ -210,17 +222,15 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
         return samples
     
     def configure_optimizers(self):
-        lr = self.learning_rate
         params = list(self.control_model.parameters())
         params += list(param for name, param in self.preprocess_model.named_parameters() 
                        if not name.endswith('.quantiles'))
-        
-        opt = torch.optim.AdamW(params, lr=lr)
 
-        aux_lr = self.aux_learning_rate
+        opt = torch.optim.AdamW(params, lr=self.ext_params.Lr)
+
         aux_params = list(param for name, param in self.preprocess_model.named_parameters() 
                        if name.endswith('.quantiles'))
-        aux_opt =  torch.optim.AdamW(aux_params, lr=aux_lr)
+        aux_opt = torch.optim.AdamW(aux_params, lr=self.ext_params.Auxlr)
 
         return opt, aux_opt
     
@@ -374,7 +384,6 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
             )
         )
         
-        
     def load_preprocess_ckpt(self, ckpt_path_pre):
         ckpt = torch.load(ckpt_path_pre)
         preprocess_model_ckpt = {}
@@ -423,49 +432,43 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
         res_sync = self.load_state_dict(ckpt_base['state_dict'], strict=False)
         logging.warning(f'[{len(res_sync.missing_keys)} keys are missing from the model (hint processing and cross connections included)]')
 
-    @torch.no_grad()
-    def process(
-        self,
-        imgs: torch.Tensor,
-        sampler: str,
-        steps: int,
-        stream_path: str
-    ) -> Tuple[List[np.ndarray], float]:
-        """
-        Apply DiffEIC model on a list of images.
-        
+    def compress(self, imgs):
+        """Compress the input images into bitstreams.
+
         Args:
-            imgs (List[np.ndarray]): A list of images (HWC, RGB, range in [0, 255])
-            sampler (str): Sampler name.
-            steps (int): Sampling steps.
-            stream_path (str): Savedir of bitstream
-        
+            imgs (torch.Tensor): Target images with shape [B, C, H, W] \
+                and value range in [0, 1].
+
         Returns:
-            preds (List[np.ndarray]): Restoration results (HWC, RGB, range in [0, 255]).
-            bpp
+            Tuple: containing
+                strings (List[List[bytes]]): The compressed bitstream (CompressAI format).
+                shape (Tuple[int, int]): The shape of the hyperprior latent.
         """
-        # n_samples = len(imgs)
-        n_samples = imgs.shape[0]
-        if sampler == "ddpm":
-            sampler = SpacedSampler(self, var_type="fixed_small")
-        else:
-            sampler = DDIMSampler(self)
-        # control = torch.tensor(np.stack(imgs) / 255.0, dtype=torch.float32, device=self.device).clamp_(0, 1)
-        # control = einops.rearrange(control, "n h w c -> n c h w").contiguous()
-        control = imgs
+        z_guidance = self.encode_first_stage(imgs * 2 - 1).mode() * self.scale_factor
+        return self.preprocess_model.compress(imgs, z_guidance)
+    
+    def decompress(self, strings, shape):
+        """The decompression process of DiffEIC. \
+           Decode `z_content` from the bitstream, \
+           and then generate images from `z_content` with the latent diffusion model. 
+
+        Args:
+            strings (List[List[bytes]]): The compressed bitstream (CompressAI format).
+            shape (Tuple[int, int]): The shape of the hyperprior latent.
+
+        Returns:
+            torch.Tensor: The generated images with shape [B, C, H, W] and value range in [0, 1].
+        """
+        z_content = self.preprocess_model.decompress(strings, shape)
+        cond = PreprocessOutput(z_content=z_content)
+        x_T = torch.randn_like(z_content)
+            
+        sampler = SpacedSampler(self, var_type="fixed_small") if self.sampler == "ddpm" \
+            else DDIMSampler(self)
         
-        height, width = control.size(-2), control.size(-1)
-        bpp = self.apply_condition_compress(control, stream_path, height, width)
-        cond = {
-            "c_latent": [self.apply_condition_decompress(stream_path)],
-            "c_crossattn": [self.get_learned_conditioning([""] * n_samples)]
-        }
-        
-        shape = (n_samples, 4, height // 8, width // 8)
-        x_T = torch.randn(shape, device=self.device, dtype=torch.float32)
         if isinstance(sampler, SpacedSampler):
             samples = sampler.sample(
-                steps, shape, cond,
+                self.sampling_steps, z_content.shape, cond,
                 unconditional_guidance_scale=1.0,
                 unconditional_conditioning=None,
                 cond_fn=None, x_T=x_T
@@ -473,12 +476,13 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
         else:
             sampler: DDIMSampler
             samples, _ = sampler.sample(
-                S=steps, batch_size=shape[0], shape=shape[1:],
+                S=self.sampling_steps, batch_size=z_content.shape[0], 
+                shape=z_content.shape[1:],
                 conditioning=cond, unconditional_conditioning=None,
                 x_T=x_T, eta=0
             )
+            
+        generated_imgs = self.decode_first_stage(samples)
+        generated_imgs = ((generated_imgs + 1) / 2).clamp(0, 1)
         
-        x_samples = self.decode_first_stage(samples)
-        x_samples = ((x_samples + 1) / 2).clamp(0, 1)
-        
-        return x_samples, bpp
+        return generated_imgs
