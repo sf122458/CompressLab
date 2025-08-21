@@ -60,7 +60,8 @@ class AutoencoderKL(pl.LightningModule):
         """Encodes the input image into a posterior distribution.
 
         Args:
-            x (torch.Tensor): _description_
+            x (torch.Tensor): The target image with shape [B, C, H, W] 
+                and normalized to [-1, 1].
 
         Returns:
             DiagonalGaussianDistribution: _description_

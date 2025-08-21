@@ -390,7 +390,7 @@ class CDDM(nn.Module):
             zero_module(conv_nd(self.dims, in_channels, out_channels, 1, padding=0))
         )
 
-    def forward(self, x, hint, timesteps, context, base_model, **kwargs):
+    def forward(self, x, hint, timesteps, context, base_model: UNetModel):
         t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False)
         emb = self.control_model.time_embed(t_emb)
         emb_base = base_model.time_embed(t_emb)

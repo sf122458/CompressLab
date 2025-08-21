@@ -20,10 +20,12 @@ class BasicTrainer(L.LightningModule):
 
         # Set automatic optimization to False, as we will handle it manually
         self.automatic_optimization = False
+        
+        self.ext_params = ext_params
 
-        self.save_recon_imgs = ext_params.SaveRecon
-        self.learning_rate = ext_params.Lr
-        self.aux_learning_rate = ext_params.Auxlr
+        # self.save_recon_imgs = ext_params.SaveRecon
+        # self.learning_rate = ext_params.Lr
+        # self.aux_learning_rate = ext_params.Auxlr
 
         self.metric_logger = MetricLogger()
 
@@ -193,8 +195,8 @@ class CompressAIImageCodecTrainer(BasicTrainer):
             aux_parameters += [p for n, p in model_instance.named_parameters() if p.requires_grad and n.endswith(".quantiles")]
         
         optimizer = torch.optim.Adam([
-            {"params": parameters, "lr": self.learning_rate, "name": "model_params"},
-            {"params": aux_parameters, "lr": self.aux_learning_rate, "name": "entropy_model_params"}
+            {"params": parameters, "lr": self.ext_params.Lr, "name": "model_params"},
+            {"params": aux_parameters, "lr": self.ext_params.Auxlr, "name": "entropy_model_params"}
         ])
 
         return optimizer

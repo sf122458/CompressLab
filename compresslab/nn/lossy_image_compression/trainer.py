@@ -107,7 +107,7 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
                 "ms-ssim": metrics.ms_ssim
             })
 
-            if self.save_recon_imgs:
+            if self.ext_params.SaveRecon:
                 output_dir = os.path.join(
                     self.trainer.default_root_dir, 
                     "recon_imgs", 
