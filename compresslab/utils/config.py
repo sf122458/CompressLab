@@ -28,7 +28,7 @@ class GeneralCodecExtParams(BaseModel):
         default=False, description="Whether to save reconstructed images/videos.",
     )
     
-    Bitstream: bool = Field(
+    SaveBitstream: bool = Field(
         default=False, description="Whether to save the bitstream during testing. \
             The time cost of writing and reading the bitstream may also be contained in the final metrics."
     )

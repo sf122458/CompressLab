@@ -1,15 +1,20 @@
 import lightning as L
+from compresslab.nn.base.utils import write_body, read_body, filesize
 from compresslab.core.models import CompressionModel, update_registered_buffers
 from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
 from compresslab.utils.logger import MetricLogger
-import torch
+import torch, os
+from torch import Tensor
+from pathlib import Path
 import torch.nn as nn
 from typing import Dict, Any, Type
 from .wrapper import ModelWrapper
+from typing import List, Tuple
 from compresslab.utils.config import (
     GeneralCodecExtParams
 )
 from compresslab.nn.base.metrics import MetricsCollector
+from torchvision.utils import save_image
 
 class BasicTrainer(L.LightningModule):
     """
@@ -22,11 +27,6 @@ class BasicTrainer(L.LightningModule):
         self.automatic_optimization = False
         
         self.ext_params = ext_params
-
-        # self.save_recon_imgs = ext_params.SaveRecon
-        # self.learning_rate = ext_params.Lr
-        # self.aux_learning_rate = ext_params.Auxlr
-
         self.metric_logger = MetricLogger()
 
         # some functions to log metrics
@@ -95,7 +95,62 @@ class BasicTrainer(L.LightningModule):
 
     def configure_optimizers(self):
         raise NotImplementedError("Please implement the `configure_optimizers` method in your trainer class.")
+
+    def write_bitstream(self, filename: str, strings: List[List[bytes]], shape: Tuple[int, int]):
+        bitstream_dir = os.path.join(
+            self.trainer.default_root_dir,
+            "bitstreams")
+        os.makedirs(bitstream_dir, exist_ok=True)
+        stream_path = os.path.join(bitstream_dir, f"{filename}.bin")
+        with Path(stream_path).open("wb") as f:
+            write_body(f, shape, strings)
+        size = filesize(stream_path)
+        return float(size) * 8
+                
+    def read_bitstream(self, filename: str):
+        with Path(os.path.join(
+            self.trainer.default_root_dir,
+            "bitstreams",
+            f"{filename}.bin"
+        )).open("rb") as f:
+            return read_body(f)
     
+    def save_recon_imgs(self, imgs: Tensor, filename: str):
+        output_dir = os.path.join(
+            self.trainer.default_root_dir, 
+            "recon_imgs",
+        )
+        os.makedirs(output_dir, exist_ok=True)
+        if not filename.endswith(".png"):
+            filename += ".png"
+        save_image(imgs, os.path.join(output_dir, filename))
+        
+    
+    def load_state_dict(self, state_dict, strict = True, assign = False):
+        for name, module in self.named_modules():
+            if not any(x.startswith(name) for x in state_dict.keys()):
+                continue
+
+            if isinstance(module, EntropyBottleneck):
+                update_registered_buffers(
+                    module,
+                    name,
+                    ["_quantized_cdf", "_offset", "_cdf_length"],
+                    state_dict,
+                    policy="resize"
+                )
+
+            if isinstance(module, GaussianConditional):
+                update_registered_buffers(
+                    module,
+                    name,
+                    ["_quantized_cdf", "_offset", "_cdf_length", "scale_table"],
+                    state_dict,
+                    policy="resize"
+                )
+
+        return nn.Module.load_state_dict(self, state_dict, strict=strict)
+
 
 class CompressAIImageCodecTrainer(BasicTrainer):
     """This is used in the training for end-to-end lossy image compression.
@@ -103,7 +158,8 @@ class CompressAIImageCodecTrainer(BasicTrainer):
     def __init__(self, 
                  model_class: Type[CompressionModel],
                  params: Dict[str, Any],
-                 ext_params: GeneralCodecExtParams
+                 *args, 
+                 **kwargs
                  ):
         """
         Args:
@@ -112,14 +168,12 @@ class CompressAIImageCodecTrainer(BasicTrainer):
             ext_params (Dict[str, Any], optional): Additional parameters for the trainer.
                 Defaults to None.
         """
-        super().__init__(ext_params=ext_params)
-
-        self.ext_params = ext_params
+        super().__init__(*args, **kwargs)
 
         self.automatic_optimization = False
 
         # compression levels
-        self._lmbda = ext_params.Lmbda
+        self._lmbda = self.ext_params.Lmbda
 
         if isinstance(self._lmbda, dict):
             assert "mse" in self._lmbda.keys() and "ms-ssim" in self._lmbda.keys()
@@ -162,13 +216,7 @@ class CompressAIImageCodecTrainer(BasicTrainer):
         - Multi stage training (Loss function modification).
         """
         pass
-
-    def training_step(self, batch, batch_idx):
-        raise NotImplementedError("Please implement the `training_step` method in your trainer class.")
-
-    def validation_step(self, batch, batch_idx):
-        raise NotImplementedError("Please implement the `validation_step` method in your trainer class.")
-
+    
     def on_test_start(self):
         self.model_type = "last"
         if self.trainer.ckpt_path is not None:
@@ -183,10 +231,7 @@ class CompressAIImageCodecTrainer(BasicTrainer):
         )
         
         self.model_wrapper.update()
-
-    def test_step(self, batch, batch_idx):
-        raise NotImplementedError("Please implement the `test_step` method in your trainer class.")
-
+        
     def configure_optimizers(self):
         parameters = []
         aux_parameters = []
@@ -200,31 +245,6 @@ class CompressAIImageCodecTrainer(BasicTrainer):
         ])
 
         return optimizer
-    
-    def load_state_dict(self, state_dict, strict = True, assign = False):
-        for name, module in self.named_modules():
-            if not any(x.startswith(name) for x in state_dict.keys()):
-                continue
-
-            if isinstance(module, EntropyBottleneck):
-                update_registered_buffers(
-                    module,
-                    name,
-                    ["_quantized_cdf", "_offset", "_cdf_length"],
-                    state_dict,
-                    policy="resize"
-                )
-
-            if isinstance(module, GaussianConditional):
-                update_registered_buffers(
-                    module,
-                    name,
-                    ["_quantized_cdf", "_offset", "_cdf_length", "scale_table"],
-                    state_dict,
-                    policy="resize"
-                )
-
-        return nn.Module.load_state_dict(self, state_dict, strict=strict)
     
 # TODO
 class VQCodecTrainer(BasicTrainer):

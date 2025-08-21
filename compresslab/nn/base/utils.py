@@ -1,7 +1,5 @@
-import torch
 import struct
 from pathlib import Path
-import cv2
 
 
 def write_uchars(fd, values, fmt=">{:d}B"):
@@ -44,7 +42,7 @@ def read_body(fd):
         s = read_bytes(fd, read_uints(fd, 1)[0])
         lstrings.append([s])
 
-    return lstrings, shape
+    return {"strings": lstrings, "shape": shape}
 
 
 def write_body(fd, shape, out_strings):
@@ -60,31 +58,3 @@ def filesize(filepath: str) -> int:
     if not Path(filepath).is_file():
         raise ValueError(f'Invalid file "{filepath}".')
     return Path(filepath).stat().st_size
-
-def img2tensor(imgs, bgr2rgb=True, float32=True):
-    """Numpy array to tensor.
-
-    Args:
-        imgs (list[ndarray] | ndarray): Input images.
-        bgr2rgb (bool): Whether to change bgr to rgb.
-        float32 (bool): Whether to change to float32.
-
-    Returns:
-        list[tensor] | tensor: Tensor images. If returned results only have
-            one element, just return tensor.
-    """
-
-    def _totensor(img, bgr2rgb, float32):
-        if img.shape[2] == 3 and bgr2rgb:
-            if img.dtype == 'float64':
-                img = img.astype('float32')
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = torch.from_numpy(img.transpose(2, 0, 1))
-        if float32:
-            img = img.float()
-        return img
-
-    if isinstance(imgs, list):
-        return [_totensor(img, bgr2rgb, float32) for img in imgs]
-    else:
-        return _totensor(imgs, bgr2rgb, float32)
