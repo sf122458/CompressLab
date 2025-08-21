@@ -27,7 +27,7 @@ class BasicImageDataset(BaseDataset):
         return len(self.image_list)
 
     def __getitem__(self, index):
-        image = Image.open(os.path.join(self.root, self.image_list[index]))
+        image = Image.open(os.path.join(self.root, self.image_list[index])).convert("RGB")
         image = self.transform(image)
         if self.return_img_info:
             filename = os.path.splitext(self.image_list[index])[0]
@@ -38,6 +38,7 @@ class BasicImageDataset(BaseDataset):
 # https://github.com/InterDigitalInc/CompressAI/blob/master/compressai/datasets/vimeo90k.py
 class Vimeo90kDataset(BaseDataset):
     """Load a Vimeo-90K structured dataset.
+    This dataset is used for training.
 
     Vimeo-90K dataset from
     Tianfan Xue, Baian Chen, Jiajun Wu, Donglai Wei, William T. Freeman:
@@ -102,35 +103,38 @@ class Vimeo90kDataset(BaseDataset):
         list_suffix = {"train": "trainlist", "valid": "testlist"}[split]
         return f"{tuplet_prefix}_{list_suffix}.txt"
     
-# @DataRegistry.register("Vimeo90kImageDataModule", define_path=__file__)
-# class Vimeo90kImageDataModule(BasicDataModule):
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-
-#         train_transform = transforms.Compose([
-transforms.RandomCrop((256, 256)),
-#             transforms.RandomHorizontalFlip(),
-#             transforms.ToTensor(),
-#         ])
-
-#         test_transform = transforms.Compose([
-#             transforms.ToTensor(),
-#         ])
-
-#         self.train_dataset = Vimeo90kDataset(
-#             root=self.train_data_dir,
-#             transform=train_transform,
-#             split="train",
-#             tuplet=7
-#         )
-
-#         self.val_dataset = BasicImageDataset(
-#             self.test_data_dir, 
-#             transform=test_transform
-#         )
-
-#         self.test_dataset = BasicImageDataset(
-#             self.test_data_dir, 
-#             transform=test_transform,
-#             return_img_info=True
-#         )
+    
+class LICDataset(BaseDataset):
+    """The dataset used in DiffEIC, usually used for training and validation."""
+    def __init__(
+        self,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        
+        self.image_list = self.list_image_files(self.root)
+    
+    def __len__(self):
+        return len(self.image_list)
+        
+    def __getitem__(self, index):
+        image = Image.open(self.image_list[index]).convert("RGB")
+        image = self.transform(image)
+        return image
+        
+    
+    def list_image_files(self, root, exts=(".jpg", ".png", ".jpeg"), max_size=1):
+        """List all image files in a directory and its subdirectories.
+        """
+        files = []
+        for dir_path, _, file_names in os.walk(root):
+            early_stop = False
+            for file_name in file_names:
+                if os.path.splitext(file_name)[1].lower() in exts:
+                    if max_size >= 0 and len(files) >= max_size:
+                        early_stop = True
+                        break
+                    files.append(os.path.join(dir_path, file_name))
+            if early_stop:
+                break
+        return files
