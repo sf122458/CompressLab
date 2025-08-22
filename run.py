@@ -55,7 +55,7 @@ def main(args: Args):
             # traditional codec
             if model.Key in TRADITIONAL_CODEC:
                 if not args.test:
-                    test_data_dir = model.Params.pop("test_data_dir", config.Data.Params["test_data_dir"])
+                    test_data_dir = config.Data.Test.Params["root"]
                     codec = TRADITIONAL_CODEC[model.Key](
                         save_dir=out_dir,
                         test_data_dir=test_data_dir,

@@ -41,9 +41,11 @@ Model:
 
 
 Data:
-  Key: BasicImageDataModule
-  Params:
-    test_data_dir: dataset/Kodak
+  Test:
+    Key: BasicImageDataset
+    Params:
+      root: dataset/Kodak
+
 
 Train:
   Benchmark: 

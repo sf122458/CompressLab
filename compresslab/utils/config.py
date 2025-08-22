@@ -12,8 +12,8 @@ class DatasetConfig(BaseModel):
 
 class DataSetting(BaseModel):
     """Dataset setting for the datamodule."""
-    Train: DatasetConfig = Field(description="Configuration for the training dataset.")
-    Val: DatasetConfig = Field(description="Configuration for the validation dataset.")
+    Train: DatasetConfig = Field(default=None, description="Configuration for the training dataset.")
+    Val: DatasetConfig = Field(default=None, description="Configuration for the validation dataset.")
     Test: DatasetConfig = Field(description="Configuration for the testing dataset.")
     BatchSize: int = Field(default=32, description="Batch size for training.")
     NumWorkers: int = Field(default=4, description="Number of workers for data loading.")
@@ -105,5 +105,5 @@ class Config(BaseModel):
     Global: Optional[Dict[str, Any]] = None
     Model: List[GeneralCodec]
     Data: DataSetting
-    Train: TrainClass
-    Env: EnvClass
+    Train: TrainClass = Field(default_factory=TrainClass)
+    Env: EnvClass = Field(default_factory=EnvClass)
