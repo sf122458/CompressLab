@@ -16,16 +16,15 @@ from compresslab.nn.lossy_image_compression.elic.transform import *
 
 
 class ELIC(CompressionModel):
-    def __init__(self, N=192, M=320, slice_num=10, quant="noise", **kwargs):
+    def __init__(self, N=192, M=320, slice_num=10, 
+                 slice_ch=[8, 8, 8, 8, 16, 16, 32, 32, 96, 96],
+                 quant="noise", **kwargs):
         super().__init__(**kwargs)
-        
-        slice_ch = M // slice_num
-        assert slice_ch * slice_num == M
 
         self.N = N
         self.M = M
         self.slice_num = slice_num
-        self.slice_ch = slice_ch # [8, 8, 8, 8, 16, 16, 32, 32, 96, 96]
+        self.slice_ch = slice_ch
         self.quant = quant # noise or ste
         self.slice_num = slice_num
         self.slice_ch = slice_ch
