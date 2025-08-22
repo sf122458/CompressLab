@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from .layers.conv import conv3x3
-from .layers.res_blk import *
+from compresslab.core.layers import conv3x3
+from ..layers.res_blk import *
 
 
 class LatentResidualPredictionOld(nn.Module):

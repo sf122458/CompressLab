@@ -7,8 +7,7 @@ from compresslab.core.models import CompressionModel
 from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
 from compresslab.core.ops import quantize_ste
 from compresslab.ans import BufferedRansEncoder, RansDecoder
-from compresslab.nn.lossy_image_compression.mlic.utils.func import update_registered_buffers, get_scale_table
-from compresslab.nn.base.utils.ckbd import *
+from compresslab.nn.lossy_image_compression.elic.utils.ckbd import *
 from compresslab.nn.lossy_image_compression.mlic.transform import *
 
 class MLICPlusPlus(CompressionModel):
@@ -345,19 +344,3 @@ class MLICPlusPlus(CompressionModel):
         x_hat = self.g_s(y_hat)
 
         return {"x_hat": x_hat}
-
-    def load_state_dict(self, state_dict):
-        update_registered_buffers(
-            self.gaussian_conditional,
-            "gaussian_conditional",
-            ["_quantized_cdf", "_offset", "_cdf_length", "scale_table"],
-            state_dict,
-        )
-        super().load_state_dict(state_dict)
-
-    def update(self, scale_table=None, force=False):
-        if scale_table is None:
-            scale_table = get_scale_table()
-        updated = self.gaussian_conditional.update_scale_table(scale_table, force=force)
-        updated |= super().update(force=force)
-        return updated

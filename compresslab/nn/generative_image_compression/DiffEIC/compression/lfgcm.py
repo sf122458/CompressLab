@@ -7,7 +7,7 @@ import torch.nn as nn
 from compresslab.core.models import CompressionModel, get_scale_table
 from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
 from compresslab.core.ops import quantize_ste
-from compresslab.nn.lossy_image_compression.mlic.utils.ckbd import *
+from compresslab.nn.lossy_image_compression.elic.utils.ckbd import *
 from compresslab.ans import BufferedRansEncoder, RansDecoder
 from compresslab.core.layers import (
     conv,

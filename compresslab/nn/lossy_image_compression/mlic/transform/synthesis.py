@@ -1,7 +1,6 @@
 import torch.nn as nn
-from compresslab.core.layers import subpel_conv3x3
-from .layers.conv import conv3x3
-from .layers.res_blk import *
+from compresslab.core.layers import subpel_conv3x3, conv3x3
+from ..layers.res_blk import *
 
 class HyperSynthesis(nn.Module):
     """
@@ -26,26 +25,6 @@ class HyperSynthesis(nn.Module):
 
     def forward(self, x):
         x = self.increase(x)
-
-        return x
-
-
-class SynthesisTransformOld(nn.Module):
-    def __init__(self, N, M):
-        super().__init__()
-        self.synthesis_transform = nn.Sequential(
-            ResidualBlock(M, N),
-            ResidualBlockUpsample(N, N, 2),
-            ResidualBlock(N, N),
-            ResidualBlockUpsample(N, N, 2),
-            ResidualBlock(N, N),
-            ResidualBlockUpsample(N, N, 2),
-            ResidualBlock(N, N),
-            subpel_conv3x3(N, 3, 2),
-        )
-
-    def forward(self, x):
-        x = self.synthesis_transform(x)
 
         return x
 
