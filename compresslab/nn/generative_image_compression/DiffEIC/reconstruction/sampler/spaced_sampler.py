@@ -4,7 +4,7 @@ import torch
 import numpy as np
 
 from ..modules.diffusionmodules.utils import make_beta_schedule
-
+from ..models import LatentDiffusion
 
 # https://github.com/openai/guided-diffusion/blob/main/guided_diffusion/respace.py
 def space_timesteps(num_timesteps, section_counts):
@@ -77,7 +77,7 @@ def _extract_into_tensor(arr, timesteps, broadcast_shape):
 
 
 class SpacedSampler:
-    def __init__(self, model, schedule="linear", var_type: str="fixed_small"):
+    def __init__(self, model:LatentDiffusion, schedule="linear", var_type: str="fixed_small"):
         self.model = model
         self.original_num_steps = model.num_timesteps
         self.schedule = schedule

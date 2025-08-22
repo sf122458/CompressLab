@@ -1,38 +1,23 @@
 import torch
-import torch as th
 import torch.nn as nn
 from .modules.diffusionmodules.utils import (
     conv_nd,
     zero_module,
     timestep_embedding,
+    conv_nd,
+    linear,
 )
-from compresslab.nn.generative_image_compression.DiffEIC.reconstruction.modules.diffusionmodules.unet import (
+from .modules.diffusionmodules.unet import (
     UNetModel,
     TimestepEmbedSequential,
     ResBlock,
     Downsample,
     Upsample,
-)
-from .layers.res_blk import ResTimestepBlock
-
-import torch
-import torch.nn as nn
-
-from compresslab.nn.generative_image_compression.DiffEIC.reconstruction.modules.diffusionmodules.utils import (
-    conv_nd,
-    linear,
-)
-
-from compresslab.nn.generative_image_compression.DiffEIC.reconstruction.layers.attention import SpatialTransformer
-from compresslab.nn.generative_image_compression.DiffEIC.reconstruction.modules.diffusionmodules.unet import (
-    TimestepEmbedSequential,
-    Downsample,
     AttentionBlock,
 )
-from compresslab.nn.generative_image_compression.DiffEIC.reconstruction.utils import exists
-from .layers.res_blk import find_denominator, ResTimestepBlock
-    
-
+from .layers.attention import SpatialTransformer, find_denominator
+from .layers.res_blk import ResTimestepBlock
+from .utils import exists
     
 
 class ControlModule(nn.Module):
@@ -425,7 +410,7 @@ class CDDM(nn.Module):
         for module_base in base_model.output_blocks:
             h_base = h_base + next(it_dec_convs_out)(hs_ctr.pop(), emb) * next(scales)
 
-            h_base = th.cat([h_base, hs_base.pop()], dim=1)
+            h_base = torch.cat([h_base, hs_base.pop()], dim=1)
             h_base = module_base(h_base, emb_base, context)
 
         return base_model.out(h_base)

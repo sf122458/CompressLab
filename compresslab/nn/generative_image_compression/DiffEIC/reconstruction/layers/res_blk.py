@@ -1,12 +1,12 @@
 
 import torch.nn as nn
 import torch
-from compresslab.nn.generative_image_compression.DiffEIC.reconstruction.modules.diffusionmodules.unet import (
+from ..modules.diffusionmodules.unet import (
     Downsample,
     Upsample,
     TimestepBlock
 )
-from compresslab.nn.generative_image_compression.DiffEIC.reconstruction.modules.diffusionmodules.utils import (
+from ..modules.diffusionmodules.utils import (
     conv_nd,
     linear,
     zero_module,

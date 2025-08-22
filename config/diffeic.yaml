@@ -1,20 +1,21 @@
+# NOTE: The training stage code is not tested yet.
 Model:
   - Name: diffeic
     Key: DiffEIC
     Params:
       pretrained_target_rate: 0.06
+    ExtParams:
+      SaveRecon: true
 
 Data:
   Train:
-    Key: Vimeo90kDataset
+    Key: LICDataset
     Params:
-      root: /mnt/sdb/lyx/dataset/vimeo_setuplet
+      root: dataset/LSDIR
       transform:
         RandomCrop: 
-          size: [256, 256]
+          size: [512, 512]
         RandomHorizontalFlip: ~
-      split: train
-      tuplet: 7
   Val:
     Key: BasicImageDataset
     Params:
@@ -24,18 +25,11 @@ Data:
     Params:
       root: dataset/Kodak
       return_img_info: true
-  BatchSize: 16
+  BatchSize: 4
 
 Train:
   Steps: 1_200_000
   Valinterval: 1
-  # Benchmark: 
-  #   - Key: BD_RATE
-  #     Params:
-  #       mode: 1
-  #       baseline: "JPEG"
-  #   - Key: BD_CURVE
-
 
 Env:
   Devices: [0]

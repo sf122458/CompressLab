@@ -29,16 +29,12 @@ class DDPM(nn.Module):
     def __init__(self,
                  timesteps=1000,
                  beta_schedule="linear",
-                 loss_type="l2",
-                 first_stage_key="image",
                  linear_start=1e-4,
                  linear_end=2e-2,
                  cosine_s=8e-3,
                  given_betas=None,
                  v_posterior=0.,  # weight for choosing posterior variance as sigma = (1-v) * beta_tilde + v * beta
-                 conditioning_key="crossattn",
                  parameterization="eps",  # all assuming fixed variance schedules
-                 learn_logvar=False,
                  logvar_init=0.,
                  ):
         super().__init__()
@@ -47,9 +43,10 @@ class DDPM(nn.Module):
         logging.info(f"{self.__class__.__name__}: Running in {self.parameterization}-prediction mode")
         self.cond_stage_model = None
         
-        self.first_stage_key = first_stage_key
         
-        self.model = DiffusionWrapper(conditioning_key)
+        self.model = DiffusionWrapper()
+        self.model.eval()
+        self.model.train = disabled_train
         count_params(self.model, verbose=True)
         
         self.v_posterior = v_posterior
@@ -57,14 +54,9 @@ class DDPM(nn.Module):
         self.register_schedule(given_betas=given_betas, beta_schedule=beta_schedule, timesteps=timesteps,
                                linear_start=linear_start, linear_end=linear_end, cosine_s=cosine_s)
 
-        self.loss_type = loss_type
 
-        self.learn_logvar = learn_logvar
         logvar = torch.full(fill_value=logvar_init, size=(self.num_timesteps,))
-        if self.learn_logvar:
-            self.logvar = nn.Parameter(self.logvar, requires_grad=True)
-        else:
-            self.register_buffer('logvar', logvar)
+        self.register_buffer('logvar', logvar)
 
 
     def register_schedule(self, given_betas=None, beta_schedule="linear", timesteps=1000,
@@ -130,8 +122,6 @@ class DDPM(nn.Module):
         )
 
     def predict_start_from_z_and_v(self, x_t, t, v):
-        # self.register_buffer('sqrt_alphas_cumprod', to_torch(np.sqrt(alphas_cumprod)))
-        # self.register_buffer('sqrt_one_minus_alphas_cumprod', to_torch(np.sqrt(1. - alphas_cumprod)))
         return (
                 extract_into_tensor(self.sqrt_alphas_cumprod, t, x_t.shape) * x_t -
                 extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_t.shape) * v
@@ -163,21 +153,6 @@ class DDPM(nn.Module):
                 extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x.shape) * x
         )
 
-    def get_loss(self, pred, target, mean=True):
-        if self.loss_type == 'l1':
-            loss = (target - pred).abs()
-            if mean:
-                loss = loss.mean()
-        elif self.loss_type == 'l2':
-            if mean:
-                loss = torch.nn.functional.mse_loss(target, pred)
-            else:
-                loss = torch.nn.functional.mse_loss(target, pred, reduction='none')
-        else:
-            raise NotImplementedError(f"unknown loss type '{self.loss_type}'")
-
-        return loss
-
     def get_input(self, batch, k):
         x = batch[k] # k: key, 'jpg'
         if len(x.shape) == 3:
@@ -186,11 +161,6 @@ class DDPM(nn.Module):
         x = x.to(memory_format=torch.contiguous_format).float()
         return x
 
-    def shared_step(self, batch):
-        x = self.get_input(batch, self.first_stage_key)
-        loss, loss_dict = self(x)
-        return loss, loss_dict
-            
 class LatentDiffusion(DDPM):
     """main class"""
 
@@ -200,7 +170,6 @@ class LatentDiffusion(DDPM):
                  cond_stage_key="txt",
                  cond_stage_trainable=False, # Must false
                  cond_stage_forward=None,
-                 conditioning_key="crossattn",
                  scale_factor=0.18215,
                  scale_by_std=False,
                  force_null_conditioning=False,
@@ -211,9 +180,9 @@ class LatentDiffusion(DDPM):
         assert self.num_timesteps_cond <= timesteps
             
         super().__init__(
-            timesteps=timesteps,
-            conditioning_key=conditioning_key, 
-            *args, **kwargs)
+            timesteps=timesteps, 
+            *args, **kwargs
+        )
         
         self.cond_stage_trainable = cond_stage_trainable
         self.cond_stage_key = cond_stage_key
@@ -260,22 +229,6 @@ class LatentDiffusion(DDPM):
         ids = torch.round(torch.linspace(0, self.num_timesteps - 1, self.num_timesteps_cond)).long()
         self.cond_ids[:self.num_timesteps_cond] = ids
 
-    @rank_zero_only
-    @torch.no_grad()
-    def on_train_batch_start(self, batch, batch_idx, dataloader_idx):
-        # only for very first batch
-        if self.scale_by_std and self.current_epoch == 0 and self.global_step == 0 and batch_idx == 0 and not self.restarted_from_ckpt:
-            assert self.scale_factor == 1., 'rather not use custom rescaling and std-rescaling simultaneously'
-            # set rescale weight to 1./std of encodings
-            logging.info("### USING STD-RESCALING ###")
-            x = super().get_input(batch, self.first_stage_key)
-            x = x.to(self.device)
-            encoder_posterior = self.encode_first_stage(x)
-            z = self.get_first_stage_encoding(encoder_posterior).detach()
-            del self.scale_factor
-            self.register_buffer('scale_factor', 1. / z.flatten().std())
-            logging.info(f"setting self.scale_factor to {self.scale_factor}")
-            logging.info("### USING STD-RESCALING ###")
 
     def register_schedule(self,
                           given_betas=None, beta_schedule="linear", timesteps=1000,
@@ -309,53 +262,6 @@ class LatentDiffusion(DDPM):
         return c
 
     @torch.no_grad()
-    def get_input(self, batch, k, return_first_stage_outputs=False, force_c_encode=False,
-                  cond_key=None, return_original_cond=False, bs=None, return_x=False):
-        x = super().get_input(batch, k)
-        if bs is not None:
-            x = x[:bs]
-        x = x.to(self.device)
-        encoder_posterior = self.encode_first_stage(x)
-        z = self.get_first_stage_encoding(encoder_posterior).detach()
-
-        if self.model.conditioning_key is not None and not self.force_null_conditioning:
-            if cond_key is None:
-                cond_key = self.cond_stage_key
-            if cond_key != self.first_stage_key:
-                if cond_key in ['caption', 'coordinates_bbox', "txt"]:
-                    xc = batch[cond_key]
-                elif cond_key in ['class_label', 'cls']:
-                    xc = batch
-                else:
-                    xc = super().get_input(batch, cond_key).to(self.device)
-            else:
-                xc = x
-            if not self.cond_stage_trainable or force_c_encode:
-                if isinstance(xc, dict) or isinstance(xc, list):
-                    c = self.get_learned_conditioning(xc)
-                else:
-                    c = self.get_learned_conditioning(xc.to(self.device))
-            else:
-                c = xc
-            if bs is not None:
-                c = c[:bs]
-
-
-        else:
-            c = None
-            xc = None
-            
-        out = [z, c]
-        if return_first_stage_outputs:
-            xrec = self.decode_first_stage(z)
-            out.extend([x, xrec])
-        if return_x:
-            out.extend([x])
-        if return_original_cond:
-            out.append(xc)
-        return out
-
-    @torch.no_grad()
     def decode_first_stage(self, z, predict_cids=False, force_not_quantize=False):
         if predict_cids:
             if z.dim() == 4:
@@ -381,36 +287,13 @@ class LatentDiffusion(DDPM):
     def encode_first_stage(self, x):
         return self.first_stage_model.encode(x)
 
-    def shared_step(self, batch, **kwargs):
-        x, c = self.get_input(batch, self.first_stage_key)
-        loss = self(x, c)
-        return loss
-
-
-    def apply_model(self, x_noisy, t, cond, return_ids=False):
-        if isinstance(cond, dict):
-            # hybrid case, cond is expected to be a dict
-            pass
-        else:
-            if not isinstance(cond, list):
-                cond = [cond]
-            key = 'c_concat' if self.model.conditioning_key == 'concat' else 'c_crossattn'
-            cond = {key: cond}
-
-        x_recon = self.model(x_noisy, t, **cond)
-
-        if isinstance(x_recon, tuple) and not return_ids:
-            return x_recon[0]
-        else:
-            return x_recon
-
     def _predict_xstart_from_eps(self, x_t, t, eps):
         return extract_into_tensor(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t - \
                extract_into_tensor(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * eps
 
 
 class DiffusionWrapper(pl.LightningModule):
-    def __init__(self, conditioning_key):
+    def __init__(self):
         super().__init__()
         self.sequential_cross_attn = False
         self.diffusion_model = UNetModel(
@@ -428,38 +311,4 @@ class DiffusionWrapper(pl.LightningModule):
             context_dim=1024,
             legacy=False
         )
-        self.conditioning_key = conditioning_key
-        assert self.conditioning_key in [None, 'concat', 'crossattn', 'hybrid', 'adm', 'hybrid-adm', 'crossattn-adm']
-
-    def forward(self, x, t, c_concat: list = None, c_crossattn: list = None, c_adm=None):
-        if self.conditioning_key is None:
-            out = self.diffusion_model(x, t)
-        elif self.conditioning_key == 'concat':
-            xc = torch.cat([x] + c_concat, dim=1)
-            out = self.diffusion_model(xc, t)
-        elif self.conditioning_key == 'crossattn':
-            if not self.sequential_cross_attn:
-                cc = torch.cat(c_crossattn, 1)
-            else:
-                cc = c_crossattn
-            out = self.diffusion_model(x, t, context=cc)
-        elif self.conditioning_key == 'hybrid':
-            xc = torch.cat([x] + c_concat, dim=1)
-            cc = torch.cat(c_crossattn, 1)
-            out = self.diffusion_model(xc, t, context=cc)
-        elif self.conditioning_key == 'hybrid-adm':
-            assert c_adm is not None
-            xc = torch.cat([x] + c_concat, dim=1)
-            cc = torch.cat(c_crossattn, 1)
-            out = self.diffusion_model(xc, t, context=cc, y=c_adm)
-        elif self.conditioning_key == 'crossattn-adm':
-            assert c_adm is not None
-            cc = torch.cat(c_crossattn, 1)
-            out = self.diffusion_model(x, t, context=cc, y=c_adm)
-        elif self.conditioning_key == 'adm':
-            cc = c_crossattn[0]
-            out = self.diffusion_model(x, t, y=cc)
-        else:
-            raise NotImplementedError()
-
-        return out
+        
