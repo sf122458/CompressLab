@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from compresslab.core.models import CompressionModel
-from compresslab.core.entropy_models import GaussianConditional
+from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
 from compresslab.core.ops import quantize_ste as ste_round
 from compresslab.ans import BufferedRansEncoder, RansDecoder
 from compresslab.nn.lossy_image_compression.elic.utils.ckbd import *
@@ -57,7 +57,7 @@ class ELIC(CompressionModel):
             for i in range(slice_num)
         )
 
-        # Gussian Conditional
+        self.entropy_bottleneck = EntropyBottleneck(N)
         self.gaussian_conditional = GaussianConditional(None)
 
     def forward(self, x):
