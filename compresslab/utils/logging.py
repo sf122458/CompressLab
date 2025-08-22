@@ -2,6 +2,7 @@ import logging
 import colorlog
 import sys
 from logging import Handler, getLevelName
+from .constant import SHOW_ABS_PATH
 
 class StreamHandler(Handler):
     """
@@ -49,8 +50,8 @@ class StreamHandler(Handler):
             msg = self.format(record)
             stream = self.stream
             # FIXME: the implementation of StreamHandler in `logging` will lead to the repeat of the progress bar, use sys.stderr here can avoid this problem
-            # stream.write(msg + self.terminator)
-            sys.stderr.write(msg + self.terminator)
+            stream.write(msg + self.terminator)
+            # sys.stderr.write(msg + self.terminator)
             self.flush()
         except RecursionError:  # See issue 36272
             raise
@@ -97,13 +98,16 @@ colors_config = {
 }
 
 
+name = "pathname" if SHOW_ABS_PATH else "filename"
+
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 console_handler = StreamHandler()
 console_formatter = colorlog.ColoredFormatter(
-    fmt='%(log_color)s[%(asctime)s.%(msecs)03d] %(filename)s -> %(funcName)s line:%(lineno)d [%(levelname)s] : %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
+    fmt=f'%(log_color)s[%(asctime)s] %({name})s -> %(funcName)s line:%(lineno)d [%(levelname)s] : %(message)s',
+    datefmt='%m-%d %H:%M:%S',
     log_colors=colors_config,
     stream=sys.stderr
 )
