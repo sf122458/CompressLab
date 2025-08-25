@@ -19,7 +19,7 @@ class MetricLogger:
     .. code-block:: python
         logger = MetricLogger(save_dir)
             
-    2.recode time:
+    2.log the execution time:
     .. code-block:: python
         with logger.timer(name, metric_name):
             # Your code here

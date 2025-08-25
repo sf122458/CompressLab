@@ -346,7 +346,6 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
                     
             preds = self.decompress(**out_compress)
         
-        # bpp = sum(len(strings[0]) * 8 for strings in out_compress["strings"]) / H / W
         bpp = 0
         for strings in out_compress["strings"]:
             while isinstance(strings, list):
