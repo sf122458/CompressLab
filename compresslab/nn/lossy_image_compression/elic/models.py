@@ -14,7 +14,6 @@ from compresslab.ans import BufferedRansEncoder, RansDecoder
 from compresslab.nn.lossy_image_compression.elic.utils.ckbd import *
 from compresslab.nn.lossy_image_compression.elic.transform import *
 
-
 class ELIC(CompressionModel):
     def __init__(self, N=192, M=320, slice_num=10, 
                  slice_ch=[8, 8, 8, 8, 16, 16, 32, 32, 96, 96],
@@ -33,7 +32,7 @@ class ELIC(CompressionModel):
         self.h_s = HyperSynthesisEX(N, M, act=nn.ReLU)
         # Channel Fusion Model
         self.local_context = nn.ModuleList(
-            nn.Conv2d(in_channels=slice_ch[i], out_channels=slice_ch[i] * 2, kernel_size=5, stride=1, padding=2)
+            LocalContextEX(in_dim=slice_ch[i], out_dim=slice_ch[i] * 2)
             for i in range(len(slice_ch))
         )
         self.channel_context = nn.ModuleList(
