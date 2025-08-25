@@ -1,5 +1,6 @@
-# https://github.com/JiangWeibeta/MLIC/blob/main/MLIC%2B%2B/models/mlicpp.py
-
+"""
+MLIC++ implementation in https://github.com/JiangWeibeta/MLIC/blob/main/MLIC%2B%2B/models/mlicpp.py
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

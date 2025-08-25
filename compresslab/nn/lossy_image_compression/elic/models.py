@@ -26,8 +26,6 @@ class ELIC(CompressionModel):
         self.slice_num = slice_num
         self.slice_ch = slice_ch
         self.quant = quant # noise or ste
-        self.slice_num = slice_num
-        self.slice_ch = slice_ch
         self.g_a = AnalysisTransformEX(N, M, act=nn.ReLU)
         self.g_s = SynthesisTransformEX(N, M, act=nn.ReLU)
         # Hyper Transform
