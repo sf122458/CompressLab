@@ -3,31 +3,11 @@
 A PyTorch-based framework for deep-learning-based data compression research.
 
 ### Features
-- **YAML-Driven Zero-Code Experiment Launch**
 
-  Start experiments with a single `yaml` configuration file:
-  - Model Auto-Registration: The `Registry` class enables automatic model registration. Specify a list of models under the `Model` key in the config file to train multiple models in one run.
-  - DDP Training Simplification: Built on [PyTorch Lightning](https://lightning.ai), configure the `Devices` key in the config file to easily enable DDP (Distributed Data Parallel) training for multi-GPU acceleration.
-  - Each config file responds to a folder in the `output` directory, so it is suggested to train models oriented to a specific task in a single config file.
-  - **NOTE**: All trainers are defined in `trainer.py`. Models choose the corresponding trainer based on the `model`' s annotation defined in the trainer. If you want to create a customed model, you need to inherit from the abstract class in `abc.py` and implement the code in `models.py`. The abstract class defines some common methods that all models should implement. All models defined in `models.py` will be automatically registered. You can refer to the existing models in `models.py` for implementation details.
-
-- **Multi-λ Training & Parallel Model Execution**
-
-  The framework supports configuring multiple λ values in the loss function to enable simultaneous training of multiple models. It also supports parallel forward and backward passes for multiple models with the help of `vmap`. Training progress is monitored in real time via `TensorBoard`.
-  
-  **NOTE: `vmap` is not capable of accelerating the training process under all circumstances.**
-
-- **Automatic Metric Calculation via Dataclass Encapsulation**
-
-  Inputs and outputs of compression models are encapsulated in dataclass, which automatically computes key metrics based on input arguments. For example, providing `likelihoods` allows the dataclass to directly calculate the `bpp` (bits per pixel) attribute. Then you can simply access the attribute to obtain results without manual computation.
-
-- **Comprehensive Benchmarking Suite**
-  
-  The `Benchmark` module can automatically collect multiple metrics and write into `metrics.csv`, currently including:
-  - **Quality Metrics**: Bits per pixel (bpp), peak signal-to-noise ratio (PSNR);
-  - **Performance Metrics**: Compression/decompression speed;
-  - **Comparative Metrics**: BD-rate across models for direct performance comparison.
-
+- All implementations of models and datasets are modularized and registered in a registry. The training and testing pipelines can be easily configured by YAML files. Please refer to the example configuration files in the `config` folder and see the details of available options in `compresslab/utils/config.py`.
+- For the vae-based image compression models `compresslab/nn/lossy_image_compression`, training with several rate-distortion points simultaneously is supported in one run. 
+- The framework is built on [PyTorch Lightning](https://lightning.ai), which makes it easy to run in DDP mode and adjust the precision. Moreover, it supports logging via TensorBoard, and resume from the checkpoint automatically.
+- A general metrics computation module is provided, and you can easily obtain the final results in the `output` folder after testing.
 
 ### Installation
 
@@ -66,7 +46,7 @@ Each folder in `dataset` has a `download.sh` script to download the dataset. Jus
 - `UVG` is used for the evaluation of the video compression models. The preprocess currently follows [PyTorchVideoCompression](https://github.com/ZhihaoHu/PyTorchVideoCompression)
 
 ### Available models
-#### Lossy image compression
+#### VAE-based lossy image compression
 - All models implemented in [CompressAI](https://github.com/InterDigitalInc/CompressAI):
   - [FactorizedPrior](https://arxiv.org/abs/1607.05006)
   - [ScaleHyperprior](https://arxiv.org/abs/1802.01436)
@@ -78,25 +58,22 @@ Each folder in `dataset` has a `download.sh` script to download the dataset. Jus
 - [TCM](https://arxiv.org/abs/2303.14978)
 - [MLIC](https://arxiv.org/abs/2307.15421)
 
-#### Video compression
+#### Generative image compression (Only support evaluation of the pre-trained models now)
+- [DiffEIC](https://arxiv.org/pdf/2404.18820)
+- [StableCodec](https://arxiv.org/abs/2506.21977)
+
+<!-- #### Video compression (TODO: refactor the code)
 - [DVC](https://arxiv.org/abs/1812.00101)
 - [SSF](https://openaccess.thecvf.com/content_CVPR_2020/papers/Agustsson_Scale-Space_Flow_for_End-to-End_Optimized_Video_Compression_CVPR_2020_paper.pdf)
-
-**Note: All models can be trained using the provided code, but the compression performance remains unverified.**
+ -->
 
 
 ### TODO
-- [ ] Video compression pipeline, such as how to process the I-frame compression model and how to set the different training stages.
-- [x] Finetine from checkpoints.
-- [x] Implement traditional codecs like `VTM` and so on.
+- [ ] Refactor the code of video compression models.
 - [ ] Load video dataset directly from `.yuv` files.
-- [x] Options to save the reconstructed images during testing.
-- [x] Reorganize the `config`.
-- ...
-
-### Bug needed to fix
-- [ ] `benchmark.py` can't give the correct bd-rate curve.
-- [ ] ...
+- [ ] Try to implement finetining from checkpoints or two-stage training in one run.
+- [ ] Support automatically padding the input image to the required size.
+- [ ] `benchmark.py` can't give the correct bd-rate curve. Fix it later.
 
 
 ### Related links
@@ -107,6 +84,8 @@ Each folder in `dataset` has a `download.sh` script to download the dataset. Jus
 - [MLIC](https://github.com/JiangWeibeta/MLIC)
 - [DVC-PyTorch](https://github.com/binzzheng/DVC-PyTorch)
 - [PyTorchVideoCompression](https://github.com/ZhihaoHu/PyTorchVideoCompression)
+- [DiffEIC](https://github.com/huai-chang/DiffEIC)
+- [StableCodec](https://github.com/LuizScarlet/StableCodec)
 - [CLIC](https://www.compression.cc/)
 - [UVG](https://ultravideo.fi)
 - [Kodak](https://r0k.us/graphics/kodak/)
