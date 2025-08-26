@@ -127,16 +127,15 @@ def main(args: Args):
                     hparams = pickle.load(pkl_file)
                 if hparams.Key != model.Key and hparams.Params != model.Params:
                     raise ValueError(f"Model hyperparams mismatch: {hparams} vs {model}")
-            
-            if config.Train.Steps is None and config.Train.Epoch is None:
-                raise ValueError("Please specify either Train.Steps or Train.Epoch in the config file.")
-
-            num_epoch = config.Train.Epoch if config.Train.Epoch is not None \
-                else math.ceil(config.Train.Steps / len(datamodule.train_dataloader()) * len(config.Env.Devices))
-                
-            num_steps = num_epoch * len(datamodule.train_dataloader()) // len(config.Env.Devices)
 
             if not args.test:
+                if config.Train.Steps is None and config.Train.Epoch is None:
+                    raise ValueError("Please specify either Train.Steps or Train.Epoch in the config file.")
+
+                num_epoch = config.Train.Epoch if config.Train.Epoch is not None \
+                    else math.ceil(config.Train.Steps / len(datamodule.train_dataloader()) * len(config.Env.Devices))
+                    
+                num_steps = num_epoch * len(datamodule.train_dataloader()) // len(config.Env.Devices)
                 trainer = Trainer(
                     accelerator="gpu" if torch.cuda.is_available() else "cpu",
                     devices=config.Env.Devices,

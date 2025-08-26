@@ -1,3 +1,4 @@
+import logging
 import lightning as L
 from typing import Dict, Any
 from torch.utils.data import DataLoader, Dataset
@@ -81,8 +82,10 @@ class DataModule(L.LightningDataModule):
         self.batch_size_per_device = batch_size // num_devices
         self.num_workers = num_workers
         
-        self.train_dataset = DataRegistry.get(train.Key)(**train.Params)
-        self.val_dataset = DataRegistry.get(val.Key)(**val.Params)
+        self.train_dataset = DataRegistry.get(train.Key)(**train.Params) if train is not None else None
+        self.val_dataset = DataRegistry.get(val.Key)(**val.Params) if val is not None else None
+        if self.train_dataset is None or self.val_dataset is None:
+            logging.warning("Train or Val dataset is not provided. You can only run testing.")
         self.test_dataset = DataRegistry.get(test.Key)(**test.Params)
     
     def train_dataloader(self):

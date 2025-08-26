@@ -1,0 +1,23 @@
+# Test the pretrained generative image compression models.
+Model:
+  - Key: DiffEIC
+    Params:
+      pretrained_target_rate: 0.06
+    ExtParams:
+      SaveRecon: true
+
+  - Key: StableCodec
+    Params:
+      level: 1
+    ExtParams:
+      SaveRecon: true
+
+Data:
+  Test:
+    Key: BasicImageDataset
+    Params:
+      root: dataset/Kodak
+      return_img_info: true
+
+Env:
+  Devices: [0]
