@@ -9,7 +9,7 @@ import logging
 from PIL import Image
 import numpy as np
 import time
-from compresslab.utils.logger import MetricLogger
+from compresslab.utils.logger import MetricsLogger
 import torch
 from rich.progress import Progress, BarColumn, TimeElapsedColumn, TimeRemainingColumn
 from tempfile import mkstemp
@@ -56,7 +56,7 @@ class Codec(ABC):
         raise NotImplementedError("Subclasses should implement this method.")
 
     def run(self):
-        self.logger = MetricLogger(self.save_dir)
+        self.logger = MetricsLogger(self.save_dir)
 
         with Progress(
             "[progress.description]{task.description}",

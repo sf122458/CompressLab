@@ -2,29 +2,15 @@ import torch
 import torch.nn.functional as F
 import math
 from torch import Tensor
-from typing import List, Dict, Any, Union, Optional
+from typing import List, Dict, Any, Union
 from dataclasses import dataclass, field
-from pytorch_msssim import ms_ssim as ms_ssim_func
-# TODO: use torchmetrics if possible
-from torchmetrics.functional.image import (
-    deep_image_structure_and_texture_similarity as dists_func,
-    learned_perceptual_image_patch_similarity as lpips_func,
-)
+from torchmetrics.image import MultiScaleStructuralSimilarityIndexMeasure
+from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
+from torchmetrics.image.dists import DeepImageStructureAndTextureSimilarity
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.kid import KernelInceptionDistance
 from lightning import LightningModule
 
-@dataclass
-class MetricsConfig:
-    VAE_IMAGE_COMPRESSION = {
-        "train": ["MSE", "MS_SSIM"],
-        "eval": ["MSE", "MS_SSIM"]
-    }
-    
-    GENERATIVE_IMAGE_COMPRESSION = {
-        "train": ["MSE", "MS_SSIM", "LPIPS"],
-        "eval": ["MSE", "MS_SSIM", "KID", "FID", "LPIPS", "DISTS"]
-    }
 
 @dataclass
 class ImageMetricsOutput:
@@ -33,63 +19,66 @@ class ImageMetricsOutput:
     psnr: float = field(default=None)
     ms_ssim_loss: torch.Tensor = field(default=None)
     ms_ssim: float = field(default=None)
-    kid: torch.Tensor = field(default=None)
-    fid: torch.Tensor = field(default=None)
     lpips: torch.Tensor = field(default=None)
     dists: torch.Tensor = field(default=None)
+    kid: float = field(default=None)
+    fid: float = field(default=None)
         
 
 class MetricsCollector(LightningModule):
     def __init__(
         self, 
-        config: Dict[str, Any] = MetricsConfig.VAE_IMAGE_COMPRESSION,
     ):
         super().__init__()
-        self.config = config
         
+        self.initialized = False
         
-    def reset_config(self, config: Dict[str, Any]):
-        """
-        Reset the configuration for the metrics collector.
-        """
-        self.config = config
+    def setup(self):
+        self.ms_ssim = MultiScaleStructuralSimilarityIndexMeasure(data_range=1.0).to(self.device)
+        self.lpips = LearnedPerceptualImagePatchSimilarity(net_type='alex', normalize=True).to(self.device)
+        self.dists = DeepImageStructureAndTextureSimilarity(reduction='mean').to(self.device)
+        self.fid = FrechetInceptionDistance(normalize=True).to(self.device)
+        self.kid = KernelInceptionDistance(normalize=True).to(self.device)
     
-    def forward(self, *args: List[Dict[str, Any]]) -> ImageMetricsOutput:
-        # if "KID" in self.config["eval"]:
-        #     if not hasattr(self, 'kid_metric'):
-        #         self.kid_metric = KernelInceptionDistance(normalize=True).to(self.device)
+    def forward(self, imgs: Tensor, recons: Tensor, 
+                likelihoods: Dict[str, Tensor] = None, 
+                strings: List[Any] = None,
+                mse: bool = False,
+                psnr: bool = False,
+                ms_ssim: bool = False,
+                lpips: bool = False,
+                dists: bool = False,
+                kid: bool = False,
+                fid: bool = False,
+                ) -> ImageMetricsOutput:
+        if self.initialized is False:   # This avoid saving the pretrained model weights in checkpoints
+            self.setup()
+            self.initialized = True
         
-        # if "FID" in self.config["eval"]:
-        #     if not hasattr(self, 'fid_metric'):
-        #         self.fid_metric = FrechetInceptionDistance(normalize=True).to(self.device)
-
-        metrics_enabled = self.config["train"] if self.training else self.config["eval"]
-            
-        collected_dict = args[0]
-        for arg in args[1:]:
-            if isinstance(arg, dict):
-                collected_dict.update(arg)
-            
+        recons = recons.clamp(0, 1)
+        
         output_metrics = dict()
         
-        assert "x" in collected_dict, "Input tensor 'x' is required."
-        assert "x_hat" in collected_dict, "Reconstructed tensor 'x_hat' is required."
-        num_pixels = collected_dict["x"].shape[0] * collected_dict["x"].shape[2] * collected_dict["x"].shape[3]
-
-        if "likelihoods" in collected_dict:
+        num_pixels = imgs.shape[0] * imgs.shape[2] * imgs.shape[3]
+        
+        if likelihoods is not None:
             total_bits = sum(
                 torch.log(likelihood).sum() / (-math.log(2))
-                for likelihood in collected_dict["likelihoods"].values()
+                for likelihood in likelihoods.values()
             )
-        elif "strings" in collected_dict:
-            total_bits = sum(len(s) * 8 if isinstance(s, bytes) else len(s[0]) * 8 for s in collected_dict["strings"])
+        elif strings is not None:
+            total_bits = 0
+            for s in strings:
+                while isinstance(s, list):
+                    s = s[0]
+                total_bits += len(s) * 8
         else:
             raise ValueError("Either likelihoods or strings must be provided.")
         
         output_metrics["bpp"] = total_bits / num_pixels
         
-        if "MSE" in metrics_enabled:
-            mse_loss = F.mse_loss(collected_dict['x_hat'], collected_dict['x'])
+        if mse or psnr:
+            mse_loss = F.mse_loss(recons, imgs)
             psnr = 10 * torch.log10(1 / mse_loss)
             output_metrics.update({
                 "mse_loss": mse_loss,
@@ -97,12 +86,10 @@ class MetricsCollector(LightningModule):
             })
             
 
-        if "MS_SSIM" in metrics_enabled:
-            ms_ssim = ms_ssim_func(
-                collected_dict["x_hat"], 
-                collected_dict["x"], 
-                data_range=1.0, 
-                size_average=True
+        if ms_ssim:
+            ms_ssim = self.ms_ssim(
+                recons,
+                imgs, 
             )
             ms_ssim_loss = 1 - ms_ssim
             output_metrics.update({
@@ -110,57 +97,70 @@ class MetricsCollector(LightningModule):
                 "ms_ssim": ms_ssim
             })
         
-        # TODO: under test
-        # if "KID" in metrics_enabled and not self.training:
-        #     self.kid_metric.forward()
+        if lpips:
+            output_metrics["lpips"] = self.lpips(recons, imgs)
         
-        # if "FID" in metrics_enabled and not self.training:
-        #     self.fid_metric.forward()
+        if dists:
+            output_metrics["dists"] = self.dists(recons, imgs)
+            
+        if kid:
+            self._update_patch(imgs, recons, self.kid)
+            try:
+                output_metrics["kid"] = self.kid.compute()[0]
+            except Exception as e:
+                output_metrics["kid"] = torch.tensor(float('nan'))
         
-        if "LPIPS" in metrics_enabled:
-            output_metrics["lpips"] = lpips_func(
-                collected_dict["x_hat"].clamp(0, 1), 
-                collected_dict["x"], 
-                net_type='alex', 
-                normalize=True
-            )
-        
-        if "DISTS" in metrics_enabled:
-            output_metrics["dists"] = dists_func(
-                collected_dict["x_hat"], 
-                collected_dict["x"], 
-                reduction='mean',
-            )
+        if fid:
+            self._update_patch(imgs, recons, self.fid)
+            try:
+                output_metrics["fid"] = self.fid.compute()
+            except Exception as e:
+                output_metrics["fid"] = torch.tensor(float('nan'))
             
         return ImageMetricsOutput(**output_metrics)
     
+    def reset(self):
+        self.ms_ssim.reset()
+        self.lpips.reset()
+        self.dists.reset()
+        self.fid.reset()
+        self.kid.reset()
 
-    # def update_patch(self, input_images: Tensor, pred: Tensor, 
-    #                  metrics_fn: Union[KernelInceptionDistance, FrechetInceptionDistance], 
-    #                  patch_size=256):
-    #     real = self.image_to_255_scale(
-    #         F.unfold(input_images, kernel_size=patch_size, stride=patch_size)
-    #         .permute(0, 2, 1)
-    #         .reshape(-1, 3, patch_size, patch_size),
-    #         dtype=torch.uint8
-    #     )
-    #     fake = self.image_to_255_scale(
-    #         F.unfold(pred, kernel_size=patch_size, stride=patch_size)
-    #         .permute(0, 2, 1)
-    #         .reshape(-1, 3, patch_size, patch_size),
-    #         dtype=torch.uint8
-    #     )
-    #     patch_count = real.shape[0]
-    #     metrics_fn.update(real, real=True)
-    #     metrics_fn.update(fake, real=False)
+    def _update_patch(self, input_images: Tensor, pred: Tensor, 
+                     metrics_fn: Union[KernelInceptionDistance, FrechetInceptionDistance], 
+                     patch_size=256):
+        real = F.unfold(input_images, kernel_size=patch_size, stride=patch_size)\
+            .permute(0, 2, 1)\
+            .reshape(-1, 3, patch_size, patch_size)
+        fake = F.unfold(pred, kernel_size=patch_size, stride=patch_size)\
+            .permute(0, 2, 1)\
+            .reshape(-1, 3, patch_size, patch_size)
+        
+        metrics_fn.update(real, real=True)
+        metrics_fn.update(fake, real=False)
+        
+        patch_count = real.shape[0]
 
-    # def image_to_255_scale(image: Tensor, dtype: Optional[torch.dtype] = None):
-    #     if image.max() > 1.0 or image.min() < 0.0:
-    #         raise ValueError("Image tensor values must be in the range [0, 1].")
-        
-    #     image = torch.round(image * 255.0)
-        
-    #     if dtype is not None:
-    #         image = image.to(dtype)
-        
-    #     return image
+        H, W = input_images.shape[2], input_images.shape[3]
+        if H >= 1.5 * patch_size and W >= 1.5 * patch_size:
+            real = F.unfold(
+                    input_images[:, :, patch_size // 2 :, patch_size // 2 :],
+                    kernel_size=patch_size,
+                    stride=patch_size,
+                )\
+                .permute(0, 2, 1)\
+                .reshape(-1, 3, patch_size, patch_size)
+            fake = F.unfold(
+                    pred[:, :, patch_size // 2 :, patch_size // 2 :],
+                    kernel_size=patch_size,
+                    stride=patch_size,
+                )\
+                .permute(0, 2, 1)\
+                .reshape(-1, 3, patch_size, patch_size)
+                
+            patch_count += real.shape[0]
+            
+            metrics_fn.update(real, real=True)
+            metrics_fn.update(fake, real=False)
+            
+        return patch_count

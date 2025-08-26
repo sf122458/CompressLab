@@ -335,26 +335,41 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
         
         H, W = imgs.shape[2], imgs.shape[3]
         
-        with self.metric_logger.timer("DiffEIC", "compress"):
+        with self.metrics_logger.timer("DiffEIC", "compress"):
             out_compress = self.compress(imgs)
             if self.ext_params.SaveBitstream:
                 self.write_bitstream(filename, **out_compress)
                 
-        with self.metric_logger.timer("DiffEIC", "decompress"):
+        with self.metrics_logger.timer("DiffEIC", "decompress"):
             if self.ext_params.SaveBitstream:
                 out_compress = self.read_bitstream(filename)
                     
             preds = self.decompress(**out_compress)
         
-        bpp = 0
-        for strings in out_compress["strings"]:
-            while isinstance(strings, list):
-                strings = strings[0]
-            bpp += len(strings) * 8 / (H * W)
+        metrics = self.metrics_collector.forward(
+            imgs, preds, 
+            strings=out_compress["strings"],
+            psnr=True, ms_ssim=True, lpips=True, dists=True, kid=True, fid=True
+        )
+
+        self.log_test_metrics(
+            "DiffEIC",
+            {
+                "bpp": metrics.bpp,
+                "psnr": metrics.psnr,
+                "ms-ssim": metrics.ms_ssim,
+                "lpips": metrics.lpips,
+                "dists": metrics.dists,
+            },
+            {
+                "kid": metrics.kid,
+                "fid": metrics.fid,
+            }
+        )
 
         
         if self.ext_params.SaveRecon:
-            self.save_recon_imgs(preds, f"{filename}_{bpp:.4f}.png")
+            self.save_recon_imgs(preds, f"{filename}_{metrics.bpp:.4f}.png")
         
     def load_preprocess_ckpt(self, ckpt_path_pre):
         ckpt = torch.load(ckpt_path_pre)

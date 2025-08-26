@@ -45,7 +45,9 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
 
             out = model_instance(batch)
 
-            metrics = self.metrics_collector.forward(out, {"x": batch})
+            metrics = self.metrics_collector.forward(batch, out["x_hat"], 
+                                                     likelihoods=out["likelihoods"],
+                                                     mse=True, ms_ssim=True)
             loss = self.loss_fn(lmbda, metrics)
 
             total_loss += loss
@@ -82,7 +84,9 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
             model_instance: CompressionModel
             out = model_instance(batch)
             
-            metrics = self.metrics_collector(out, {"x": batch})
+            metrics = self.metrics_collector.forward(batch, out["x_hat"], 
+                                                     likelihoods=out["likelihoods"],
+                                                     mse=True, ms_ssim=True)
 
             self.log_val_metrics(model_name, {
                 "bpp": metrics.bpp,
@@ -94,13 +98,21 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
         x, filename = batch["image"], batch["filename"][0]
         for model_name, model_instance in self.model_wrapper.items():
             model_instance: CompressionModel
-            with self.metric_logger.timer(model_name, "encoding_time"):
+            with self.metrics_logger.timer(model_name, "compress"):
                 out_compress = model_instance.compress(x)
-            with self.metric_logger.timer(model_name, "decoding_time"):
+                
+                if self.ext_params.SaveBitstream:
+                    self.write_bitstream(f"{model_name}/{filename}", **out_compress)
+
+            with self.metrics_logger.timer(model_name, "compress"):
+                if self.ext_params.SaveBitstream:
+                    out_decompress = self.read_bitstream(f"{model_name}/{filename}")
+
                 out_decompress = model_instance.decompress(**out_compress)
                 
-            metrics = self.metrics_collector(out_compress, out_decompress, {"x": batch})
-
+            metrics = self.metrics_collector.forward(x, out_decompress["x_hat"], 
+                                                     strings=out_compress["strings"],
+                                                     mse=True, ms_ssim=True)
             self.log_test_metrics(model_name, {
                 "bpp": metrics.bpp,
                 "psnr": metrics.psnr,
@@ -108,18 +120,7 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
             })
 
             if self.ext_params.SaveRecon:
-                output_dir = os.path.join(
-                    self.trainer.default_root_dir, 
-                    "recon_imgs", 
-                    model_name
-                )
-                os.makedirs(output_dir, exist_ok=True)
-                save_image(
-                    out_decompress["x_hat"].clamp(0, 1),
-                    os.path.join(
-                        self.trainer.default_root_dir,
-                        "recon_imgs",
-                        model_name,
-                        f"{filename}_{self.model_type}_{metrics.bpp:.4f}_{metrics.psnr:.2f}_{metrics.ms_ssim:.4f}.png"
-                    )
+                self.save_recon_imgs(
+                    out_decompress["x_hat"], 
+                    f"{model_name}/{filename}_{self.model_type}_{metrics.bpp:.4f}_{metrics.psnr:.2f}_{metrics.ms_ssim:.4f}.png"
                 )

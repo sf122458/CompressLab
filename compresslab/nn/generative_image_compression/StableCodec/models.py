@@ -1,6 +1,6 @@
 """
 StableCodec
-Modified from https://github.com/LuizScarlet/StableCodec
+Modified based on https://github.com/LuizScarlet/StableCodec
 Paper: https://arxiv.org/abs/2506.21977
 """
 import numpy as np
@@ -276,28 +276,40 @@ class StableCodec(BasicTrainer):
     def test_step(self, batch, batch_idx):
         imgs, filename = batch["image"], batch["filename"][0]
         
-        H, W = imgs.shape[2], imgs.shape[3]
-        
-        with self.metric_logger.timer("DiffEIC", "compress"):
+        with self.metrics_logger.timer("StableCodec", "compress"):
             out_compress = self.compress(imgs)
             if self.ext_params.SaveBitstream:
                 self.write_bitstream(filename, **out_compress)
                 
-        with self.metric_logger.timer("DiffEIC", "decompress"):
+        with self.metrics_logger.timer("StableCodec", "decompress"):
             if self.ext_params.SaveBitstream:
                 out_compress = self.read_bitstream(filename)
                     
             preds = self.decompress(**out_compress)
         
-        bpp = 0
-        for strings in out_compress["strings"]:
-            while isinstance(strings, list):
-                strings = strings[0]
-            bpp += len(strings) * 8 / (H * W)
+        metrics = self.metrics_collector.forward(
+            imgs, preds, 
+            strings=out_compress["strings"],
+            psnr=True, ms_ssim=True, lpips=True, dists=True, kid=True, fid=True
+        )
 
+        self.log_test_metrics(
+            "StableCodec",
+            {
+                "bpp": metrics.bpp,
+                "psnr": metrics.psnr,
+                "ms-ssim": metrics.ms_ssim,
+                "lpips": metrics.lpips,
+                "dists": metrics.dists,
+            },
+            {
+                "kid": metrics.kid,
+                "fid": metrics.fid,
+            }
+        )
         
         if self.ext_params.SaveRecon:
-            self.save_recon_imgs(preds, f"{filename}_{bpp:.4f}.png")
+            self.save_recon_imgs(preds, f"{filename}_{metrics.bpp:.4f}.png")
     
     def configure_optimizers(self):
         return super().configure_optimizers()

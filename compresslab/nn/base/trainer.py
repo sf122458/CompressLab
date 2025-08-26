@@ -2,7 +2,7 @@ import lightning as L
 from compresslab.nn.base.utils import write_body, read_body, filesize
 from compresslab.core.models import CompressionModel, update_registered_buffers
 from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
-from compresslab.utils.logger import MetricLogger
+from compresslab.utils.logger import MetricsLogger
 import torch, os
 from torch import Tensor
 from pathlib import Path
@@ -27,41 +27,56 @@ class BasicTrainer(L.LightningModule):
         self.automatic_optimization = False
         
         self.ext_params = ext_params
-        self.metric_logger = MetricLogger()
-
-        # some functions to log metrics
-        self.bar_metrics = lambda metrics: self.log_dict(
+        
+        # metrics collector
+        self.metrics_collector = MetricsCollector()
+        
+    def bar_metrics(self, metrics: Dict[str, Any]):
+        """
+        Log metrics to the progress bar.
+        """
+        self.log_dict(
             {f"{k}": v for k, v in metrics.items()},
             prog_bar=True, on_step=True, on_epoch=False, 
             logger=False, sync_dist=False, rank_zero_only=True
         )
-
-        self.log_train_metrics = lambda model_name, metrics: self.log_dict(
-            {f"train/{model_name}.{k}": v for k, v in metrics.items()},
-            on_step=True, on_epoch=False, logger=True, 
-            sync_dist=False, rank_zero_only=True
-        )
-
-        self.log_val_metrics = lambda model_name, metrics: self.log_dict(
-            {f"val/{model_name}.{k}": v for k, v in metrics.items()},
-            on_step=False, on_epoch=True, logger=True, sync_dist=True
-        )
-
-        self.log_test_metrics = lambda model_name, metrics: self.metric_logger.log(model_name, metrics) \
-            if self.metric_logger is not None else self.log_dict(
-            {f"test/{model_name}.{k}": v for k, v in metrics.items()},
-            on_step=False, on_epoch=True, logger=True, sync_dist=True
-        )
         
-        self.log_train_monitor = lambda monitor: self.log_dict(
+    def log_train_metrics(self, model_name: str = None, metrics: Dict[str, Any] = None): 
+        if metrics is not None:
+            if model_name is None:
+                model_name = self.__class__.__name__
+            self.log_dict(
+                {f"train/{model_name}.{k}": v for k, v in metrics.items()},
+                on_step=True, on_epoch=False, logger=True, 
+                sync_dist=False, rank_zero_only=True
+            )
+
+    def log_val_metrics(self, model_name: str = None, metrics: Dict[str, Any] = None):
+        if metrics is not None:
+            if model_name is None:
+                model_name = self.__class__.__name__
+            self.log_dict(
+                {f"val/{model_name}.{k}": v for k, v in metrics.items()},
+                on_step=False, on_epoch=True, logger=True, sync_dist=True
+            )
+
+    def log_test_metrics(self, model_name: str = None, metrics: Dict[str, Any] = None, metrics_update: Dict[str, Any] = None): 
+        if model_name is None:
+            model_name = self.__class__.__name__
+        if metrics is not None:
+            self.metrics_logger.log(model_name, metrics)
+        if metrics_update is not None:
+            self.metrics_logger.log_without_avg(model_name, metrics_update)
+                
+    def log_train_monitor(self, monitor: Dict[str, Any]):
+        """Log the training monitor metrics, such as learning rate.
+        """
+        self.log_dict(
             {f"train_monitor/{k}": v for k, v in monitor.items()},
             on_step=False, on_epoch=True, logger=True, 
             sync_dist=True, rank_zero_only=True
         )
         
-        
-        # metrics collector
-        self.metrics_collector = MetricsCollector()
 
     def on_train_batch_end(self, output, batch, batch_idx):
         """
@@ -80,9 +95,7 @@ class BasicTrainer(L.LightningModule):
         raise NotImplementedError("Please implement the `validation_step` method in your trainer class.")
 
     def on_test_start(self):
-        self.metric_logger.reset_dir_and_filename(
-            save_dir=self.trainer.default_root_dir,
-        )
+        self.metrics_logger = MetricsLogger(save_dir=self.trainer.default_root_dir)
 
     def test_step(self, batch, batch_idx):
         raise NotImplementedError("Please implement the `test_step` method in your trainer class.")
@@ -91,39 +104,66 @@ class BasicTrainer(L.LightningModule):
         """
         Save the metrics into a csv file and a pkl file.
         """
-        self.metric_logger.save()
+        self.metrics_logger.save()
 
     def configure_optimizers(self):
         raise NotImplementedError("Please implement the `configure_optimizers` method in your trainer class.")
 
-    def write_bitstream(self, filename: str, strings: List[List[bytes]], shape: Tuple[int, int]):
-        bitstream_dir = os.path.join(
+    def write_bitstream(self, filename: str, strings: List[List[bytes]], shape: Tuple[int, int]) -> float:
+        """Write the bitstream to a binary file and return the size in bits.
+
+        Args:
+            filename (str): The name of the file to save the bitstream.
+            strings (List[List[bytes]]): The list of byte strings to be written. It's same with the format in `CompressAI`.
+            shape (Tuple[int, int]): The shape of the latent representation. It's same with the format in `CompressAI`.
+
+        Returns:
+            float: The size of the bitstream in bits.
+        """
+        if not filename.endswith(".bin"):
+            filename += ".bin"
+        bin_path = os.path.join(
             self.trainer.default_root_dir,
-            "bitstreams")
-        os.makedirs(bitstream_dir, exist_ok=True)
-        stream_path = os.path.join(bitstream_dir, f"{filename}.bin")
-        with Path(stream_path).open("wb") as f:
+            "bitstreams", filename
+        )
+        os.makedirs(os.path.dirname(bin_path), exist_ok=True)
+        with Path(bin_path).open("wb") as f:
             write_body(f, shape, strings)
-        size = filesize(stream_path)
+        size = filesize(bin_path)
         return float(size) * 8
                 
     def read_bitstream(self, filename: str):
-        with Path(os.path.join(
+        """Read the bitstream from a binary file.
+        Args:
+            filename (str): The name of the file to read the bitstream.
+        Returns:
+            Tuple[List[List[bytes]], Tuple[int, int]]: The list of byte strings and the shape of the latent representation.
+        """
+        if not filename.endswith(".bin"):
+            filename += ".bin"
+        bin_path = os.path.join(
             self.trainer.default_root_dir,
-            "bitstreams",
-            f"{filename}.bin"
-        )).open("rb") as f:
+            "bitstreams", filename
+        )
+        with Path(bin_path).open("rb") as f:
             return read_body(f)
     
     def save_recon_imgs(self, imgs: Tensor, filename: str):
-        output_dir = os.path.join(
-            self.trainer.default_root_dir, 
-            "recon_imgs",
-        )
-        os.makedirs(output_dir, exist_ok=True)
+        """Save the reconstructed images to a file.
+
+        Args:
+            imgs (Tensor): The images to be saved. The shape is (N, C, H, W) and the value is in [0, 1].
+            filename (str): The name of the file to save the images.
+        """
         if not filename.endswith(".png"):
             filename += ".png"
-        save_image(imgs, os.path.join(output_dir, filename))
+        img_path = os.path.join(
+            self.trainer.default_root_dir, 
+            "recon_imgs",
+            filename
+        )
+        os.makedirs(os.path.dirname(img_path), exist_ok=True)
+        save_image(imgs, img_path)
         
     
     def load_state_dict(self, state_dict, strict = True, assign = False):
@@ -218,6 +258,8 @@ class CompressAIImageCodecTrainer(BasicTrainer):
         pass
     
     def on_test_start(self):
+        super().on_test_start()
+        
         self.model_type = "last"
         if self.trainer.ckpt_path is not None:
             if "mse" in self.trainer.ckpt_path:
@@ -225,7 +267,7 @@ class CompressAIImageCodecTrainer(BasicTrainer):
             elif "ms_ssim" in self.trainer.ckpt_path:
                 self.model_type = "ms_ssim"
 
-        self.metric_logger.reset_dir_and_filename(
+        self.metrics_logger.reset_dir_and_filename(
             save_dir=self.trainer.default_root_dir,
             filename=f"metrics_{self.model_type}"
         )

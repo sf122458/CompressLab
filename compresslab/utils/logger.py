@@ -8,7 +8,7 @@ import os
 import numpy as np
 import logging
 
-class MetricLogger:
+class MetricsLogger:
     """
     A simple logger to log metrics and save them to a CSV file.
     It also provides a context manager to time code blocks.
@@ -17,7 +17,7 @@ class MetricLogger:
 
     1.initialize: 
     .. code-block:: python
-        logger = MetricLogger(save_dir)
+        logger = MetricsLogger(save_dir)
             
     2.log the execution time:
     .. code-block:: python
@@ -53,7 +53,6 @@ class MetricLogger:
         if name not in self.metrics:
             self.metrics[name] = dict()
         for k, v in log_dict.items():
-            # assert isinstance(v, (int, float)), f"Value {v} for key {k} in {name} is not a number."
             if isinstance(v, torch.Tensor):
                 v = v.item()
             if isinstance(v, (np.float32, np.float64, np.float16)):
@@ -62,6 +61,19 @@ class MetricLogger:
             if k not in self.metrics[name]:
                 self.metrics[name][k] = list()
             self.metrics[name][k].append(v)
+            
+    def log_without_avg(self, name, log_dict: Dict[str, float]):
+        if self.save_dir is None:
+            raise ValueError("Please set the save_dir before saving the metrics.")
+        if name not in self.metrics:
+            self.metrics[name] = dict()
+        for k, v in log_dict.items():
+            if isinstance(v, torch.Tensor):
+                v = v.item()
+            if isinstance(v, (np.float32, np.float64, np.float16)):
+                v = float(v)
+            
+            self.metrics[name][k] = v
     
     def save(self):
         """
@@ -72,7 +84,8 @@ class MetricLogger:
         # Compute the average of all lists in the metrics
         for name, metrics in self.metrics.items():
             for key, values in metrics.items():
-                self.metrics[name][key] = sum(values) / len(values)
+                if isinstance(values, list) and len(values) > 0:
+                    self.metrics[name][key] = sum(values) / len(values)
 
         os.makedirs(self.save_dir, exist_ok=True)
         if not self.metrics == {}:

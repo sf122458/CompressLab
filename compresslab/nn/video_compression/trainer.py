@@ -1,6 +1,6 @@
 import lightning as L
 from compresslab.core.models import CompressionModel
-from compresslab.utils.logger import MetricLogger
+from compresslab.utils.logger import MetricsLogger
 from compresslab.nn.video_compression.abc import *
 import torch
 from typing import Dict, Any, Union, Type
@@ -125,7 +125,7 @@ class VideoCodecTrainer(BasicTrainer):
 
 
     def on_test_start(self):
-        self.metric = MetricLogger(save_dir=self.trainer.default_root_dir)
+        self.metric = MetricsLogger(save_dir=self.trainer.default_root_dir)
         for model_name, model_instance in self.model_wrapper.items():
             model_instance.update()
 
@@ -290,7 +290,7 @@ class VideoCodecTrainer(BasicTrainer):
 
 
 #     def on_test_start(self):
-#         self.metric = MetricLogger(save_dir=self.trainer.default_root_dir)
+#         self.metric = MetricsLogger(save_dir=self.trainer.default_root_dir)
 #         for model_name, model_instance in self.model_wrapper.items():
 #             model_instance.update()
 
