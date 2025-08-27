@@ -62,12 +62,12 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
                     "ms-ssim": metrics.ms_ssim
                 })
 
-            self.log_train_metrics(model_name, {
+            self.log_train_metrics({
                 "loss": loss,
                 "bpp": metrics.bpp,
                 "psnr": metrics.psnr,
                 "ms-ssim": metrics.ms_ssim
-            })
+            }, model_name=model_name)
 
         self.manual_backward(total_loss)
         torch.nn.utils.clip_grad_norm_(self.model_wrapper.parameters(), 1.0)
@@ -88,23 +88,23 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
                                                      likelihoods=out["likelihoods"],
                                                      mse=True, ms_ssim=True)
 
-            self.log_val_metrics(model_name, {
+            self.log_val_metrics({
                 "bpp": metrics.bpp,
                 "psnr": metrics.psnr,
                 "ms-ssim": metrics.ms_ssim
-            })
+            }, model_name=model_name)
 
     def test_step(self, batch, batch_idx):
         x, filename = batch["image"], batch["filename"][0]
         for model_name, model_instance in self.model_wrapper.items():
             model_instance: CompressionModel
-            with self.metrics_logger.timer(model_name, "compress"):
+            with self.timer("compress", model_name):
                 out_compress = model_instance.compress(x)
                 
                 if self.ext_params.SaveBitstream:
                     self.write_bitstream(f"{model_name}/{filename}", **out_compress)
 
-            with self.metrics_logger.timer(model_name, "compress"):
+            with self.timer("decompress", model_name):
                 if self.ext_params.SaveBitstream:
                     out_decompress = self.read_bitstream(f"{model_name}/{filename}")
 
@@ -113,11 +113,11 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
             metrics = self.metrics_collector.forward(x, out_decompress["x_hat"], 
                                                      strings=out_compress["strings"],
                                                      mse=True, ms_ssim=True)
-            self.log_test_metrics(model_name, {
+            self.log_test_metrics({
                 "bpp": metrics.bpp,
                 "psnr": metrics.psnr,
                 "ms-ssim": metrics.ms_ssim
-            })
+            }, model_name=model_name)
 
             if self.ext_params.SaveRecon:
                 self.save_recon_imgs(

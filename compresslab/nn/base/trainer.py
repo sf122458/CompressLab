@@ -31,6 +31,30 @@ class BasicTrainer(L.LightningModule):
         # metrics collector
         self.metrics_collector = MetricsCollector()
         
+        self.metrics_logger: MetricsLogger # will be initialized in `on_test_start`
+        
+    def __init_subclass__(cls):
+        def init_logger(func):
+            def wrapper(self: BasicTrainer, *args, **kwargs):
+                self.metrics_logger = MetricsLogger(
+                    save_dir=self.trainer.default_root_dir,
+                )
+                return func(self, *args, **kwargs)
+            return wrapper
+        
+        if hasattr(cls, 'on_test_start') and callable(cls.on_test_start):
+            cls.on_test_start = init_logger(cls.on_test_start)
+            
+        def save_logger(func):
+            def wrapper(self: BasicTrainer, *args, **kwargs):
+                result = func(self, *args, **kwargs)
+                self.metrics_logger.save()
+                return result
+            return wrapper
+        
+        if hasattr(cls, 'on_test_end') and callable(cls.on_test_end):
+            cls.on_test_end = save_logger(cls.on_test_end)
+        
     def bar_metrics(self, metrics: Dict[str, Any]):
         """
         Log metrics to the progress bar.
@@ -41,26 +65,26 @@ class BasicTrainer(L.LightningModule):
             logger=False, sync_dist=False, rank_zero_only=True
         )
         
-    def log_train_metrics(self, model_name: str = None, metrics: Dict[str, Any] = None): 
-        if metrics is not None:
-            if model_name is None:
-                model_name = self.__class__.__name__
-            self.log_dict(
-                {f"train/{model_name}.{k}": v for k, v in metrics.items()},
-                on_step=True, on_epoch=False, logger=True, 
-                sync_dist=False, rank_zero_only=True
-            )
+    def log_train_metrics(self, metrics: Dict[str, Any], model_name: str = None,): 
+        if model_name is None:
+            model_name = self.__class__.__name__
+        self.log_dict(
+            {f"train/{model_name}.{k}": v for k, v in metrics.items()},
+            on_step=True, on_epoch=False, logger=True, 
+            sync_dist=False, rank_zero_only=True
+        )
 
-    def log_val_metrics(self, model_name: str = None, metrics: Dict[str, Any] = None):
-        if metrics is not None:
-            if model_name is None:
-                model_name = self.__class__.__name__
-            self.log_dict(
-                {f"val/{model_name}.{k}": v for k, v in metrics.items()},
-                on_step=False, on_epoch=True, logger=True, sync_dist=True
-            )
+    def log_val_metrics(self, metrics: Dict[str, Any], model_name: str = None):
+        if model_name is None:
+            model_name = self.__class__.__name__
+        self.log_dict(
+            {f"val/{model_name}.{k}": v for k, v in metrics.items()},
+            on_step=False, on_epoch=True, logger=True, sync_dist=True
+        )
 
-    def log_test_metrics(self, model_name: str = None, metrics: Dict[str, Any] = None, metrics_update: Dict[str, Any] = None): 
+    def log_test_metrics(self, metrics: Dict[str, Any] = None, metrics_update: Dict[str, Any] = None, model_name: str = None): 
+        if hasattr(self, "metrics_logger") is False:
+            raise ValueError("The `metrics_logger` is not initialized. Please make sure the `on_test_start` method is called before logging test metrics.")
         if model_name is None:
             model_name = self.__class__.__name__
         if metrics is not None:
@@ -77,6 +101,11 @@ class BasicTrainer(L.LightningModule):
             sync_dist=True, rank_zero_only=True
         )
         
+    def timer(self, metric_name: str, model_name: str = None,
+              cuda_sync: bool = False, unit: str = "ms"):
+        if model_name is None:
+            model_name = self.__class__.__name__
+        return self.metrics_logger.timer(model_name, metric_name, cuda_sync, unit)
 
     def on_train_batch_end(self, output, batch, batch_idx):
         """
@@ -94,17 +123,17 @@ class BasicTrainer(L.LightningModule):
     def validation_step(self, batch, batch_idx):
         raise NotImplementedError("Please implement the `validation_step` method in your trainer class.")
 
-    def on_test_start(self):
-        self.metrics_logger = MetricsLogger(save_dir=self.trainer.default_root_dir)
+    # def on_test_start(self):
+        
 
     def test_step(self, batch, batch_idx):
         raise NotImplementedError("Please implement the `test_step` method in your trainer class.")
 
-    def on_test_end(self):
-        """
-        Save the metrics into a csv file and a pkl file.
-        """
-        self.metrics_logger.save()
+    # def on_test_end(self):
+    #     """
+    #     Save the metrics into a csv file and a pkl file.
+    #     """
+    #     self.metrics_logger.save()
 
     def configure_optimizers(self):
         raise NotImplementedError("Please implement the `configure_optimizers` method in your trainer class.")
@@ -258,8 +287,6 @@ class CompressAIImageCodecTrainer(BasicTrainer):
         pass
     
     def on_test_start(self):
-        super().on_test_start()
-        
         self.model_type = "last"
         if self.trainer.ckpt_path is not None:
             if "mse" in self.trainer.ckpt_path:
@@ -267,8 +294,7 @@ class CompressAIImageCodecTrainer(BasicTrainer):
             elif "ms_ssim" in self.trainer.ckpt_path:
                 self.model_type = "ms_ssim"
 
-        self.metrics_logger.reset_dir_and_filename(
-            save_dir=self.trainer.default_root_dir,
+        self.metrics_logger.reset_filename(
             filename=f"metrics_{self.model_type}"
         )
         

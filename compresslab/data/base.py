@@ -79,13 +79,17 @@ class DataModule(L.LightningDataModule):
                  batch_size: int = 32, 
                  num_workers: int = 4):
         super().__init__()
+        
+        self.test_only = False
+        
         self.batch_size_per_device = batch_size // num_devices
         self.num_workers = num_workers
         
         self.train_dataset = DataRegistry.get(train.Key)(**train.Params) if train is not None else None
         self.val_dataset = DataRegistry.get(val.Key)(**val.Params) if val is not None else None
         if self.train_dataset is None or self.val_dataset is None:
-            logging.warning("Train or Val dataset is not provided. You can only run testing.")
+            logging.warning("Train or Val dataset is not provided. Automatically set to test only mode.")
+            self.test_only = True
         self.test_dataset = DataRegistry.get(test.Key)(**test.Params)
     
     def train_dataloader(self):

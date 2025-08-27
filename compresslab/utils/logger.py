@@ -42,12 +42,11 @@ class MetricsLogger:
         self.save_dir = save_dir
         self.filename = filename
     
-    def reset_dir_and_filename(self, save_dir: str, filename: str = "metrics"):
-        self.save_dir = save_dir
+    def reset_filename(self, filename: str = "metrics"):
         self.filename = filename
         self.metrics = dict()
 
-    def log(self, name, log_dict: Dict[str, float]):
+    def log(self, name: str, log_dict: Dict[str, float]):
         if self.save_dir is None:
             raise ValueError("Please set the save_dir before saving the metrics.")
         if name not in self.metrics:
@@ -62,7 +61,7 @@ class MetricsLogger:
                 self.metrics[name][k] = list()
             self.metrics[name][k].append(v)
             
-    def log_without_avg(self, name, log_dict: Dict[str, float]):
+    def log_without_avg(self, name: str, log_dict: Dict[str, float]):
         if self.save_dir is None:
             raise ValueError("Please set the save_dir before saving the metrics.")
         if name not in self.metrics:
@@ -110,7 +109,7 @@ class MetricsLogger:
 
 
     @contextlib.contextmanager
-    def timer(self, name, metric_name: str, avg: int = 1, cuda_sync=False, unit="ms"):
+    def timer(self, name: str, metric_name: str, cuda_sync=False, unit="ms", avg: int = 1):
         """
         A context manager to time a code block.
         """

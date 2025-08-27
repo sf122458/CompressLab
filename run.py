@@ -74,6 +74,8 @@ def main(args: Args):
                 num_workers=config.Data.NumWorkers
             )
             
+            args.test = datamodule.test_only or args.test
+            
             # learning-based codec
             try:
                 model_path = Path(getattr(compresslab.utils.registry, "ModelRegistry")._map.get(model.Key)["define_path"])

@@ -269,19 +269,18 @@ class StableCodec(BasicTrainer):
         return super().validation_step(batch, batch_idx)
 
     def on_test_start(self):
-        super().on_test_start()
         self.codec.update()
         self.scheduler = self._make_one_step_scheduler(self.sd_path)
     
     def test_step(self, batch, batch_idx):
         imgs, filename = batch["image"], batch["filename"][0]
         
-        with self.metrics_logger.timer("StableCodec", "compress"):
+        with self.timer("compress"):
             out_compress = self.compress(imgs)
             if self.ext_params.SaveBitstream:
                 self.write_bitstream(filename, **out_compress)
                 
-        with self.metrics_logger.timer("StableCodec", "decompress"):
+        with self.timer("decompress"):
             if self.ext_params.SaveBitstream:
                 out_compress = self.read_bitstream(filename)
                     
@@ -294,7 +293,6 @@ class StableCodec(BasicTrainer):
         )
 
         self.log_test_metrics(
-            "StableCodec",
             {
                 "bpp": metrics.bpp,
                 "psnr": metrics.psnr,

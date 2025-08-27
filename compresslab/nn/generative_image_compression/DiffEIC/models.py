@@ -319,28 +319,23 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
         # TODO
         cond = self.preprocess_forward(batch)
         generated_imgs = self.generate_imgs(cond)
-        self.log_val_metrics("DiffEIC", {
-            "bpp": cond.bpp,
-        })
+        raise NotImplementedError()
         # self.log(f"generated_imgs/{batch_idx}", generated_imgs)
         
 
     def on_test_start(self):
-        super().on_test_start()
         self.preprocess_model.update()
         self.freeze()
         
     def test_step(self, batch, batch_idx):
         imgs, filename = batch["image"], batch["filename"][0]
         
-        H, W = imgs.shape[2], imgs.shape[3]
-        
-        with self.metrics_logger.timer("DiffEIC", "compress"):
+        with self.timer("compress"):
             out_compress = self.compress(imgs)
             if self.ext_params.SaveBitstream:
                 self.write_bitstream(filename, **out_compress)
                 
-        with self.metrics_logger.timer("DiffEIC", "decompress"):
+        with self.timer("decompress"):
             if self.ext_params.SaveBitstream:
                 out_compress = self.read_bitstream(filename)
                     
@@ -353,7 +348,6 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
         )
 
         self.log_test_metrics(
-            "DiffEIC",
             {
                 "bpp": metrics.bpp,
                 "psnr": metrics.psnr,
