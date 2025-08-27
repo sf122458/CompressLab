@@ -88,22 +88,44 @@ class MetricsLogger:
 
         os.makedirs(self.save_dir, exist_ok=True)
         if not self.metrics == {}:
-            with open(f"{self.save_dir}/{self.filename}.csv", "w") as f:
-                # Write the header
-                headers = ["name"] + list(next(iter(self.metrics.values())).keys())
-                writer = csv.writer(f)
-                writer.writerow(headers)
+            csv_path = f"{self.save_dir}/{self.filename}.csv"
+            existing_data = {}
+            headers = ["name"] + list(next(iter(self.metrics.values())).keys())
+            
+            # Read existing CSV file if it exists
+            if os.path.exists(csv_path):
+                with open(csv_path, "r") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        existing_data[row["name"]] = row
+                    # Update headers to include any new columns
+                    existing_headers = reader.fieldnames or []
+                    headers = list(dict.fromkeys(existing_headers + headers))  # Preserve order, remove duplicates
+            
+            with open(csv_path, "w") as f:
+                writer = csv.DictWriter(f, fieldnames=headers)
+                writer.writeheader()
                 
-                # Write the data
+                # Update existing data with new metrics
                 for name, metrics in self.metrics.items():
-                    row = [name]
+                    row_data = {"name": name}
                     for key in headers[1:]:
-                        row.append(f"{metrics[key]:.6f}" if key in metrics else "")
-                    writer.writerow(row)
+                        if key in metrics:
+                            row_data[key] = f"{metrics[key]:.6f}"
+                        elif name in existing_data and key in existing_data[name]:
+                            row_data[key] = existing_data[name][key]
+                        else:
+                            row_data[key] = ""
+                    existing_data[name] = row_data
+                
+                # Write all data (existing + new/updated)
+                for row_data in existing_data.values():
+                    writer.writerow(row_data)
                     
             # Save the metrics as a pickle file
             with open(f"{self.save_dir}/{self.filename}.pkl", "wb") as pkl_file:
-                pickle.dump(self.metrics, pkl_file)
+                # pickle.dump(self.metrics, pkl_file)
+                pickle.dump(existing_data, pkl_file)
         else:
             logging.warning("No metrics to save. The metrics dictionary is empty.")
 
