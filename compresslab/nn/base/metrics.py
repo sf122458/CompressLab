@@ -43,6 +43,7 @@ class MetricsCollector(LightningModule):
     def forward(self, imgs: Tensor, recons: Tensor, 
                 likelihoods: Dict[str, Tensor] = None, 
                 strings: List[Any] = None,
+                bytes: List[Any] = None,
                 mse: bool = False,
                 psnr: bool = False,
                 ms_ssim: bool = False,
@@ -72,6 +73,8 @@ class MetricsCollector(LightningModule):
                 while isinstance(s, list):
                     s = s[0]
                 total_bits += len(s) * 8
+        elif bytes is not None:
+            total_bits = len(bytes) * 8
         else:
             raise ValueError("Either likelihoods or strings must be provided.")
         

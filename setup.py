@@ -8,6 +8,7 @@ except:
 
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import find_packages, setup
+from setuptools_rust import Binding, RustExtension
 from glob import glob
 
 cwd = Path(__file__).resolve().parent
@@ -18,7 +19,6 @@ version = "0.1.0"
 
 def get_extensions():
     ext_modules = []
-
 
     extra_compile_args = ["-std=c++17"]
     if os.getenv("DEBUG_BUILD", None):
@@ -72,8 +72,17 @@ setup(
         "vector_quantize_pytorch",
         "open-clip-torch==2.22.0",
         "openai-clip=1.0.1",
-        "peft==0.17.0"
+        "peft==0.17.0",
+        "setuptools_rust",
+        "cupy-cuda12x"
     ],
     ext_modules=get_extensions(),
+    rust_extensions=[
+        RustExtension(
+            f"zipf_encoding.zipf_encoding",
+            path="compresslab/nn/generative_image_compression/DiffC/rcc/arithmetic-coding/python-bindings/Cargo.toml",
+            binding=Binding.PyO3,
+        )
+    ],
     cmdclass={"build_ext": build_ext},
 )
