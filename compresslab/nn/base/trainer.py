@@ -123,18 +123,9 @@ class BasicTrainer(L.LightningModule):
     def validation_step(self, batch, batch_idx):
         raise NotImplementedError("Please implement the `validation_step` method in your trainer class.")
 
-    # def on_test_start(self):
-        
-
     def test_step(self, batch, batch_idx):
         raise NotImplementedError("Please implement the `test_step` method in your trainer class.")
-
-    # def on_test_end(self):
-    #     """
-    #     Save the metrics into a csv file and a pkl file.
-    #     """
-    #     self.metrics_logger.save()
-
+    
     def configure_optimizers(self):
         raise NotImplementedError("Please implement the `configure_optimizers` method in your trainer class.")
 
