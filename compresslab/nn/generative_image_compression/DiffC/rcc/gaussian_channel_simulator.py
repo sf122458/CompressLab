@@ -4,7 +4,7 @@ from .chunk_coding import (
     decode_from_chunks,
 )
 import numpy as np
-from zipf_encoding.zipf_encoding import encode_zipf, decode_zipf
+from compresslab.zipf_encoding import encode_zipf, decode_zipf
 
 
 class GaussianChannelSimulator:

@@ -79,7 +79,7 @@ setup(
     ext_modules=get_extensions(),
     rust_extensions=[
         RustExtension(
-            f"zipf_encoding.zipf_encoding",
+            f"compresslab.zipf_encoding",
             path="compresslab/nn/generative_image_compression/DiffC/rcc/arithmetic-coding/python-bindings/Cargo.toml",
             binding=Binding.PyO3,
         )
