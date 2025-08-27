@@ -24,7 +24,7 @@ from compresslab.utils.constant import PRETRAINED_CACHE_DIR
 class StableCodec(BasicTrainer):
     
     pretrained_level = [1, 2, 3, 4, 5]
-    level_ckpt_slot = {l: str(2**l) for l in pretrained_level}
+    level_ckpt_slot = {l: str(2**(6-l)) for l in pretrained_level}
     
     def __init__(
         self,
@@ -147,6 +147,7 @@ class StableCodec(BasicTrainer):
         
         # load ckpt
         if level is not None:
+            self.level = level
             codec_path = f"{PRETRAINED_CACHE_DIR}/StableCodec/stablecodec_ft{self.level_ckpt_slot[level]}.pkl"
             logging.info(f"Loading pretrained weights from {codec_path}")
             ckpt = torch.load(codec_path, map_location="cpu")
@@ -165,7 +166,7 @@ class StableCodec(BasicTrainer):
                 _sd_unet[k] = ckpt["state_dict_unet"][k]
             self.unet.load_state_dict(_sd_unet)
         else:
-            logging.info(f"Training from scratch.")
+            raise NotImplementedError("Training is not supported now.")
             
     def compress(self, imgs):
         """Compress images.
@@ -275,12 +276,12 @@ class StableCodec(BasicTrainer):
     def test_step(self, batch, batch_idx):
         imgs, filename = batch["image"], batch["filename"][0]
         
-        with self.timer("compress"):
+        with self.timer("compress", model_name=f"StableCodec_{self.level}"):
             out_compress = self.compress(imgs)
             if self.ext_params.SaveBitstream:
                 self.write_bitstream(filename, **out_compress)
                 
-        with self.timer("decompress"):
+        with self.timer("decompress", model_name=f"StableCodec_{self.level}"):
             if self.ext_params.SaveBitstream:
                 out_compress = self.read_bitstream(filename)
                     
@@ -303,11 +304,12 @@ class StableCodec(BasicTrainer):
             {
                 "kid": metrics.kid,
                 "fid": metrics.fid,
-            }
+            },
+            model_name=f"StableCodec_{self.level}"
         )
         
         if self.ext_params.SaveRecon:
-            self.save_recon_imgs(preds, f"{filename}_{metrics.bpp:.4f}.png")
+            self.save_recon_imgs(preds, f"level_{self.level}/{filename}_{metrics.bpp:.4f}.png")
     
     def configure_optimizers(self):
         return super().configure_optimizers()
