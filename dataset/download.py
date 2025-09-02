@@ -29,6 +29,12 @@ DATASET_INFO = {
     "CLIC2020_mobile_val": {
         "url": "https://storage.googleapis.com/clic_datasets/clic2020_mobile_valid.zip",
     },
+    "CLIC2020_professional_test": {
+        "url": "https://storage.googleapis.com/clic_datasets/clic2020_professional_test.zip",
+    },
+    "CLIC2020_mobile_test": {
+        "url": "https://storage.googleapis.com/clic_datasets/clic2020_mobile_test.zip",
+    },
     "Tecnick-100": {
         "url": "https://sourceforge.net/projects/testimages/files/OLD/OLD_SAMPLING/testimages.zip",
         "prefix": "RGB_OR_1200x1200",
@@ -131,7 +137,7 @@ def dataset_preparation(dataset: str, remove: bool = False):
                         # Remove the root directory from the path
                         new_name = filename[len(root_dir) + 1:]
                         if new_name:
-                            methods[type(member)]['setname'](member, new_name)
+                            methods['setname'](member, new_name)
                             return True
                 else:
                     return True
