@@ -1,6 +1,6 @@
 import logging
 import lightning as L
-from typing import Dict, Any
+from typing import Dict, Any, Union, List
 from torch.utils.data import DataLoader, Dataset
 from compresslab.utils.config import DatasetConfig
 from compresslab.utils.registry import DataRegistry
@@ -54,7 +54,7 @@ class BaseDataset(Dataset):
     """
     def __init__(
         self,
-        root: str,
+        root: Union[str, List[str]],
         transform: Dict[str, Any] = None,
     ):
         self.root = root

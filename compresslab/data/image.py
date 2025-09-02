@@ -20,14 +20,25 @@ class BasicImageDataset(BaseDataset):
                 in a dictionary format. Defaults to False.
         """
         super().__init__(**kwargs)
-        self.image_list = os.listdir(self.root)
+        if isinstance(self.root, list): # support multiple root directories for training
+            self.image_list = []
+            for r in self.root:
+                image_paths = os.listdir(r)
+                for image_path in image_paths:
+                    self.image_list.append(os.path.join(r, image_path))
+        else:
+            image_paths = os.listdir(self.root)
+            self.image_list = []
+            for image_path in image_paths:
+                self.image_list.append(os.path.join(self.root, image_path))
+                
         self.return_img_info = return_img_info
 
     def __len__(self):
         return len(self.image_list)
 
     def __getitem__(self, index):
-        image = Image.open(os.path.join(self.root, self.image_list[index])).convert("RGB")
+        image = Image.open(self.image_list[index]).convert("RGB")
         image = self.transform(image)
         if self.return_img_info:
             filename = os.path.splitext(self.image_list[index])[0]
@@ -72,6 +83,7 @@ class Vimeo90kDataset(BaseDataset):
         **kwargs
     ):
         super().__init__(**kwargs)
+        assert isinstance(self.root, str), "The root should be a string."
         list_path = Path(self.root) / self._list_filename(split, tuplet)
 
         with open(list_path) as f:
@@ -111,7 +123,7 @@ class LICDataset(BaseDataset):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        
+        assert isinstance(self.root, str), "The root should be a string."
         self.image_list = self.list_image_files(self.root)
     
     def __len__(self):
