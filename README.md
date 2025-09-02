@@ -39,11 +39,17 @@ to monitor the training process.
 
 ### Dataset preparation
 
-Each folder in `dataset` has a `download.sh` script to download the dataset. Just run `download.sh` and don't need to care about the file structure. Currently, the following datasets are supported:
-- `CLIC 2020` is used for the training of the image compression models.
-- `Kodak` is used for the evaluation of the image compression models.
-- `Vimeo-90K` is used for the training of the video compression models.
-- `UVG` is used for the evaluation of the video compression models. The preprocess currently follows [PyTorchVideoCompression](https://github.com/ZhihaoHu/PyTorchVideoCompression)
+`download.py` can be used to download and extract the datasets automatically. For example, to download the CLIC2020 Professional Validation dataset, run
+```shell
+python dataset/download.py --dataset CLIC2020_professional_val
+```
+Current supported datasets:
+- Vimeo90k
+- CLIC2020
+- DIV2K
+- Tecnick
+- UVG
+- Kodak (Already included in the repository)
 
 ### Available models
 #### VAE-based lossy image compression
