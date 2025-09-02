@@ -1,4 +1,5 @@
 import os
+import sys
 import wget
 import argparse
 import zipfile
@@ -159,7 +160,7 @@ if __name__ == "__main__":
         help="Remove the zip file after extraction.",
     )
     parser.add_argument(
-        "-d", type=str, nargs="+", 
+        "-d", "--dataset", type=str, nargs="+", 
         choices=list(DATASET_INFO.keys()),
         help="Specify which dataset(s) to download.",
     )
@@ -171,6 +172,8 @@ if __name__ == "__main__":
         for name in DATASET_INFO.keys():
             print(f"- {name}")
         exit(0)
+        
+    os.chdir(os.path.dirname(sys.argv[0]) or './')
     
     # Download the file
     for dataset in args.dataset:
