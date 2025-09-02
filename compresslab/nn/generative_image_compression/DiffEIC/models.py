@@ -85,8 +85,11 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
             self.sync_control_weights_from_base_checkpoint(sync_path, synch_control=synch_control)
             
         if pretrained_target_rate is not None:
+            self.pretrained_target_rate = pretrained_target_rate
             ckpt_path_pre = f"{PRETRAINED_CACHE_DIR}/DiffEIC/{pretrained_target_rate}/lc.ckpt"
             self.load_preprocess_ckpt(ckpt_path_pre=ckpt_path_pre)
+        else:
+            raise NotImplementedError("Training from scratch is not supported yet.")
         
         self.l_simple_weight = l_simple_weight
         self.l_bpp_weight = l_bpp_weight
@@ -327,15 +330,17 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
         self.preprocess_model.update()
         self.freeze()
         
-    def test_step(self, batch, batch_idx):
-        imgs, filename = batch["image"], batch["filename"][0]
+    def test_step(self, batch, batch_idx, dataloader_idx=0):
+        imgs, filename, dataset = batch["image"], batch["filename"][0], batch["dataset"][0]
         
-        with self.timer("compress"):
+        model_name = f"{dataset}/DiffEIC_{self.pretrained_target_rate}"
+        
+        with self.timer("compress", model_name):
             out_compress = self.compress(imgs)
             if self.ext_params.SaveBitstream:
                 self.write_bitstream(filename, **out_compress)
                 
-        with self.timer("decompress"):
+        with self.timer("decompress", model_name):
             if self.ext_params.SaveBitstream:
                 out_compress = self.read_bitstream(filename)
                     
@@ -358,12 +363,13 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
             {
                 "kid": metrics.kid,
                 "fid": metrics.fid,
-            }
+            },
+            model_name
         )
 
         
         if self.ext_params.SaveRecon:
-            self.save_recon_imgs(preds, f"{filename}_{metrics.bpp:.4f}.png")
+            self.save_recon_imgs(preds, f"{model_name}/{filename}_{metrics.bpp:.4f}.png")
         
     def load_preprocess_ckpt(self, ckpt_path_pre):
         ckpt = torch.load(ckpt_path_pre)

@@ -1,8 +1,22 @@
 # Test the pretrained generative image compression models.
 Model:
+  - Name: SD21
+    Key: DiffC
+    Params:
+      model_name: SD2.1
+      manual_dkl_per_step: [21, 20, 20, 40, 43, 66, 67, 67, 92, 92, 92, 74, 91, 123, 130, 128, 125, 102, 143, 135, 155, 102, 107, 134, 81, 133, 193, 135, 112, 130, 136, 157, 147, 135, 213, 186, 174, 202, 168, 174, 205, 237, 172, 152, 210, 247, 198, 206, 181, 219, 261, 237, 246, 181, 186, 231, 281, 207, 256, 175, 225, 186, 289, 250, 205, 211, 329, 285, 175, 241, 185, 254, 195, 268, 206, 212, 292, 302, 233, 239, 332, 345, 267, 182, 281, 290, 300, 311, 322, 220, 342, 234, 240, 246, 384, 263, 411, 284, 292, 301, 311, 321, 332, 344, 356, 370, 384, 399, 416, 433, 452, 473, 495, 520, 268, 275, 282, 290, 298, 306, 315, 325, 334, 345, 356, 368, 381, 394, 408, 424, 440, 457, 476, 496, 518, 542, 567, 596, 626, 660, 698, 740, 786, 838, 895, 962, 1039, 1125, 1228, 1345, 1488, 1663, 1877, 2148, 2506, 2992, 3674, 4715, 6488, 10135, 21339]
+    ExtParams:
+      SaveRecon: true
+
   - Key: DiffEIC
     Params:
       pretrained_target_rate: 0.06
+    ExtParams:
+      SaveRecon: true
+
+  - Key: DiffEIC
+    Params:
+      pretrained_target_rate: 0.09
     ExtParams:
       SaveRecon: true
 
@@ -12,12 +26,28 @@ Model:
     ExtParams:
       SaveRecon: true
 
+  - Key: StableCodec
+    Params:
+      level: 3
+    ExtParams:
+      SaveRecon: true
+  
+  - Key: StableCodec
+    Params:
+      level: 5
+    ExtParams:
+      SaveRecon: true
+
 Data:
   Test:
-    Key: BasicImageDataset
-    Params:
-      root: dataset/Kodak
-      return_img_info: true
+    - Key: BasicImageDataset
+      Params:
+        root: dataset/Kodak
+        return_img_info: true
+    - Key: BasicImageDataset
+      Params:
+        root: dataset/CLIC2020_professional_val
+        return_img_info: true
 
 Env:
-  Devices: [0]
+  Devices: [3]

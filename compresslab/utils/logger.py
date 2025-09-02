@@ -30,7 +30,11 @@ class MetricsLogger:
             
     4.save metrics as a csv file:
     .. code-block:: python
-        logger.save()  
+        logger.save()
+        
+        
+    NOTE: If model name contains '/', it will be treated as 'dataset/model_name'. 
+    The result in the CSV file will be sorted by dataset name, bpp, and finally model name.
     """
     def __init__(self, save_dir: str = None, filename: str = "metrics"):
         """
@@ -84,6 +88,18 @@ class MetricsLogger:
         for name, metrics in self.metrics.items():
             for key, values in metrics.items():
                 if isinstance(values, list) and len(values) > 0:
+                    if key.endswith("(ms)") or key.endswith("(s)"):
+                        # Remove outliers for timing metrics using IQR method
+                        if len(values) > 3:  # Only remove outliers if we have enough data points
+                            q1 = np.percentile(values, 25)
+                            q3 = np.percentile(values, 75)
+                            iqr = q3 - q1
+                            lower_bound = q1 - 1.5 * iqr
+                            upper_bound = q3 + 1.5 * iqr
+                            filtered_values = [v for v in values if lower_bound <= v <= upper_bound]
+                            if filtered_values:  # If we still have values after filtering
+                                values = filtered_values
+                                
                     self.metrics[name][key] = sum(values) / len(values)
 
         os.makedirs(self.save_dir, exist_ok=True)
@@ -119,7 +135,14 @@ class MetricsLogger:
                     existing_data[name] = row_data
                 
                 # Write all data (existing + new/updated)
-                for row_data in existing_data.values():
+                # Sort the data by name with custom logic(dataset name, bpp, model name)
+                sorted_data = sorted(existing_data.values(), key=lambda row: (
+                    row["name"].split("/")[0] if "/" in row["name"] else "",
+                    float(row["bpp"]) if row.get("bpp") and row["bpp"] != "" else "",
+                    row["name"].split("/")[1] if "/" in row["name"] else row["name"]
+                ))
+                
+                for row_data in sorted_data:
                     writer.writerow(row_data)
                     
             # Save the metrics as a pickle file

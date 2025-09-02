@@ -94,9 +94,10 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
                 "ms-ssim": metrics.ms_ssim
             }, model_name=model_name)
 
-    def test_step(self, batch, batch_idx):
-        x, filename = batch["image"], batch["filename"][0]
+    def test_step(self, batch, batch_idx, dataloader_idx=0):
+        x, filename, dataset = batch["image"], batch["filename"][0], batch["dataset"][0]
         for model_name, model_instance in self.model_wrapper.items():
+            model_name = f"{dataset}/{model_name}"
             model_instance: CompressionModel
             with self.timer("compress", model_name):
                 out_compress = model_instance.compress(x)

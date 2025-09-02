@@ -77,7 +77,7 @@ Data:
   Train:
     Key: Vimeo90kDataset
     Params:
-      root: dataset/vimeo_setuplet
+      root: dataset/Vimeo90k_septuplet
       transform:
         RandomCrop: 
           size: [256, 256]

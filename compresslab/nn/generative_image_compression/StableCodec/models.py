@@ -273,15 +273,16 @@ class StableCodec(BasicTrainer):
         self.codec.update()
         self.scheduler = self._make_one_step_scheduler(self.sd_path)
     
-    def test_step(self, batch, batch_idx):
-        imgs, filename = batch["image"], batch["filename"][0]
+    def test_step(self, batch, batch_idx, dataloader_idx=0):
+        imgs, filename, dataset = batch["image"], batch["filename"][0], batch["dataset"][0]
+        model_name = f"{dataset}/StableCodec_{self.level}"
         
-        with self.timer("compress", model_name=f"StableCodec_{self.level}"):
+        with self.timer("compress", model_name=model_name):
             out_compress = self.compress(imgs)
             if self.ext_params.SaveBitstream:
                 self.write_bitstream(filename, **out_compress)
                 
-        with self.timer("decompress", model_name=f"StableCodec_{self.level}"):
+        with self.timer("decompress", model_name=model_name):
             if self.ext_params.SaveBitstream:
                 out_compress = self.read_bitstream(filename)
                     
@@ -305,11 +306,11 @@ class StableCodec(BasicTrainer):
                 "kid": metrics.kid,
                 "fid": metrics.fid,
             },
-            model_name=f"StableCodec_{self.level}"
+            model_name=model_name
         )
         
         if self.ext_params.SaveRecon:
-            self.save_recon_imgs(preds, f"level_{self.level}/{filename}_{metrics.bpp:.4f}.png")
+            self.save_recon_imgs(preds, f"{model_name}/{filename}_{metrics.bpp:.4f}.png")
     
     def configure_optimizers(self):
         return super().configure_optimizers()

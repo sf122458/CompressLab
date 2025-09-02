@@ -101,11 +101,10 @@ class BasicTrainer(L.LightningModule):
             sync_dist=True, rank_zero_only=True
         )
         
-    def timer(self, metric_name: str, model_name: str = None,
-              cuda_sync: bool = False, unit: str = "ms"):
+    def timer(self, metric_name: str, model_name: str = None, unit: str = "ms"):
         if model_name is None:
             model_name = self.__class__.__name__
-        return self.metrics_logger.timer(model_name, metric_name, cuda_sync, unit)
+        return self.metrics_logger.timer(model_name, metric_name, cuda_sync=(self.device != torch.device("cpu")), unit=unit)
 
     def on_train_batch_end(self, output, batch, batch_idx):
         """

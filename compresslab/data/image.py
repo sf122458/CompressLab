@@ -41,8 +41,8 @@ class BasicImageDataset(BaseDataset):
         image = Image.open(self.image_list[index]).convert("RGB")
         image = self.transform(image)
         if self.return_img_info:
-            filename = os.path.splitext(self.image_list[index])[0]
-            return {"image": image, "filename": filename}
+            filename = os.path.basename(self.image_list[index]).split('.')[0]
+            return {"image": image, "filename": filename, "dataset": os.path.basename(os.path.dirname(self.image_list[index]))}
         return image
 
 

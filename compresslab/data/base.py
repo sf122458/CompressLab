@@ -73,7 +73,7 @@ class DataModule(L.LightningDataModule):
     def __init__(self, 
                  train: DatasetConfig,
                  val: DatasetConfig,
-                 test: DatasetConfig,
+                 test: Union[DatasetConfig, List[DatasetConfig]],
                  # dataloader parameters
                  num_devices: int,
                  batch_size: int = 32, 
@@ -90,7 +90,11 @@ class DataModule(L.LightningDataModule):
         if self.train_dataset is None or self.val_dataset is None:
             logging.warning("Train or Val dataset is not provided. Automatically set to test only mode.")
             self.test_only = True
-        self.test_dataset = DataRegistry.get(test.Key)(**test.Params)
+            
+        if isinstance(test, list):
+            self.test_dataset = [DataRegistry.get(t.Key)(**t.Params) for t in test]
+        else:
+            self.test_dataset = DataRegistry.get(test.Key)(**test.Params)
     
     def train_dataloader(self):
         return DataLoader(self.train_dataset, 
@@ -105,7 +109,13 @@ class DataModule(L.LightningDataModule):
                           num_workers=self.num_workers)
     
     def test_dataloader(self):
-        return DataLoader(self.test_dataset,
-                          batch_size=1,
-                          shuffle=False,
-                          num_workers=self.num_workers)
+        if isinstance(self.test_dataset, list):
+            return [DataLoader(ds,
+                               batch_size=1,
+                               shuffle=False,
+                               num_workers=self.num_workers) for ds in self.test_dataset]
+        else:
+            return DataLoader(self.test_dataset,
+                            batch_size=1,
+                            shuffle=False,
+                            num_workers=self.num_workers)

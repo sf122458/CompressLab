@@ -14,7 +14,7 @@ class DataSetting(BaseModel):
     """Dataset setting for the datamodule."""
     Train: DatasetConfig = Field(default=None, description="Configuration for the training dataset.")
     Val: DatasetConfig = Field(default=None, description="Configuration for the validation dataset.")
-    Test: DatasetConfig = Field(description="Configuration for the testing dataset.")
+    Test: Union[DatasetConfig, List[DatasetConfig]] = Field(description="Configuration for the testing dataset.")
     BatchSize: int = Field(default=32, description="Batch size for training.")
     NumWorkers: int = Field(default=4, description="Number of workers for data loading.")
 
