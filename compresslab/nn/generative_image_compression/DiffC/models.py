@@ -219,10 +219,6 @@ class DiffC(BasicTrainer):
             "step_idx": step_idx
         }
     
-    # def on_test_start(self):
-    #     print(f"Device: {self.device} {self.model.pipe.device} {self.model.vae.device} {self.model.snr_values.device} {self.captioner.model.device}")
-    #     print(f"dtype: {self.model.pipe.dtype} {self.model.vae.dtype} {self.model.snr_values.dtype}")
-        
     def test_step(self, batch, batch_idx):
         imgs, filename = batch["image"], batch["filename"][0]
         with self.timer("compress"):

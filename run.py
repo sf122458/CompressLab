@@ -127,9 +127,8 @@ def main(args: Args):
             else:
                 with open(model_pkl_path, "rb") as pkl_file:
                     hparams = pickle.load(pkl_file)
-                if hparams.Key != model.Key and hparams.Params != model.Params:
-                    raise ValueError(f"Model hyperparams mismatch: {hparams} vs {model}")
-
+                if hparams.Key != model.Key or hparams.Params != model.Params:
+                    logging.warning(f"Model hyperparams mismatch: {hparams} vs {model}")
             if not args.test:
                 if config.Train.Steps is None and config.Train.Epoch is None:
                     raise ValueError("Please specify either Train.Steps or Train.Epoch in the config file.")
