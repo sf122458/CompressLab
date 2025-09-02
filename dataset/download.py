@@ -106,48 +106,49 @@ def dataset_preparation(dataset: str, remove: bool = False):
         wget.download(url)
         print("Download completed.")
     
-    if len(os.listdir(dataset)) > 0:
-        print(f"Directory {dataset} is not empty. Skipping extraction.")
-        return
+    if len(os.listdir(dataset)) == 0:
+        
     
-    context = zipfile.ZipFile(compressed_filename, "r") if compressed_filename.endswith('.zip') \
-        else tarfile.open(compressed_filename, 'r:bz2')
-    with context as ref:
-        methods = archieve_methods[type(ref)]
-        file_list = methods['namelist'](ref)
-        
-        root_dirs = set()
-        for file_path in file_list:
-            parts = file_path.split('/')
-            if len(parts) > 1:
-                root_dirs.add(parts[0])
-        
-        
-        def process(member: Union[zipfile.ZipInfo, tarfile.TarInfo]) -> bool:
-            filename = methods['getname'](member)
-            if prefix is not None:
-                if prefix in filename and filename.endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff')):
-                    new_name = os.path.basename(filename)
-                    methods['setname'](member, new_name)
-                    return True
-            else:
-                if len(root_dirs) == 1:
-                    root_dir = list(root_dirs)[0]
-                    if filename.startswith(root_dir + '/'):
-                        # Remove the root directory from the path
-                        new_name = filename[len(root_dir) + 1:]
-                        if new_name:
-                            methods['setname'](member, new_name)
-                            return True
+        context = zipfile.ZipFile(compressed_filename, "r") if compressed_filename.endswith('.zip') \
+            else tarfile.open(compressed_filename, 'r:bz2')
+        with context as ref:
+            methods = archieve_methods[type(ref)]
+            file_list = methods['namelist'](ref)
+            
+            root_dirs = set()
+            for file_path in file_list:
+                parts = file_path.split('/')
+                if len(parts) > 1:
+                    root_dirs.add(parts[0])
+            
+            
+            def process(member: Union[zipfile.ZipInfo, tarfile.TarInfo]) -> bool:
+                filename = methods['getname'](member)
+                if prefix is not None:
+                    if prefix in filename and filename.endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff')):
+                        new_name = os.path.basename(filename)
+                        methods['setname'](member, new_name)
+                        return True
                 else:
-                    return True
-            return False
-        
-        for member in methods['getmembers'](ref):
-            if process(member):
-                ref.extract(member, dataset)
-        
-    print(f"Extraction {compressed_filename} completed.")
+                    if len(root_dirs) == 1:
+                        root_dir = list(root_dirs)[0]
+                        if filename.startswith(root_dir + '/'):
+                            # Remove the root directory from the path
+                            new_name = filename[len(root_dir) + 1:]
+                            if new_name:
+                                methods['setname'](member, new_name)
+                                return True
+                    else:
+                        return True
+                return False
+            
+            for member in methods['getmembers'](ref):
+                if process(member):
+                    ref.extract(member, dataset)
+            
+        print(f"Extraction {compressed_filename} completed.")
+    else:
+        print(f"Directory {dataset} is not empty. Skipping extraction.")
     
     if remove:
         print(f"Removing {compressed_filename}...")
