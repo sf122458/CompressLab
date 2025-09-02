@@ -51,6 +51,13 @@ Current supported datasets:
 - UVG
 - Kodak (Already included in the repository)
 
+Run 
+```shell
+python dataset/download.py --list
+```
+to check all supported datasets.
+
+
 ### Available models
 #### VAE-based lossy image compression
 - All models implemented in [CompressAI](https://github.com/InterDigitalInc/CompressAI):
