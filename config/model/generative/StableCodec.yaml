@@ -1,0 +1,29 @@
+- Key: StableCodec
+  Params:
+    level: 1
+  ExtParams:
+    SaveRecon: true
+
+- Key: StableCodec
+  Params:
+    level: 2
+  ExtParams:
+    SaveRecon: true
+
+- Key: StableCodec
+  Params:
+    level: 3
+  ExtParams:
+    SaveRecon: true
+
+- Key: StableCodec
+  Params:
+    level: 4
+  ExtParams:
+    SaveRecon: true
+
+- Key: StableCodec
+  Params:
+    level: 5
+  ExtParams:
+    SaveRecon: true

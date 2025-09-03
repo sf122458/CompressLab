@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional, List, Union
+import yaml, os
+from yaml.nodes import ScalarNode, SequenceNode
 
 ########## Data Setting ##########
 class DatasetConfig(BaseModel):
@@ -107,3 +109,61 @@ class Config(BaseModel):
     Data: DataSetting
     Train: TrainClass = Field(default_factory=TrainClass)
     Env: EnvClass = Field(default_factory=EnvClass)
+
+
+
+class Loader(yaml.Loader):
+    """Custom YAML loader.
+    It supports the `!include` tag to include other YAML files.
+    1. If the `!include` tag is used in a sequence, and the included file also contains a sequence,
+       and its elements will be merged into the parent sequence, otherwise, the included file will be directly replaced.
+    2. If the `!include` tag is used in a mapping, the included file can be of any type,
+       and it will replace the value in the parent mapping.
+       
+    NOTE: The path of the included file is relative to the including file.
+    """
+    def __init__(self, stream):
+        self._base_dir = os.path.dirname(os.path.abspath(stream.name))
+        super().__init__(stream)
+        
+    def compose_sequence_node(self, anchor):
+        node = super().compose_sequence_node(anchor)
+        
+        new_value = []
+        for child in node.value:
+            if isinstance(child, ScalarNode) and child.tag == '!include':
+                include_path = os.path.join(
+                    self._base_dir, 
+                    self.construct_scalar(child)
+                )
+                with open(include_path, 'r') as f:
+                    include_loader = Loader(f)
+                    include_node = include_loader.get_single_node()
+                
+                if isinstance(include_node, SequenceNode):
+                    new_value.extend(include_node.value)
+                else:
+                    new_value.append(include_node)
+            else:
+                new_value.append(child)
+        
+        node.value = new_value
+        return node
+
+    def compose_mapping_node(self, anchor):
+        node = super().compose_mapping_node(anchor)
+        new_value = []
+        
+        for key_node, value_node in node.value:
+            if isinstance(value_node, ScalarNode) and value_node.tag == '!include':
+                include_path = os.path.join(self._base_dir, self.construct_scalar(value_node))
+                with open(include_path, 'r') as f:
+                    include_loader = Loader(f)
+                    include_node = include_loader.get_single_node()
+                
+                new_value.append((key_node, include_node))
+            else:
+                new_value.append((key_node, value_node))
+        
+        node.value = new_value
+        return node

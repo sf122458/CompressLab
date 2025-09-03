@@ -1,29 +1,29 @@
 import inspect
 from pathlib import Path
-import compresslab.utils.logging
 import argparse
 import logging
 import os
-import torch
 import math
+import yaml
+import pickle
+import importlib.util
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
-from compresslab.utils.config import Config
+import compresslab.utils.logging
+from compresslab.utils.config import Config, Loader
 from compresslab.nn.base import BasicTrainer
+import compresslab.utils.registry
 from compresslab.utils.registry import Registry, ModelRegistry
 from compresslab.utils.benchmark import Benchmark
 from compresslab.data import DataModule
 from compresslab.codec import TRADITIONAL_CODEC
+import torch
 from lightning import Trainer
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.callbacks import ModelCheckpoint, RichProgressBar, RichModelSummary
 from argparse import Namespace
 import compresslab.nn   # register all models
 import compresslab.data # register all datamodules
-from pydantic_yaml import parse_yaml_file_as
-import pickle
-import compresslab.utils.registry
-import importlib.util
 from compresslab.utils.constant import *
 
 class Args(Namespace):
@@ -43,7 +43,7 @@ def main(args: Args):
         if args.config is None:
             raise ValueError("Please provide a config file.")
         
-        config = parse_yaml_file_as(Config, args.config)
+        config = Config(**yaml.load(open(args.config, 'r'), Loader))
 
         exp_dir = os.path.join(OUTPUT_DIR, Path(args.config).stem)
         os.makedirs(exp_dir, exist_ok=True)
