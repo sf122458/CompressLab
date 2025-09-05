@@ -5,6 +5,7 @@ A PyTorch-based framework for deep-learning-based data compression research.
 ### Features
 
 - All implementations of models and datasets are modularized and registered in a registry. The training and testing pipelines can be easily configured by YAML files. Please refer to the example configuration files in the `config` folder and see the details of available options in `compresslab/utils/config.py`.
+- Add `!include` tag to include other YAML files, and `!loop` tag to generate repeated structures in the configuration files. Please refer to the examples in `config` folder.
 - For the vae-based image compression models `compresslab/nn/lossy_image_compression`, training with several rate-distortion points simultaneously is supported in one run. 
 - The framework is built on [PyTorch Lightning](https://lightning.ai), which makes it easy to run in DDP mode and adjust the precision. Moreover, it supports logging via TensorBoard, and resume from the checkpoint automatically.
 - A general metrics computation module is provided, and you can easily obtain the final results in the `output` folder after testing.
