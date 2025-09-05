@@ -8,16 +8,16 @@ cuda_code = open(f"{pwd}/cuda_kernels.cu", "r").read()
 cuda_module = cp.RawModule(code=cuda_code)
 
 # Get the kernel functions
-reverse_channel_encode_kernel = cuda_module.get_function(
-    "reverse_channel_encode_kernel"
-)
-generate_sample_kernel = cuda_module.get_function("generate_sample_kernel")
+# reverse_channel_encode_kernel = cuda_module.get_function(
+#     "reverse_channel_encode_kernel"
+# )
+# generate_sample_kernel = cuda_module.get_function("generate_sample_kernel")
 
 
 def generate_sample(dim, shared_seed, sample_seed):
     sample_out = cp.empty(dim, dtype=cp.float32)
 
-    generate_sample_kernel(
+    cuda_module.get_function("generate_sample_kernel")(
         (1, 1, 1),
         (1, 1, 1),
         (cp.int32(dim), cp.uint64(shared_seed), cp.uint64(sample_seed), sample_out),
@@ -44,7 +44,9 @@ def _reverse_channel_encode(mu_q_in, K, shared_seed=0):
     log_cumsum_t = cp.log(cp.cumsum(t))
 
     # Launch main kernel
-    reverse_channel_encode_kernel(
+    cuda_module.get_function(
+        "reverse_channel_encode_kernel"
+    )(
         (grid_size, 1, 1),
         (block_size, 1, 1),
         (mu_q, cp.int32(dim), cp.uint64(K), cp.uint64(shared_seed), log_w, max_log_w),

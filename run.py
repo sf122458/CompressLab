@@ -1,7 +1,6 @@
 import inspect
 from pathlib import Path
 import argparse
-import logging
 import os
 import math
 import yaml
@@ -9,7 +8,7 @@ import pickle
 import importlib.util
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
-import compresslab.utils.logging
+from compresslab.utils.logging import logging
 from compresslab.utils.config import Config, Loader
 from compresslab.nn.base import BasicTrainer
 import compresslab.utils.registry
@@ -71,7 +70,8 @@ def main(args: Args):
                 test=config.Data.Test,
                 num_devices=len(config.Env.Devices),
                 batch_size=config.Data.BatchSize,
-                num_workers=config.Data.NumWorkers
+                num_workers=config.Data.NumWorkers,
+                test_only=args.test
             )
             
             args.test = datamodule.test_only or args.test

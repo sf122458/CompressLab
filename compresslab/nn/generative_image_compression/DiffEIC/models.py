@@ -9,7 +9,6 @@ from typing import Mapping, Any, Dict, Tuple, List
 import logging
 import os
 import math
-import pyiqa
 from dataclasses import dataclass
 from compresslab.nn.generative_image_compression.DiffEIC.compression.lfgcm import LFGCM
 from compresslab.nn.generative_image_compression.DiffEIC.reconstruction.cddm import CDDM
@@ -26,6 +25,15 @@ class PreprocessOutput:
     q_bpp: torch.Tensor = None
 
 class DiffEIC(BasicTrainer, LatentDiffusion):
+    
+    ckpt_slot = {
+        0.02: "1_2_16",
+        0.04: "1_2_8",
+        0.06: "1_2_4",
+        0.09: "1_2_2",
+        0.12: "1_2_1",
+    }
+    
     def __init__(
         self, 
         *args, 
@@ -36,11 +44,6 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
         sync_path: str = f"{PRETRAINED_CACHE_DIR}/sd_2.1/v2-1_512-ema-pruned.ckpt", 
         synch_control: bool = True,
         pretrained_target_rate: float = None, # (0.02, 0.04, 0.06, 0.09, 0.12)
-        calculate_metrics: Mapping[str, Any] = {
-            "psnr": {"type": "psnr", "crop_border": 0, "test_y_channel": False},
-            "ms_ssim": {"type": "ms_ssim", "test_y_channel": False},
-            "lpips": {"type": "lpips", "better": "lower"}
-        },
         # test stage
         sampler: str = "ddpm",
         sampling_steps: int = 50,
@@ -86,7 +89,7 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
             
         if pretrained_target_rate is not None:
             self.pretrained_target_rate = pretrained_target_rate
-            ckpt_path_pre = f"{PRETRAINED_CACHE_DIR}/DiffEIC/{pretrained_target_rate}/lc.ckpt"
+            ckpt_path_pre = f"{PRETRAINED_CACHE_DIR}/DiffEIC/{self.ckpt_slot[pretrained_target_rate]}/lc.ckpt"
             self.load_preprocess_ckpt(ckpt_path_pre=ckpt_path_pre)
         else:
             raise NotImplementedError("Training from scratch is not supported yet.")
@@ -99,14 +102,6 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
         self.sampling_steps = sampling_steps
         
         self.register_buffer("c_crossattn_buffer", self.get_learned_conditioning([""]).detach(), persistent=False)
-
-        self.calculate_metrics = calculate_metrics
-        self.metric_funcs = {}
-        for _, opt in calculate_metrics.items(): 
-            mopt = opt.copy()
-            name = mopt.pop('type', None)
-            mopt.pop('better', None)
-            self.metric_funcs[name] = pyiqa.create_metric(name, device=self.device, **mopt)
     
     def preprocess_forward(self, imgs: torch.Tensor) -> PreprocessOutput:
         """Provide the image input(range in [0, 1]), obtain `z_content`(the output of the LFGCM),\
@@ -292,6 +287,7 @@ class DiffEIC(BasicTrainer, LatentDiffusion):
 
     def training_step(self, batch, batch_idx):
         # TODO
+        raise NotImplementedError("Training is not supported yet.")
         opt, aux_opt = self.optimizers()
         opt.zero_grad()
         aux_opt.zero_grad()

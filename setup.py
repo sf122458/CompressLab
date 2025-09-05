@@ -59,7 +59,6 @@ setup(
         "opencv_python",
         "Pillow",
         "pydantic",
-        "pydantic_yaml",
         "pytorch_msssim",
         "PyYAML",
         "rich==14.0.0",
