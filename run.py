@@ -78,7 +78,7 @@ def main(args: Args):
             
             # learning-based codec
             try:
-                model_path = Path(getattr(compresslab.utils.registry, "ModelRegistry")._map.get(model.Key)["define_path"])
+                model_path = Path(getattr(compresslab.utils.registry, "ModelRegistry")._map.get(model.Key)["path"])
             except Exception as e:
                 logging.error(f"{model.Key} isn't registered. Skipping...")
                 continue
@@ -180,7 +180,7 @@ def main(args: Args):
         
         Benchmark(exp_dir, config.Train.Benchmark)
         
-        logging.info("Finish training.")
+        logging.info("Finish.")
     
 
 if __name__ == "__main__":

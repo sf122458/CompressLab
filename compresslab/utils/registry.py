@@ -45,29 +45,6 @@ T = TypeVar("T")
 
 class Registry(Generic[T]):
     """A registry. Inherit from it to create a lots of factories.
-
-    Example:
-    ```python
-        # Inherit to make a factory.
-        class Geometry(Registry):
-            ...
-
-        # Register with auto-key "Foo"
-        @Geometry.register
-        class Foo:
-            ...
-
-        # Register with manual-key "Bar"
-        @Geometry.register("Bar")
-        class Bar:
-            ...
-
-        instance = Geometry.get("Foo")()
-        assert isinstance(instance, Foo)
-
-        instance = Geometry["Bar"]()
-        assert isinstance(instance, Bar)
-    ```
     """
     _map: Dict[str, T]
     def __init_subclass__(cls, **kwargs):
@@ -82,12 +59,7 @@ class Registry(Generic[T]):
             key (str): The key for registering an object.
         """
         assert isinstance(class_type, type), "Registered object must be a class."
-        cls._map[key or class_type.__name__] = {"cls": class_type, "define_path": inspect.getfile(class_type)}
-        # def insert(value):
-        #     assert isinstance(value, type), "Registered object must be a class."
-        #     cls._map[key or value.__name__] = {"cls": value, "define_path": define_path or inspect.getfile(value)}
-        # return insert
-    
+        cls._map[key or class_type.__name__] = {"cls": class_type, "path": inspect.getfile(class_type)}
 
     @classmethod
     def get(cls, key: str, default = None, logger: logging.Logger = logging.root) -> T:
@@ -117,7 +89,7 @@ class Registry(Generic[T]):
         for k, v in cls._map.items():
             table.add_row(
                 k,
-                v['define_path'],
+                v['path'],
             )
 
         console = Console()
@@ -125,16 +97,6 @@ class Registry(Generic[T]):
 
 """
 Modules need to be registered.
-Example:
-    ```python
-        ModelRegistry.register("class_key")(class_name)
-    ```
-        or
-    ```python
-        @ModelRegistry.register("class_key")
-        class class_name:
-            ...
-    ```
 """
 class ModelRegistry(Registry[Type["torch.nn.Module"]]):
     pass
