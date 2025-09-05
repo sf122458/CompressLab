@@ -1,29 +1,9 @@
-- Key: StableCodec
-  Params:
-    level: 1
-  ExtParams:
-    SaveRecon: true
-
-- Key: StableCodec
-  Params:
-    level: 2
-  ExtParams:
-    SaveRecon: true
-
-- Key: StableCodec
-  Params:
-    level: 3
-  ExtParams:
-    SaveRecon: true
-
-- Key: StableCodec
-  Params:
-    level: 4
-  ExtParams:
-    SaveRecon: true
-
-- Key: StableCodec
-  Params:
-    level: 5
-  ExtParams:
-    SaveRecon: true
+!loop
+  vars:
+    level: [1, 2, 3, 4, 5]
+  template:
+    Key: StableCodec
+    Params:
+      level: ${level}
+    ExtParams:
+      SaveRecon: true

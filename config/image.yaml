@@ -92,6 +92,7 @@ Data:
     Key: BasicImageDataset
     Params:
       root: dataset/Kodak
+      return_img_info: true
   BatchSize: 16
   
 Train:

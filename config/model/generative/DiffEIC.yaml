@@ -1,29 +1,9 @@
-- Key: DiffEIC
-  Params:
-    pretrained_target_rate: 0.02
-  ExtParams:
-    SaveRecon: true
-
-- Key: DiffEIC
-  Params:
-    pretrained_target_rate: 0.04
-  ExtParams:
-    SaveRecon: true
-
-- Key: DiffEIC
-  Params:
-    pretrained_target_rate: 0.06
-  ExtParams:
-    SaveRecon: true
-
-- Key: DiffEIC
-  Params:
-    pretrained_target_rate: 0.09
-  ExtParams:
-    SaveRecon: true
-
-- Key: DiffEIC
-  Params:
-    pretrained_target_rate: 0.12
-  ExtParams:
-    SaveRecon: true
+!loop
+  vars:
+    target_rates: [0.02, 0.04, 0.06, 0.09, 0.12]
+  template:
+    Key: DiffEIC
+    Params:
+      pretrained_target_rate: ${target_rates}
+    ExtParams:
+      SaveRecon: true

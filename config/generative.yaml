@@ -15,7 +15,10 @@ Data:
     - Key: BasicImageDataset
       Params:
         root: dataset/CLIC2020_professional_val
+        transform:
+          CenterCrop:
+            size: [768, 768]
         return_img_info: true
 
 Env:
-  Devices: [3]
+  Devices: [0]

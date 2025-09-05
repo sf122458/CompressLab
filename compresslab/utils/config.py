@@ -1,7 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional, List, Union
 import yaml, os
-from yaml.nodes import ScalarNode, SequenceNode
+from yaml.nodes import ScalarNode, SequenceNode, MappingNode
+import re
 
 ########## Data Setting ##########
 class DatasetConfig(BaseModel):
@@ -132,18 +133,15 @@ class Loader(yaml.Loader):
         new_value = []
         for child in node.value:
             if isinstance(child, ScalarNode) and child.tag == '!include':
-                include_path = os.path.join(
-                    self._base_dir, 
-                    self.construct_scalar(child)
-                )
-                with open(include_path, 'r') as f:
-                    include_loader = Loader(f)
-                    include_node = include_loader.get_single_node()
-                
+                include_node = self._process_include_node(child)
                 if isinstance(include_node, SequenceNode):
                     new_value.extend(include_node.value)
+                elif isinstance(include_node, MappingNode) and include_node.tag == '!loop':
+                    new_value.extend(self._process_loop_node(include_node).value)
                 else:
                     new_value.append(include_node)
+            elif isinstance(child, MappingNode) and child.tag == '!loop':
+                new_value.extend(self._process_loop_node(child).value)
             else:
                 new_value.append(child)
         
@@ -156,14 +154,101 @@ class Loader(yaml.Loader):
         
         for key_node, value_node in node.value:
             if isinstance(value_node, ScalarNode) and value_node.tag == '!include':
-                include_path = os.path.join(self._base_dir, self.construct_scalar(value_node))
-                with open(include_path, 'r') as f:
-                    include_loader = Loader(f)
-                    include_node = include_loader.get_single_node()
-                
+                include_node = self._process_include_node(value_node)
                 new_value.append((key_node, include_node))
+            elif isinstance(value_node, MappingNode) and value_node.tag == '!loop':
+                loop_node = self._process_loop_node(value_node)
+                new_value.append((key_node, loop_node))
             else:
                 new_value.append((key_node, value_node))
         
         node.value = new_value
         return node
+    
+    def _process_include_node(self, include_node: ScalarNode) -> Union[ScalarNode, SequenceNode, MappingNode]:
+        include_path = os.path.join(
+            self._base_dir, 
+            self.construct_scalar(include_node)
+        )
+        with open(include_path, 'r') as f:
+            include_loader = Loader(f)
+            include_node = include_loader.get_single_node()
+        return include_node
+    
+    def _process_loop_node(self, loop_node: MappingNode) -> SequenceNode:
+        loop_config = self.construct_mapping(loop_node, deep=True)
+        self._validate_loop_config(loop_config)
+        
+        vars_dict = loop_config['vars']
+        template = loop_config['template']
+        var_names = list(vars_dict.keys())
+        var_lists = list(vars_dict.values())
+        total_items = len(var_lists[0])
+        
+        loop_items = []
+        for idx in range(total_items):
+            var_mapping = {var_names[i]: var_lists[i][idx] for i in range(len(var_names))}
+            item_data = self._replace_placeholders(template, var_mapping)
+            item_data = MappingNode(tag='tag:yaml.org,2002:map', value=[
+                (ScalarNode(tag='tag:yaml.org,2002:str', value=k), 
+                    ScalarNode(tag='tag:yaml.org,2002:str', value=v))
+                for k, v in item_data.items()
+            ])
+            loop_items.append(item_data)
+        
+        return SequenceNode(tag='tag:yaml.org,2002:seq', value=loop_items)
+    
+    def _replace_placeholders(self, node, var_mapping):
+        if isinstance(node, dict):
+            return {
+                k: self._replace_placeholders(v, var_mapping)
+                for k, v in node.items()
+            }
+        elif isinstance(node, list):
+            return [
+                self._replace_placeholders(item, var_mapping)
+                for item in node
+            ]
+        elif isinstance(node, str):
+            result = re.sub(r'\$\{\s*(\w+)\s*\}', lambda m: str(var_mapping.get(m.group(1), m.group(0))), node)
+            # Try to convert back to original data type
+            if result != node:
+                try:
+                    return int(result)
+                except ValueError:
+                    pass
+                try:
+                    return float(result)
+                except ValueError:
+                    pass
+                if result.lower() in ('true', 'false'):
+                    return result.lower() == 'true'
+                if result.lower() in ('null', 'none', '~'):
+                    return None
+            return result
+        elif isinstance(node, ScalarNode):
+            scalar_value = self.construct_scalar(node)
+            return self._replace_placeholders(scalar_value, var_mapping)
+        else:
+            return node
+        
+    def _validate_loop_config(self, loop_config):
+        if 'vars' not in loop_config or 'template' not in loop_config:
+            raise ValueError("!loop tag must contain 'vars' and 'template' keys.")
+
+        vars_dict = loop_config['vars']
+        if not isinstance(vars_dict, dict):
+            raise ValueError("'vars' must be a dictionary.")
+        for var_name, var_list in vars_dict.items():
+            if not isinstance(var_name, str) or not isinstance(var_list, list):
+                raise ValueError(f"!loop") # TODO
+            
+        var_lists = list(vars_dict.values())
+        if not var_lists:
+            raise ValueError("!loop 'vars' cannot be empty.")
+        list_lengths = [len(lst) for lst in var_lists]
+        if len(set(list_lengths)) != 1:
+            raise ValueError("All lists in !loop must have the same length.")
+        if list_lengths[0] == 0:
+            raise ValueError("Lists in !loop cannot be empty.")
+    
