@@ -100,7 +100,7 @@ colors_config = {
 
 name = "pathname" if SHOW_ABS_PATH else "filename"
 
-
+logging.captureWarnings(True)
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 

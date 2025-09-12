@@ -8,6 +8,7 @@ import pickle
 import importlib.util
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning, module="torchmetrics")
 from compresslab.utils.logging import logging
 from compresslab.utils.config import Config, Loader
 from compresslab.nn.base import BasicTrainer

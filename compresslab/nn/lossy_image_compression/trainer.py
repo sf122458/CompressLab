@@ -54,19 +54,19 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
             total_aux_loss += model_instance.aux_loss()
 
             # show metrics of the first model on the progress bar
-            if model_name == "codec_0":
+            if model_name == "0":
                 self.bar_metrics({
                     "loss": loss,
                     "bpp": metrics.bpp,
                     "psnr": metrics.psnr,
-                    "ms-ssim": metrics.ms_ssim
+                    "ms_ssim": metrics.ms_ssim
                 })
 
             self.log_train_metrics({
                 "loss": loss,
                 "bpp": metrics.bpp,
                 "psnr": metrics.psnr,
-                "ms-ssim": metrics.ms_ssim
+                "ms_ssim": metrics.ms_ssim
             }, model_name=model_name)
 
         self.manual_backward(total_loss)
@@ -91,13 +91,14 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
             self.log_val_metrics({
                 "bpp": metrics.bpp,
                 "psnr": metrics.psnr,
-                "ms-ssim": metrics.ms_ssim
+                "ms_ssim": metrics.ms_ssim
             }, model_name=model_name)
 
     def test_step(self, batch, batch_idx, dataloader_idx=0):
         x, filename, dataset = batch["image"], batch["filename"][0], batch["dataset"][0]
         for model_name, model_instance in self.model_wrapper.items():
-            model_name = f"{dataset}/{model_name}"
+            model_name = f"{dataset}_{self.model_type}/{model_name}" if self.model_type is not None \
+                else f"{dataset}/{model_name}"
             model_instance: CompressionModel
             with self.timer("compress", model_name):
                 out_compress = model_instance.compress(x)
@@ -117,11 +118,11 @@ class ImageCodecTrainer(CompressAIImageCodecTrainer):
             self.log_test_metrics({
                 "bpp": metrics.bpp,
                 "psnr": metrics.psnr,
-                "ms-ssim": metrics.ms_ssim
+                "ms_ssim": metrics.ms_ssim
             }, model_name=model_name)
 
             if self.ext_params.SaveRecon:
                 self.save_recon_imgs(
                     out_decompress["x_hat"], 
-                    f"{model_name}/{filename}_{self.model_type}_{metrics.bpp:.4f}_{metrics.psnr:.2f}_{metrics.ms_ssim:.4f}.png"
+                    f"{model_name}/{filename[:10]}_{metrics.bpp:.4f}_{metrics.psnr:.2f}_{metrics.ms_ssim:.4f}.png"
                 )

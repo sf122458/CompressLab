@@ -82,13 +82,13 @@ class ModelWrapper(nn.Module):
         self.vmap_forward = vmap(fmodel, in_dims=(0, 0, None), randomness="different")
     
     def keys(self):
-        return [f"codec_{idx}" for idx in range(len(self.models))]
+        return [f"{idx}" for idx in range(len(self.models))]
     
     def values(self):
         return self.models
     
     def items(self):
-        return {f"codec_{idx}": model for idx, model in enumerate(self.models)}.items()
+        return {f"{idx}": model for idx, model in enumerate(self.models)}.items()
     
     # CompressAI feature
     def _assert_compressmodel(self):
