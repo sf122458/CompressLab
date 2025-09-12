@@ -12,7 +12,6 @@ class SDModel(LatentNoisePredictionModel, ABC):
         Initialize the SD15 model.
         
         Args:
-            device (str): Device to run the model on ("cuda" or "cpu")
             dtype (torch.dtype): Data type for model parameters
         """
         super().__init__()
