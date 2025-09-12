@@ -54,8 +54,8 @@ class GeneralCodecExtParams(BaseModel):
     Lmbda: Union[float, List[float], Dict[str, List[float]]] = Field(
         default=0.0018,
         description="Compression levels for the codec." \
-        "It supports a single float value, a list of floats, or a dictionary with keys 'mse' and 'ms-ssim'." \
-        "If you set the fine-tuning step with `FinetuneRatio` or `FinetuneStep`, `Lmbda` must be a dictionary with keys 'mse' and 'ms-ssim'." \
+        "It supports a single float value, a list of floats, or a dictionary with keys 'mse' and 'ms_ssim'." \
+        "If you set the fine-tuning step with `FinetuneRatio` or `FinetuneStep`, `Lmbda` must be a dictionary with keys 'mse' and 'ms_ssim'." \
     )
     
     # NOTE: `vmap` can't always accelerate the forward pass, use with caution.

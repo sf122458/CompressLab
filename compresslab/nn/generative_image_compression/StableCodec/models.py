@@ -1,7 +1,7 @@
 """
 StableCodec
 Modified based on https://github.com/LuizScarlet/StableCodec
-Paper: https://arxiv.org/abs/2506.21977
+Paper: [StableCodec: Taming One-Step Diffusion for Extreme Image Compression](https://arxiv.org/abs/2506.21977)
 """
 import numpy as np
 import torch
@@ -28,7 +28,7 @@ class StableCodec(BasicTrainer):
     
     def __init__(
         self,
-        level: int = None,
+        level: int,
         elic_path: str = f"{PRETRAINED_CACHE_DIR}/StableCodec/elic_official.pth",
         sd_path = "stabilityai/sd-turbo",
         latent_tiled_size: int = 96,
@@ -262,12 +262,6 @@ class StableCodec(BasicTrainer):
         output_image = (self.vae.decode(x_denoised / self.vae.config.scaling_factor).sample).clamp(-1, 1)
         output_image = (output_image + 1) / 2
         return output_image
-    
-    def training_step(self, batch, batch_idx):
-        return super().training_step(batch, batch_idx)
-    
-    def validation_step(self, batch, batch_idx):
-        return super().validation_step(batch, batch_idx)
 
     def on_test_start(self):
         self.codec.update()
@@ -275,7 +269,7 @@ class StableCodec(BasicTrainer):
     
     def test_step(self, batch, batch_idx, dataloader_idx=0):
         imgs, filename, dataset = batch["image"], batch["filename"][0], batch["dataset"][0]
-        model_name = f"{dataset}/StableCodec_{self.level}"
+        model_name = f"{dataset}/{self.level}"
         
         with self.timer("compress", model_name=model_name):
             out_compress = self.compress(imgs)
@@ -298,7 +292,7 @@ class StableCodec(BasicTrainer):
             {
                 "bpp": metrics.bpp,
                 "psnr": metrics.psnr,
-                "ms-ssim": metrics.ms_ssim,
+                "ms_ssim": metrics.ms_ssim,
                 "lpips": metrics.lpips,
                 "dists": metrics.dists,
             },
@@ -311,9 +305,6 @@ class StableCodec(BasicTrainer):
         
         if self.ext_params.SaveRecon:
             self.save_recon_imgs(preds, f"{model_name}/{filename}_{metrics.bpp:.4f}.png")
-    
-    def configure_optimizers(self):
-        return super().configure_optimizers()
 
     def _make_one_step_scheduler(self, pretrained_path):
         noise_scheduler_one_step = DDPMScheduler.from_pretrained(

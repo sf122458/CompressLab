@@ -1,9 +1,9 @@
 !loop
   vars:
-    target_rates: [0.02, 0.04, 0.06, 0.09, 0.12]
+    level: [1, 2, 3, 4, 5]
   template:
     Key: DiffEIC
     Params:
-      pretrained_target_rate: ${target_rates}
+      level: ${level}
     ExtParams:
       SaveRecon: true

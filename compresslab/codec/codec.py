@@ -122,7 +122,7 @@ class PillowCodec(Codec):
         return {
             "bpp": bpp,
             "psnr": psnr,
-            "ms-ssim": ms_ssim,
+            "ms_ssim": ms_ssim,
             "encoding_time": enc_time,
             "decoding_time": dec_time,
         }
@@ -185,7 +185,7 @@ class BinaryCodec(Codec):
         return {
             "bpp": bpp,
             "psnr": psnr,
-            "ms-ssim": ms_ssim,
+            "ms_ssim": ms_ssim,
             "encoding_time": enc_time,
             "decoding_time": dec_time,
         }
@@ -443,7 +443,7 @@ class HM(Codec):
         return {
             "bpp": bpp,
             "psnr": psnr,
-            "ms-ssim": ms_ssim,
+            "ms_ssim": ms_ssim,
             "encoding_time": enc_time,
             "decoding_time": dec_time,
         }
@@ -584,7 +584,7 @@ class VTM(Codec):
         return {
             "bpp": bpp,
             "psnr": psnr,
-            "ms-ssim": ms_ssim,
+            "ms_ssim": ms_ssim,
             "encoding_time": enc_time,
             "decoding_time": dec_time,
         }

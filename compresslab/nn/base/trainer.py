@@ -235,7 +235,7 @@ class CompressAIImageCodecTrainer(BasicTrainer):
         self._lmbda = self.ext_params.Lmbda
 
         if isinstance(self._lmbda, dict):
-            assert "mse" in self._lmbda.keys() and "ms-ssim" in self._lmbda.keys()
+            assert "mse" in self._lmbda.keys() and "ms_ssim" in self._lmbda.keys()
             num_models = len(self._lmbda["mse"])
         else:
             if isinstance(self._lmbda, (int, float)):
@@ -250,7 +250,7 @@ class CompressAIImageCodecTrainer(BasicTrainer):
     def on_train_start(self):
         # FIXME: `self.finetune_step` must be defined here due to `Trainer` isn't attached before this step.
         # fine-tuning steps
-        if isinstance(self._lmbda, dict) and "ms-ssim" in self._lmbda.keys():
+        if isinstance(self._lmbda, dict) and "ms_ssim" in self._lmbda.keys():
             self.finetune_step = self.ext_params.FinetuneStep if self.ext_params.FinetuneStep > 0 else \
                 int(self.ext_params.FinetuneRatio * self.trainer.max_steps) + 1 # when `FinetuneRatio` is 1, ms-ssim model won't be saved
         else:
@@ -264,7 +264,7 @@ class CompressAIImageCodecTrainer(BasicTrainer):
         if self.global_step < self.finetune_step:
             return self._lmbda["mse"]
         else:
-            return self._lmbda["ms-ssim"]
+            return self._lmbda["ms_ssim"]
 
     def on_train_batch_end(self, output, batch, batch_idx):
         """
@@ -277,17 +277,13 @@ class CompressAIImageCodecTrainer(BasicTrainer):
         pass
     
     def on_test_start(self):
-        self.model_type = "last"
+        self.model_type = None
         if self.trainer.ckpt_path is not None:
             if "mse" in self.trainer.ckpt_path:
                 self.model_type = "mse"
             elif "ms_ssim" in self.trainer.ckpt_path:
                 self.model_type = "ms_ssim"
 
-        self.metrics_logger.reset_filename(
-            filename=f"metrics_{self.model_type}"
-        )
-        
         self.model_wrapper.update()
         
     def configure_optimizers(self):

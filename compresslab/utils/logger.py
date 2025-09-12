@@ -45,10 +45,7 @@ class MetricsLogger:
         self.metrics = dict()
         self.save_dir = save_dir
         self.filename = filename
-    
-    def reset_filename(self, filename: str = "metrics"):
-        self.filename = filename
-        self.metrics = dict()
+
 
     def log(self, name: str, log_dict: Dict[str, float]):
         if self.save_dir is None:
