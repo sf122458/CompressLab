@@ -25,7 +25,7 @@ class ImageMetricsOutput:
     fid: float = field(default=None)
         
 
-class MetricsCollector(LightningModule):
+class MetricsCollector:
     def __init__(
         self, 
     ):
@@ -33,12 +33,12 @@ class MetricsCollector(LightningModule):
         
         self.initialized = False
         
-    def setup(self):
-        self.ms_ssim = MultiScaleStructuralSimilarityIndexMeasure(data_range=1.0).to(self.device)
-        self.lpips = LearnedPerceptualImagePatchSimilarity(net_type='alex', normalize=True).to(self.device)
-        self.dists = DeepImageStructureAndTextureSimilarity(reduction='mean').to(self.device)
-        self.fid = FrechetInceptionDistance(normalize=True).to(self.device)
-        self.kid = KernelInceptionDistance(normalize=True).to(self.device)
+    def setup(self, device):
+        self.ms_ssim = MultiScaleStructuralSimilarityIndexMeasure(data_range=1.0).to(device)
+        self.lpips = LearnedPerceptualImagePatchSimilarity(net_type='alex', normalize=True).to(device)
+        self.dists = DeepImageStructureAndTextureSimilarity(reduction='mean').to(device)
+        self.fid = FrechetInceptionDistance(normalize=True).to(device)
+        self.kid = KernelInceptionDistance(normalize=True).to(device)
     
     def forward(self, imgs: Tensor, recons: Tensor, 
                 likelihoods: Dict[str, Tensor] = None, 
@@ -53,7 +53,7 @@ class MetricsCollector(LightningModule):
                 fid: bool = False,
                 ) -> ImageMetricsOutput:
         if self.initialized is False:   # This avoid saving the pretrained model weights in checkpoints
-            self.setup()
+            self.setup(imgs.device)
             self.initialized = True
         
         recons = recons.clamp(0, 1)

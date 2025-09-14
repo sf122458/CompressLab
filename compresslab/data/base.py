@@ -49,8 +49,13 @@ class BasicDataModule(L.LightningDataModule):
                           shuffle=False,
                           num_workers=self.num_workers)
 
-class BaseDataset(Dataset):
+class BasicDataset(Dataset):
     """A dataset base class that processes the transformations for images.
+    
+    Args:
+        root (Union[str, List[str]]): Path to the dataset. When a list is provided, data is loaded from multiple directories.
+        transform (Dict[str, Any], optional): The transformations to be applied to the data. `ToTensor()`
+            is applied by default. Defaults to None.
     """
     def __init__(
         self,

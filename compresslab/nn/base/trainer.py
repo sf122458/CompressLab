@@ -122,7 +122,7 @@ class BasicTrainer(L.LightningModule):
     def validation_step(self, batch, batch_idx):
         raise NotImplementedError("Please implement the `validation_step` method in your trainer class.")
 
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch, batch_idx, dataloader_idx=0):
         raise NotImplementedError("Please implement the `test_step` method in your trainer class.")
     
     def configure_optimizers(self):

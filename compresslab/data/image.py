@@ -1,11 +1,15 @@
 import os
-from torchvision import transforms
 from PIL import Image
 from pathlib import Path
-from .base import BaseDataset
+from .base import BasicDataset
 
+from typing import Any, Callable, Optional, Tuple, Union
 
-class BasicImageDataset(BaseDataset):
+import numpy as np
+import pickle
+from torchvision.datasets.utils import check_integrity
+
+class BasicImageDataset(BasicDataset):
     """
     A simplest image dataset.
     """
@@ -47,7 +51,7 @@ class BasicImageDataset(BaseDataset):
 
 
 # https://github.com/InterDigitalInc/CompressAI/blob/master/compressai/datasets/vimeo90k.py
-class Vimeo90kDataset(BaseDataset):
+class Vimeo90kDataset(BasicDataset):
     """Load a Vimeo-90K structured dataset.
     This dataset is used for training.
 
@@ -116,7 +120,7 @@ class Vimeo90kDataset(BaseDataset):
         return f"{tuplet_prefix}_{list_suffix}.txt"
     
     
-class LICDataset(BaseDataset):
+class LICDataset(BasicDataset):
     """The dataset used in DiffEIC, usually used for training and validation."""
     def __init__(
         self,
@@ -150,3 +154,94 @@ class LICDataset(BaseDataset):
             if early_stop:
                 break
         return files
+    
+class CIFAR10(BasicDataset):
+    """`CIFAR10 <https://www.cs.toronto.edu/~kriz/cifar.html>`_ Dataset.
+
+    Args:
+        train (bool, optional): If True, creates dataset from training set, otherwise
+            creates from test set.
+        **kwargs: Other arguments for BasicDataset.
+    """
+    train_list = [
+        ["data_batch_1", "c99cafc152244af753f735de768cd75f"],
+        ["data_batch_2", "d4bba439e000b95fd0a9bffe97cbabec"],
+        ["data_batch_3", "54ebc095f3ab1f0389bbae665268c751"],
+        ["data_batch_4", "634d18415352ddfa80567beed471001a"],
+        ["data_batch_5", "482c414d41f54cd18b22e5b47cb7c3cb"],
+    ]
+
+    test_list = [
+        ["test_batch", "40351d587109b95175f43aff81a1287e"],
+    ]
+    meta = {
+        "filename": "batches.meta",
+        "key": "label_names",
+        "md5": "5ff9c542aee3614f3951f8cda6e48888",
+    }
+
+    def __init__(
+        self,
+        train: bool = True,
+        **kwargs
+    ) -> None:
+        super().__init__(**kwargs)
+
+        assert isinstance(self.root, str), "The root should be a string."
+        self.train = train  # training set or test set
+
+        if not self._check_integrity():
+            raise RuntimeError("Dataset not found or corrupted. You can use download=True to download it")
+
+        if self.train:
+            downloaded_list = self.train_list
+        else:
+            downloaded_list = self.test_list
+
+        self.data = []
+        
+        # now load the picked numpy arrays
+        for file_name, checksum in downloaded_list:
+            file_path = os.path.join(self.root, file_name)
+            with open(file_path, "rb") as f:
+                entry = pickle.load(f, encoding="latin1")
+                self.data.append(entry["data"])
+
+        self.data = np.vstack(self.data).reshape(-1, 3, 32, 32)
+        self.data = self.data.transpose((0, 2, 3, 1))  # convert to HWC
+
+        self._load_meta()
+
+    def _load_meta(self) -> None:
+        path = os.path.join(self.root, self.meta["filename"])
+        if not check_integrity(path, self.meta["md5"]):
+            raise RuntimeError("Dataset metadata file not found or corrupted. You can use download=True to download it")
+    
+    def __getitem__(self, index: int):
+        """
+        Args:
+            index (int): Index
+
+        Returns:
+            tuple: (image, target) where target is index of the target class.
+        """
+        img = self.data[index]
+
+        # doing this so that it is consistent with all other datasets
+        # to return a PIL Image
+        img = Image.fromarray(img)
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        return img
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def _check_integrity(self) -> bool:
+        for filename, md5 in self.train_list + self.test_list:
+            fpath = os.path.join(self.root, filename)
+            if not check_integrity(fpath, md5):
+                return False
+        return True
