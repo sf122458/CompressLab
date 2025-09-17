@@ -53,6 +53,9 @@ DATASET_INFO = {
             "https://ultravideo.fi/video/ShakeNDry_1920x1080_120fps_420_8bit_YUV_RAW.7z", 
             "https://ultravideo.fi/video/YachtRide_1920x1080_120fps_420_8bit_YUV_RAW.7z",
         ],
+    },
+    "CIFAR10": {
+        "url": "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz",
     }
 }
 
@@ -107,10 +110,8 @@ def dataset_preparation(dataset: str, remove: bool = False):
         print("Download completed.")
     
     if len(os.listdir(dataset)) == 0:
-        
-    
         context = zipfile.ZipFile(compressed_filename, "r") if compressed_filename.endswith('.zip') \
-            else tarfile.open(compressed_filename, 'r:bz2')
+            else tarfile.open(compressed_filename, 'r:*')
         with context as ref:
             methods = archieve_methods[type(ref)]
             file_list = methods['namelist'](ref)

@@ -57,6 +57,7 @@ setup(
         "scipy",
         "numpy",
         "opencv_python",
+        "wget",
         "Pillow",
         "pydantic",
         "pytorch_msssim",
@@ -73,7 +74,8 @@ setup(
         "openai-clip=1.0.1",
         "peft==0.17.0",
         "setuptools_rust",
-        "cupy-cuda12x"
+        "cupy-cuda12x",
+        # "ema-pytorch==0.7.7"
     ],
     ext_modules=get_extensions(),
     rust_extensions=[
