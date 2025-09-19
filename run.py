@@ -179,7 +179,7 @@ def main(args: Args):
                 trainer.test(modelmodule, datamodule, ckpt_path="last")
 
         
-        Benchmark(exp_dir, config.Train.Benchmark)
+        # Benchmark(exp_dir, config.Train.Benchmark)
         
         logging.info("Finish.")
     

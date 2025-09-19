@@ -22,7 +22,7 @@ def partition_mu(dim, chunk_sizes, shared_seed=0):
     return partition_indices
 
 
-def combine_partitions(partition_indices, partitions):
+def combine_partitions(partition_indices, partitions)-> np.ndarray:
     combined = np.zeros_like(partition_indices, dtype=partitions[0].dtype)
     for i, partition in enumerate(partitions):
         combined[partition_indices == i] = partition

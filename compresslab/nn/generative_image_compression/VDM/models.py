@@ -4,15 +4,14 @@ Modified based on https://github.com/addtt/variational-diffusion-models
 from compresslab.nn.base import BasicTrainer
 import numpy as np
 import torch, math, os
-from torch import allclose, argmax, autograd, exp, linspace, sigmoid, sqrt, Tensor
+from torch import argmax, autograd, exp, linspace, sigmoid, sqrt, Tensor
 from torch.special import expm1
+from rich.progress import Progress
 from typing import Tuple
 from torchvision.utils import save_image
 from compresslab.nn.generative_image_compression.VDM.utils import unsqueeze_right, kl_std_normal
 from compresslab.nn.generative_image_compression.VDM.unet import UNetVDM
 from compresslab.nn.generative_image_compression.VDM.scheduler import FixedLinearSchedule, LearnedLinearSchedule
-# from compresslab.nn.generative_image_compression.DiffC.rcc.gaussian_channel_simulator import GaussianChannelSimulator
-
 
 class VDM(BasicTrainer):
     """Pipeline for variational diffusion models.
@@ -42,11 +41,6 @@ class VDM(BasicTrainer):
         sampling_batch: int = 64,
         n_sample_steps: int = 250,
         clip_samples: bool = True,
-        
-        # rcc
-        # max_chunk_size: int = 16,
-        # chunk_padding: int = 2,
-        # seed: int = 42,
         
         **kwargs
     ):
@@ -81,7 +75,6 @@ class VDM(BasicTrainer):
         self.n_sample_steps = n_sample_steps
         self.clip_samples = clip_samples
         self.vocab_size = 256  # Number of discrete values per pixel channel
-        # self.seed = seed
         
         self.diffusion_model = UNetVDM(
             embedding_dim=embedding_dim,
@@ -103,11 +96,6 @@ class VDM(BasicTrainer):
         else:
             raise ValueError(f"Unknown noise schedule: {noise_schedule}")
 
-        # self.gaussian_channel_simulator = GaussianChannelSimulator(
-        #     max_chunk_size=max_chunk_size,
-        #     chunk_padding=chunk_padding,
-        # )
-
     def sample_q_t_0(self, x: Tensor, times: Tensor, noise: Tensor=None):
         """Samples from the distributions q(x_t | x_0) at the given time steps."""
         with torch.enable_grad():  # Need gradient to compute loss even when evaluating
@@ -119,7 +107,9 @@ class VDM(BasicTrainer):
             noise = torch.randn_like(x)
         return mean + noise * scale, gamma_t
 
-    def sample_times(self, batch_size):
+    def sample_times(self, batch_size: int) -> Tensor:
+        """Note that timestep here is in [0, 1].
+        """
         if self.antithetic_time_sampling:
             t0 = np.random.uniform(0, 1 / batch_size)
             times = torch.arange(t0, 1.0, 1.0 / batch_size, device=self.device)
@@ -127,8 +117,7 @@ class VDM(BasicTrainer):
             times = torch.rand(batch_size, device=self.device)
         return times
     
-    def forward(self, batch, *, noise=None):
-        x = batch
+    def forward(self, x, noise=None):
         bpd_factor = 1 / (np.prod(x.shape[1:]) * np.log(2))
 
         # Convert image to integers in range [0, vocab_size - 1].
@@ -250,35 +239,41 @@ class VDM(BasicTrainer):
     
     @torch.no_grad()
     def sample(self, batch_size):
-        z = torch.randn((batch_size, *self.image_shape), device=self.device)
-        steps = linspace(1.0, 0.0, self.n_sample_steps + 1, device=self.device)
-        
         if self.local_rank == 0:
+            z = torch.randn((batch_size, *self.image_shape), device=self.device)
+            steps = linspace(1.0, 0.0, self.n_sample_steps + 1, device=self.device)
+            
             task = self.progress.add_task("Sampling", total=self.n_sample_steps)
-        for i in range(self.n_sample_steps):
-            z = self.sample_p_s_t(z, steps[i], steps[i + 1])
-            if self.local_rank == 0:
+            for i in range(self.n_sample_steps):
+                z = self.sample_p_s_t(z, steps[i], steps[i + 1])
                 self.progress.update(task, advance=1)
                 self.progress.refresh()
-        if self.local_rank == 0:
             self.progress.update(task, visible=False)
-        
-        logprobs = self.log_probs_x_z0(z_0=z)  # (B, C, H, W, vocab_size)
-        x = argmax(logprobs, dim=-1)  # (B, C, H, W)
-        return x.float() / (self.vocab_size - 1)  # normalize to [0, 1]
+            
+            logprobs = self.log_probs_x_z0(z_0=z)  # (B, C, H, W, vocab_size)
+            x = argmax(logprobs, dim=-1)  # (B, C, H, W)
+            return x.float() / (self.vocab_size - 1)  # normalize to [0, 1]
 
-    def sample_images(self, is_ema):
+    @torch.no_grad()
+    def sample_images(self, is_ema, test=False):
         samples = []
         for i in range(0, self.num_samples, self.sampling_batch):
             corrected_batch_size = min(self.sampling_batch, self.num_samples - i)
             samples.append(self.sample(corrected_batch_size))
         samples = torch.cat(samples, dim=0)
         
-        img_path = os.path.join(
-            self.trainer.default_root_dir, 
-            "samples",
-            f"sample-{'ema-' if is_ema else ''}{self.global_step}.png"
-        )
+        if not test:
+            img_path = os.path.join(
+                self.trainer.default_root_dir, 
+                "samples",
+                f"sample-{'ema-' if is_ema else ''}{self.global_step}.png"
+            )
+        else:
+            img_path = os.path.join(
+                self.trainer.default_root_dir, 
+                "test_samples",
+                f"sample.png"
+            )
         os.makedirs(os.path.dirname(img_path), exist_ok=True)
         save_image(samples, str(img_path), nrow=int(math.sqrt(self.num_samples)))
         
@@ -298,33 +293,30 @@ class VDM(BasicTrainer):
         self.log_train_metrics(metrics)
         
         optimizer.step()
-        
-        # TODO logging
     
     def on_validation_start(self):
         self.progress = self.trainer.progress_bar_callback.progress
         
         self.sample_images(is_ema=False)
         
-    # def validation_step(self, batch, batch_idx):
-    #     data = batch
-    #     # self.sample_images(self.ema.ema_model, is_ema=True)
-    #     self.sample_images(is_ema=False)
-        # _, metrics = self(data)
-        # self.log_val_metrics(metrics)
-        
     def validation_step(self, batch, batch_idx):
-        pass
-        
-    def on_test_start(self):
-        self.progress = self.trainer.progress_bar_callback.progress
-        
-    def test_step(self, batch, batch_idx, dataloader_idx=0):
+        return
         data = batch
+        self.sample_images(self.ema.ema_model, is_ema=True)
         self.sample_images(is_ema=False)
         _, metrics = self(data)
-        self.log_test_metrics(metrics)
+        self.log_val_metrics(metrics)
         
+    def on_test_start(self):
+        self.progress: Progress = self.trainer.progress_bar_callback.progress
+
+        self.sample_images(is_ema=False, test=True)
+        
+    def test_step(self, batch, batch_idx, dataloader_idx=0):
+        return
+        data = batch
+        _, metrics = self(data)
+        self.log_test_metrics(metrics)
         
     def configure_optimizers(self):
         return torch.optim.AdamW(
@@ -334,24 +326,4 @@ class VDM(BasicTrainer):
             weight_decay=0.01,
             eps=1e-8,
         )
-        
-        
-    # def encode(self, 
-    #            target_image: Tensor,
-    #            timestep_schedule,
-    #            manual_dkl_per_step):
-        
-    #     torch.manual_seed(self.seed)
-        
-    #     z_t = torch.randn_like(target_image)
-        
-        
-    # def decode(
-    #     self,
-    #     image_width: int,
-    #     image_height: int,
-    #     timestep_schedule,
-    # ):
-    #     torch.manual_seed(self.seed)
-        
         

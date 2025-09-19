@@ -85,12 +85,21 @@ class UNetVDM(nn.Module):
             zero_init(nn.Conv2d(embedding_dim, input_channels, 3, padding=1)),
         )
 
-    def forward(self, z: Tensor, g_t: Tensor):
+    def forward(self, z: Tensor, gamma_t: Tensor):
+        """Predict noise
+
+        Args:
+            z (Tensor): _description_
+            gamma_t (Tensor): _description_
+
+        Returns:
+            _type_: _description_
+        """
         # Get gamma to shape (B, ).
-        g_t = g_t.expand(z.shape[0])  # assume shape () or (1,) or (B,)
-        assert g_t.shape == (z.shape[0],)
+        gamma_t = gamma_t.expand(z.shape[0])  # assume shape () or (1,) or (B,)
+        assert gamma_t.shape == (z.shape[0],)
         # Rescale to [0, 1], but only approximately since gamma0 & gamma1 are not fixed.
-        t = (g_t - self.gamma_min) / (self.gamma_max - self.gamma_min)
+        t = (gamma_t - self.gamma_min) / (self.gamma_max - self.gamma_min)
         t_embedding = get_timestep_embedding(t, self.embedding_dim)
         # We will condition on time embedding.
         cond = self.embed_conditioning(t_embedding)

@@ -1,6 +1,18 @@
 import torch
+from torch import Tensor
+from typing import Tuple
 
-def get_alpha_prod_and_beta_prod(snr):
+def get_alpha_prod_and_beta_prod(snr: float):
+    """Map the SNR value to the corresponding alpha_prod and beta_prod values.
+
+    Args:
+        snr (float): A SNR value in SNR schedule.
+
+    Returns:
+        Tuple:
+            - alpha_prod (float): 
+            - beta_prod (float): 
+    """
     if snr == torch.inf:
         alpha_prod = 1
     else:
@@ -8,7 +20,20 @@ def get_alpha_prod_and_beta_prod(snr):
     beta_prod = 1 - alpha_prod
     return alpha_prod, beta_prod
 
-def P(noisy_latent, noise_prediction, current_snr, prev_snr):
+def P(noisy_latent: Tensor, noise_prediction: Tensor, current_snr: float, prev_snr: float) -> Tuple[Tensor, Tensor]:
+    """Predict p(x_{t-1} | x_t) given the noisy latent x_t and the predicted noise.
+
+    Args:
+        noisy_latent (Tensor): Noisy latent at current timestep, i.e. x_t.
+        noise_prediction (Tensor): Noise predicted by the model.
+        current_snr (float): The current SNR value in SNR schedule.
+        prev_snr (float): The previous SNR value in SNR schedule.
+
+    Returns:
+        Tuple:
+            pred_prev_sample (Tensor): predicted mean of previous latent
+            std (Tensor): predicted standard deviation of previous latent
+    """
     alpha_prod_t, beta_prod_t = get_alpha_prod_and_beta_prod(current_snr)
     alpha_prod_t_prev, beta_prod_t_prev = get_alpha_prod_and_beta_prod(prev_snr)
     current_alpha_t = alpha_prod_t / alpha_prod_t_prev
@@ -35,7 +60,18 @@ def P(noisy_latent, noise_prediction, current_snr, prev_snr):
     std = variance ** (0.5)
     return pred_prev_sample, std
 
-def Q(noisy_latent, target_latent, current_snr, prev_snr):
+def Q(noisy_latent: Tensor, target_latent: Tensor, current_snr: float, prev_snr: float) -> Tensor:
+    """q(x_{t-1} | x_t, x_0), i.e. the posterior distribution of x_{t-1} given x_t and x_0.
+
+    Args:
+        noisy_latent (Tensor): _description_
+        target_latent (Tensor): _description_
+        current_snr (float): The current SNR value in SNR schedule.
+        prev_snr (float): The previous SNR value in SNR schedule.
+
+    Returns:
+        _type_: _description_
+    """
     alpha_prod_t, beta_prod_t = get_alpha_prod_and_beta_prod(current_snr)
     alpha_prod_t_prev, beta_prod_t_prev = get_alpha_prod_and_beta_prod(prev_snr)
     current_alpha_t = alpha_prod_t / alpha_prod_t_prev
