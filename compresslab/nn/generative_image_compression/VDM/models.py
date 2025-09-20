@@ -90,16 +90,16 @@ class VDM(BasicTrainer):
         )
 
         if noise_schedule == "fixed_linear":
-            self.gamma = FixedLinearSchedule(gamma_min, gamma_max)
+            self.noise_schedule = FixedLinearSchedule(gamma_min, gamma_max)
         elif noise_schedule == "learned_linear":
-            self.gamma = LearnedLinearSchedule(gamma_min, gamma_max)
+            self.noise_schedule = LearnedLinearSchedule(gamma_min, gamma_max)
         else:
             raise ValueError(f"Unknown noise schedule: {noise_schedule}")
 
     def sample_q_t_0(self, x: Tensor, times: Tensor, noise: Tensor=None):
         """Samples from the distributions q(x_t | x_0) at the given time steps."""
         with torch.enable_grad():  # Need gradient to compute loss even when evaluating
-            gamma_t = self.gamma(times)
+            gamma_t = self.noise_schedule.gamma(times)
         gamma_t_padded = unsqueeze_right(gamma_t, x.ndim - gamma_t.ndim)
         mean = x * sqrt(sigmoid(-gamma_t_padded))  # x * alpha
         scale = sqrt(sigmoid(gamma_t_padded))
@@ -147,7 +147,7 @@ class VDM(BasicTrainer):
         diffusion_loss = 0.5 * pred_loss * gamma_grad * bpd_factor
 
         # *** Latent loss (bpd): KL divergence from N(0, 1) to q(z_1 | x)
-        gamma_1 = self.gamma(torch.tensor([1.0], device=self.device))
+        gamma_1 = self.noise_schedule.gamma(torch.tensor([1.0], device=self.device))
         sigma_1_sq = sigmoid(gamma_1)
         mean_sq = (1 - sigma_1_sq) * x**2  # (alpha_1 * x)**2
         latent_loss = kl_std_normal(mean_sq, sigma_1_sq).sum((1, 2, 3)) * bpd_factor
@@ -167,7 +167,7 @@ class VDM(BasicTrainer):
         loss = diffusion_loss + latent_loss + recons_loss
 
         with torch.no_grad():
-            gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
+            gamma_0 = self.noise_schedule.gamma(torch.tensor([0.0], device=self.device))
         metrics = {
             "bpd": loss.mean(),
             "diff_loss": diffusion_loss.mean(),
@@ -201,7 +201,7 @@ class VDM(BasicTrainer):
         Returns:
             log_probs: Log probabilities of shape (B, C, H, W, vocab_size).
         """
-        gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
+        gamma_0 = self.noise_schedule.gamma(torch.tensor([0.0], device=self.device))
         if x is None and z_0 is not None:
             z_0_rescaled = z_0 / sqrt(sigmoid(-gamma_0))  # z_0 / alpha_0
         elif z_0 is None and x is not None:
@@ -217,27 +217,6 @@ class VDM(BasicTrainer):
         return log_probs
     
     @torch.no_grad()
-    def sample_p_s_t(self, z: Tensor, t: Tensor, s: Tensor):
-        """Samples from p(z_s | z_t, x). Used for standard ancestral sampling."""
-        gamma_t = self.gamma(t)
-        gamma_s = self.gamma(s)
-        c = -expm1(gamma_s - gamma_t)
-        alpha_t = sqrt(sigmoid(-gamma_t))
-        alpha_s = sqrt(sigmoid(-gamma_s))
-        sigma_t = sqrt(sigmoid(gamma_t))
-        sigma_s = sqrt(sigmoid(gamma_s))
-
-        pred_noise = self.diffusion_model(z, gamma_t)
-        if self.clip_samples:
-            x_start = (z - sigma_t * pred_noise) / alpha_t
-            x_start.clamp_(-1.0, 1.0)
-            mean = alpha_s * (z * (1 - c) / alpha_t + c * x_start)
-        else:
-            mean = alpha_s / alpha_t * (z - c * sigma_t * pred_noise)
-        scale = sigma_s * sqrt(c)
-        return mean + scale * torch.randn_like(z)
-    
-    @torch.no_grad()
     def sample(self, batch_size):
         if self.local_rank == 0:
             z = torch.randn((batch_size, *self.image_shape), device=self.device)
@@ -245,7 +224,7 @@ class VDM(BasicTrainer):
             
             task = self.progress.add_task("Sampling", total=self.n_sample_steps)
             for i in range(self.n_sample_steps):
-                z = self.sample_p_s_t(z, steps[i], steps[i + 1])
+                z = self.noise_schedule.denoise_step(z, steps[i], steps[i + 1])
                 self.progress.update(task, advance=1)
                 self.progress.refresh()
             self.progress.update(task, visible=False)
