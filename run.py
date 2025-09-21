@@ -45,7 +45,7 @@ def main(args: Args):
         
         config = Config(**yaml.load(open(args.config, 'r'), Loader))
 
-        exp_dir = os.path.join(OUTPUT_DIR, Path(args.config).stem)
+        exp_dir = os.path.join(OUTPUT_DIR, Path(args.config).stem if config.Train.ResultDir is None else config.Train.ResultDir)
         os.makedirs(exp_dir, exist_ok=True)
         os.system(f"cp {args.config} {exp_dir}/config.yaml")
 

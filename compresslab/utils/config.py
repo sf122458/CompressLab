@@ -146,6 +146,10 @@ class TrainClass(BaseModel):
         default=1, description="Validation interval in epochs."
     )
     Benchmark: Optional[List[BenchmarkItem]] = None
+    ResultDir: Optional[str] = Field(
+        default=None, description="Directory to save the results. \
+        If not specified, the name of the directory will follow the config filename."
+    )
 
 ############ Environment Configuration ##########
 class EnvClass(BaseModel):
