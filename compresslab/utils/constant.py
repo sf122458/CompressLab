@@ -5,5 +5,8 @@ MODEL_DEFAULT_FILENAME = "models.py"    # The model filename. The code will auto
 TRAINER_DEFAULT_FILENAME = "trainer.py" # The trainer filename. The code will automatically search the trainer in this file.
 
 
-# logging
-SHOW_ABS_PATH = False # If true, show absolute path in logging (friendly to locate the file in VSCode).
+# logging message in terminal
+LOGGING_SHOW_ABS_PATH = False # If true, show absolute path in terminal (friendly to locate the file in VSCode).
+
+# tensorboard logging
+LOGGING_EVERY_N_STEP = 1000 # Log every n steps in training.

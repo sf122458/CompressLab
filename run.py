@@ -146,6 +146,7 @@ def main(args: Args):
                     max_epochs=num_epoch,
                     check_val_every_n_epoch=config.Train.Valinterval,
                     default_root_dir=out_dir,
+                    log_every_n_steps=LOGGING_EVERY_N_STEP,
                     callbacks=[
                         RichProgressBar(),
                         ModelCheckpoint(

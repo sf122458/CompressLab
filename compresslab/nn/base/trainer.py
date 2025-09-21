@@ -293,10 +293,10 @@ class CompressAIImageCodecTrainer(BasicTrainer):
             parameters += [p for n, p in model_instance.named_parameters() if p.requires_grad and not n.endswith(".quantiles")]
             aux_parameters += [p for n, p in model_instance.named_parameters() if p.requires_grad and n.endswith(".quantiles")]
         
-        optimizer = torch.optim.Adam([
-            {"params": parameters, "lr": self.ext_params.Lr, "name": "model_params"},
-            {"params": aux_parameters, "lr": self.ext_params.Auxlr, "name": "entropy_model_params"}
-        ])
+        optimizer = getattr(torch.optim, self.ext_params.Optimizer.Key)([
+            {"params": parameters, "lr": self.ext_params.Optimizer.Lr, "name": "model_params"},
+            {"params": aux_parameters, "lr": 1e-3, "name": "entropy_model_params"}
+        ], **self.ext_params.Optimizer.Params)
 
         return optimizer
     

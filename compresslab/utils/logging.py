@@ -2,7 +2,7 @@ import logging
 import colorlog
 import sys
 from logging import Handler, getLevelName
-from .constant import SHOW_ABS_PATH
+from .constant import LOGGING_SHOW_ABS_PATH
 
 class StreamHandler(Handler):
     """
@@ -98,7 +98,7 @@ colors_config = {
 }
 
 
-name = "pathname" if SHOW_ABS_PATH else "filename"
+name = "pathname" if LOGGING_SHOW_ABS_PATH else "filename"
 
 logging.captureWarnings(True)
 logger = logging.getLogger()

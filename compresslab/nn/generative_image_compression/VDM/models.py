@@ -298,11 +298,9 @@ class VDM(BasicTrainer):
         self.log_test_metrics(metrics)
         
     def configure_optimizers(self):
-        return torch.optim.AdamW(
-            self.diffusion_model.parameters(),
-            self.ext_params.Lr,
-            betas=(0.9, 0.99),
-            weight_decay=0.01,
-            eps=1e-8,
+        return getattr(torch.optim, self.ext_params.Optimizer.Key)(
+            list(self.diffusion_model.parameters()) + list(self.noise_schedule.parameters()),
+            lr=self.ext_params.Optimizer.Lr,
+            **self.ext_params.Optimizer.Params
         )
         

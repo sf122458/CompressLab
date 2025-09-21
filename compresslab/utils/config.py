@@ -1,11 +1,41 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, ValidationInfo
 from typing import Dict, Any, Optional, List, Union
 import yaml, os
 from yaml.nodes import ScalarNode, SequenceNode, MappingNode
 import re
 
+class NumericStringConverterMixin(BaseModel):
+    _convert_fields: List[str] = []
+
+    @field_validator('*', mode='before')
+    def convert_string_values_to_numeric(cls, v: Any, info: ValidationInfo) -> Any:
+        if info.field_name not in cls._convert_fields.get_default():
+            return v
+        
+        def _recursive_convert(value: Any) -> Any:
+            if isinstance(value, dict):
+                return {k: _recursive_convert(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [_recursive_convert(item) for item in value]
+            elif isinstance(value, str):
+                try:
+                    return int(value)
+                except (ValueError, TypeError):
+                    pass
+                try:
+                    return float(value)
+                except (ValueError, TypeError):
+                    pass
+                return value
+            else:
+                return value
+
+        return _recursive_convert(v)
+
 ########## Data Setting ##########
-class DatasetConfig(BaseModel):
+class DatasetConfig(NumericStringConverterMixin):
+    _convert_fields = ['Params']
+    
     Key: str = Field(description="Registered name of the dataset")
     Params: Optional[Dict[str, Any]] = Field(default_factory=dict,
                                              description="Parameters for the dataset, " \
@@ -22,6 +52,18 @@ class DataSetting(BaseModel):
     NumWorkers: int = Field(default=4, description="Number of workers for data loading.")
 
 ########## Codec Classes ##########
+
+class OptimizerConfig(NumericStringConverterMixin):
+    _convert_fields = ['Params']
+    
+    Key: str = Field(default="Adam", description="Registered name of the optimizer.")
+    Lr: float = Field(default=1e-4, description="Learning rate for the optimizer.")
+    Params: Optional[Dict[str, Union[str, float, int, List, Dict]]] = Field(default_factory=dict,
+                                             description="Parameters for the optimizer, "\
+                                             "provided as a dictionary.",
+                                             kw_only=True
+                                             )
+
 class GeneralCodecExtParams(BaseModel):
     model_config = {
         "extra": "forbid"
@@ -36,10 +78,14 @@ class GeneralCodecExtParams(BaseModel):
             The time cost of writing and reading the bitstream may also be contained in the final metrics."
     )
     
-    # Extra parameters for the trainable codec.
-    Lr: Optional[float] = Field(default=1e-4, description="Learning rate.")
-    Auxlr: Optional[float] = Field(default=1e-3, description="Auxiliary learning rate for the entropy models.")
-    
+    Optimizer: OptimizerConfig = Field(
+        default_factory=OptimizerConfig,
+        description="Configuration for the optimizer."
+    )
+
+    GradAccumulateBatches: int = Field(
+        default=1, description="Number of batches to accumulate gradients over before performing an optimizer step."
+    )
     
     # TODO: a more elegant way?
     FinetuneRatio: Optional[float] = Field(
@@ -63,9 +109,11 @@ class GeneralCodecExtParams(BaseModel):
         default=False, description="Whether to use vmap for forward pass."
     )
 
-class GeneralCodec(BaseModel):
+class GeneralCodec(NumericStringConverterMixin):
     """Base class for general codecs.
     """
+    _convert_fields = ['Params']
+    
     Name: Optional[str] = Field(default=None, description="Self-defined name for the codec")
     Key: str = Field(description="Registered name of the codec")
     Params: Optional[Dict[str, Any]] = Field(default_factory=dict, 
@@ -113,7 +161,7 @@ class Config(BaseModel):
 
 
 
-class Loader(yaml.Loader):
+class Loader(yaml.SafeLoader):
     """Custom YAML loader.
     It supports the `!include` tag to include other YAML files.
     1. If the `!include` tag is used in a sequence, and the included file also contains a sequence,
