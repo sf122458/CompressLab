@@ -4,6 +4,7 @@ from .chunk_coding import (
     decode_from_chunks,
 )
 import numpy as np
+from typing import List, Union
 from compresslab.zipf_encoding import encode_zipf, decode_zipf
 
 
@@ -12,8 +13,20 @@ class GaussianChannelSimulator:
         self.max_chunk_size = max_chunk_size
         self.chunk_padding = chunk_padding
 
-    def encode(self, mu, manual_dkl=None, seed=0):
-        """Simulates a noisy channel with identity covariance and mean mu."""
+    def encode(self, mu: np.ndarray, manual_dkl: List[Union[float, int]]=None, seed: int=0):
+        """_summary_
+
+        Args:
+            mu (np.ndarray): _description_
+            manual_dkl (List[Union[float, int]], optional): _description_. Defaults to None.
+            seed (int, optional): _description_. Defaults to 0.
+
+        Returns:
+            Tuple: 
+                sample (np.ndarray): Sampled latent after channel.
+                chunk_seeds (List[int]): List of seeds for each chunk.
+                dkl (float): Actual or manually set KL divergence used.
+        """
         dkl = manual_dkl
         if dkl is None:
             dkl = 0.5 * float((mu.astype(np.float32) ** 2).sum() / np.log(2))
