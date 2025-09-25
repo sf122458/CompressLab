@@ -101,6 +101,18 @@ class BasicTrainer(L.LightningModule):
             sync_dist=True, rank_zero_only=True
         )
         
+    def log_images(self, tag: str, images: Tensor):
+        """Log images to TensorBoard.
+        Args:
+            images (Tensor): The images to be logged. The shape is (N, C, H, W) and the value is in [0, 1].
+        """
+        self.logger.experiment.add_images(
+            tag=tag,
+            img_tensor=images,
+            global_step=self.global_step,
+            dataformats="NCHW"
+        )
+        
     def timer(self, metric_name: str, model_name: str = None, unit: str = "ms"):
         if model_name is None:
             model_name = self.__class__.__name__
