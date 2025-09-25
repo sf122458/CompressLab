@@ -33,3 +33,4 @@ CIFAR10
 *.yaml
 playground
 *.jpg
+cache/
