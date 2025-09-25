@@ -6,7 +6,7 @@ import zipfile
 import tarfile
 import py7zr
 import kagglehub
-from typing import Union
+from typing import Union, List, Dict, Any, Tuple
 
 DATASET_INFO = {
     "Vimeo90k_septuplet": {
@@ -63,6 +63,10 @@ DATASET_INFO = {
     },
     "CelebA-HQ-256": {
         "kaggle": "badasstechie/celebahq-resized-256x256",
+    },
+    "CelebA-HQ-512": {
+        "kaggle": "vincenttamml/celebamaskhq512",
+        "prefix": "image"
     }
 }
 
@@ -81,14 +85,16 @@ archieve_methods = {
     },
 }
 
-def kaggle_download(dataset: str):
-    if os.path.isdir(dataset) and len(os.listdir(dataset)) > 0:
-        print(f"Directory {dataset} is not empty. Skipping download.")
+def kaggle_download(dataset_name: Dict[str, Any]):
+    info = DATASET_INFO[dataset_name]
+    if os.path.isdir(dataset_name) and len(os.listdir(dataset_name)) > 0:
+        print(f"Directory {dataset_name} is not empty. Skipping download.")
         return
     
-    path = kagglehub.dataset_download(dataset)
-    os.system(f"mv {path}/* ./{dataset}")
-    os.remove(path)
+    download_path = kagglehub.dataset_download(info["kaggle"])
+    prefix = info.get("prefix", "*")
+    os.system(f"mv {download_path}/{prefix} ./{dataset_name}")
+    os.system(f"rm -rf {download_path}")
     
 
 def dataset_preparation(dataset: str, remove: bool = False):
@@ -96,7 +102,7 @@ def dataset_preparation(dataset: str, remove: bool = False):
     
     if "url" not in DATASET_INFO[dataset]:
         if "kaggle" in DATASET_INFO[dataset]:
-            kaggle_download(DATASET_INFO[dataset]["kaggle"])
+            kaggle_download(dataset)
             return
         
         
