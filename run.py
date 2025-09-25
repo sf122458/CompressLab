@@ -85,6 +85,7 @@ def main(args: Args):
                 continue
             
             model_class = ModelRegistry.get(model.Key)
+            logging.info(f"Using model: {model_class.__name__}, provided parameters: {model.Params}, ext_params: {model.ExtParams}")
             
             if issubclass(model_class, BasicTrainer):
                 modelmodule = model_class(**model.Params, ext_params=model.ExtParams)
@@ -147,6 +148,7 @@ def main(args: Args):
                     check_val_every_n_epoch=config.Train.Valinterval,
                     default_root_dir=out_dir,
                     log_every_n_steps=LOGGING_EVERY_N_STEP,
+                    precision=config.Train.Precision,
                     callbacks=[
                         RichProgressBar(),
                         ModelCheckpoint(

@@ -19,6 +19,7 @@ class GaussianChannelSimulator:
             dkl = 0.5 * float((mu.astype(np.float32) ** 2).sum() / np.log(2))
 
         chunk_sizes = get_chunk_sizes(dkl, self.max_chunk_size, self.chunk_padding)
+        # FIXME: This cost too much time
         chunk_seeds, sample = chunk_and_encode(
             mu, chunk_sizes=chunk_sizes, shared_seed=seed
         )

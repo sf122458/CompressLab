@@ -58,7 +58,7 @@ class Schedule(nn.Module):
         """
         gamma_t = self.gamma(t)
         gamma_s = self.gamma(s)
-        c = - torch.expm1(gamma_s - gamma_t)
+        c = - torch.special.expm1(gamma_s - gamma_t)
         alpha_t = self.alpha(t)
         alpha_s = self.alpha(s)
         sigma_t = self.sigma(t)
@@ -193,7 +193,7 @@ class VariancePreservingSchedule(Schedule):
         \text{SNR}(t) = \exp({-\gamma_{\boldsymbol{\eta}}(t)})
         $$
     """
-    def __init__(self, clip_samples=True):
+    def __init__(self, clip_samples: bool = True):
         super().__init__()
         self.clip_samples = clip_samples
 
@@ -239,7 +239,7 @@ class VariancePreservingSchedule(Schedule):
         """
         gamma_t = self.gamma(t)
         gamma_s = self.gamma(s)
-        c = - torch.expm1(gamma_s - gamma_t)
+        c = - torch.special.expm1(gamma_s - gamma_t)
         alpha_t = self.alpha(t)
         alpha_s = self.alpha(s)
         sigma_t = self.sigma(t)
@@ -247,7 +247,7 @@ class VariancePreservingSchedule(Schedule):
         
         if self.clip_samples:
             x_start = (noisy_image - sigma_t * pred_noise) / alpha_t
-            x_start = x_start.clamp(-1., 1.)
+            x_start = x_start.clamp_(-1., 1.)
             mean = alpha_s * (noisy_image * (1 - c) / alpha_t + c * x_start)
         else:
             mean = alpha_s / alpha_t * (noisy_image - c * sigma_t * pred_noise)
@@ -280,7 +280,7 @@ class VariancePreservingSchedule(Schedule):
         """
         gamma_t = self.gamma(t)
         gamma_s = self.gamma(s)
-        c = - torch.expm1(gamma_s - gamma_t)
+        c = - torch.special.expm1(gamma_s - gamma_t)
         alpha_t = self.alpha(t)
         alpha_s = self.alpha(s)
         sigma_t = self.sigma(t)
@@ -288,7 +288,7 @@ class VariancePreservingSchedule(Schedule):
         
         mean = alpha_s / alpha_t * (noisy_image - c * sigma_t * pred_noise)
         std = sigma_s * torch.sqrt(c)
-        
+        print(f"gamma_t: {gamma_t}, gamma_s: {gamma_s}, sigma_t: {sigma_t}, sigma_s:{sigma_s}, c: {c}")
         return mean, std
 
         
@@ -300,6 +300,8 @@ class FixedLinearSchedule(VariancePreservingSchedule):
         self.gamma_max = gamma_max
 
     def gamma(self, t: Tensor) -> Tensor:
+        if not torch.is_tensor(t):
+            t = torch.tensor(t, dtype=torch.float32)
         return self.gamma_min + (self.gamma_max - self.gamma_min) * t
 
 
@@ -315,19 +317,28 @@ class LearnedLinearSchedule(VariancePreservingSchedule):
 class LearnedNNSchedule(VariancePreservingSchedule):
     def __init__(self, gamma_min: float, gamma_max: float, **kwargs):
         super().__init__(**kwargs)
-        self.net = nn.Sequential(
-            nn.Linear(1, 128),
-            nn.ReLU(),
-            nn.Linear(128, 128),
-            nn.ReLU(),
-            nn.Linear(128, 1),
-            nn.Sigmoid()
-        )
+
+        self.l1 = nn.Linear(1, 1)
+        self.l2 = nn.Linear(1, 1024)
+        self.l3 = nn.Linear(1024, 1)
         self.gamma_min = gamma_min
         self.gamma_max = gamma_max
+        
+    def _gamma(self, t: Tensor) -> Tensor:
+        device = next(self.l1.parameters()).device
+        if not torch.is_tensor(t):
+            t = torch.tensor(t, dtype=torch.float32, device=device)
+        t = t.unsqueeze(-1)
+        out = self.l1(t) + self.l3(torch.sigmoid(self.l2(self.l1(t))))
+        return out.squeeze(-1)
 
     def gamma(self, t: Tensor) -> Tensor:
-        raise NotImplementedError("This function is not implemented yet.")
-        t = t.unsqueeze(-1)  # Add feature dimension
-        gamma = self.net(t).squeeze(-1)  # Remove feature dimension
-        return self.gamma_min + (self.gamma_max - self.gamma_min) * gamma
+        gamma_t = self._gamma(t)
+        
+        t1 = torch.ones_like(t)
+        t0 = torch.zeros_like(t)
+        gamma_1 = self._gamma(t1)
+        gamma_0 = self._gamma(t0)
+        
+        return self.gamma_min + (self.gamma_max - self.gamma_min) * (gamma_t - gamma_0) / (gamma_1 - gamma_0)
+

@@ -150,6 +150,10 @@ class TrainClass(BaseModel):
         default=None, description="Directory to save the results. \
         If not specified, the name of the directory will follow the config filename."
     )
+    Precision: str = Field(
+        default="32", description="Precision for training. \
+        Supported values are consistent with PyTorch Lightning."
+    )
 
 ############ Environment Configuration ##########
 class EnvClass(BaseModel):

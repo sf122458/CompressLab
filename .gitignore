@@ -12,3 +12,24 @@ test/
 dcvc/
 lalic/
 config_test/
+# cache
+PerCo
+# StableCodec
+HiFiC
+MS_ILLM
+models--*
+.locks
+target
+Cargo.lock
+dataset
+*.png
+*.ckpt
+*.zip
+*.pkl
+*.pth
+*.tar*
+*.pyi
+CIFAR10
+*.yaml
+playground
+*.jpg

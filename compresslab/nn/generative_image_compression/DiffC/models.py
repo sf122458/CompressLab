@@ -192,6 +192,7 @@ class DiffC(BasicTrainer):
             sample, chunk_seeds, dkl = gaussian_channel_simulator.encode(
                 q_mu_flat_normed, manual_dkl=manual_dkl, seed=step_index
             )
+            
             chunk_seeds_per_step.append(chunk_seeds)
             dkl_per_step.append(dkl)
             sample = torch.tensor(sample)
@@ -264,7 +265,7 @@ class DiffC(BasicTrainer):
         current_snr = noise_prediction_model.get_timestep_snr(current_timestep)
         
         task = self.progress.add_task("Decoding...", total=len(chunk_seeds_per_step))
-        for step_index, (prev_timestep, chunk_seeds, Dkl) in enumerate(
+        for step_index, (prev_timestep, chunk_seeds, dkl) in enumerate(
             zip(timestep_schedule, chunk_seeds_per_step, dkl_per_step)
         ):
             noise_prediction = noise_prediction_model.predict_noise(
@@ -273,7 +274,7 @@ class DiffC(BasicTrainer):
             prev_snr = noise_prediction_model.get_timestep_snr(prev_timestep)
             p_mu, std = P(noisy_latent, noise_prediction, current_snr, prev_snr)
             sample = gaussian_channel_simulator.decode(
-                chunk_seeds, noisy_latent.numel(), Dkl, seed=step_index
+                chunk_seeds, noisy_latent.numel(), dkl, seed=step_index
             )
             reshaped_sample = (
                 torch.tensor(sample).reshape(noisy_latent.shape).to(device).to(dtype)
@@ -370,7 +371,7 @@ class DiffC(BasicTrainer):
         )
         
         
-        chunk_seeds_per_step, Dkl_per_step, _, recon_step_indices = self.encode(
+        chunk_seeds_per_step, dkl_per_step, _, recon_step_indices = self.encode(
             gt_latent,
             self.encoding_timesteps,
             self.model,
@@ -382,7 +383,7 @@ class DiffC(BasicTrainer):
         step_idx = recon_step_indices[0]
         bytes_data = self.gaussian_channel_simulator.compress_chunk_seeds(
             chunk_seeds_per_step[: step_idx + 1],
-            Dkl_per_step[: step_idx + 1],
+            dkl_per_step[: step_idx + 1],
         )
         
         return {

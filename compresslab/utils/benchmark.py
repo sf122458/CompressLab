@@ -9,83 +9,24 @@ from compresslab.utils.config import BenchmarkItem
 import logging
 import matplotlib.pyplot as plt
 
-@dataclass
-class BenchmarkTestItem:
-    BD_RATE = {"bd-rate"}
-
 class Benchmark:
-    """
-    Benchmark:
-        1. calculate BD-Rate for lossy compression
-        2. plot BD-Rate curve
-    """
-
-    # from CompressAI
-    bd_rate_baseline = dict(
-        JPEG=dict(
-            bpp=[0.22115325927734372,
-                0.32661437988281244,
-                0.42312622070312506,
-                0.5083855523003472,
-                0.5878660413953993,
-                0.6601265801323783,
-                0.728946261935764,
-                0.786026848687066,
-                0.8497187296549479,
-                0.9060007731119791,
-                0.9643800523546006,
-                1.0372119479709203,
-                1.1273964775933163,
-                1.23984612358941,
-                1.3688269721137154,
-                1.5718070136176217,
-                1.8588163587782118,
-                2.350199381510416,
-                3.4013400607638893],
-            psnr=[23.779894921045457,
-                26.57723034342358,
-                28.042246379237767,
-                29.04180914810682,
-                29.78473021842612,
-                30.378313496658652,
-                30.903164761925012,
-                31.307827225129476,
-                31.70484530103775,
-                32.05865273799422,
-                32.39929573599792,
-                32.789915599755076,
-                33.234742421489976,
-                33.792594320368266,
-                34.39429509119509,
-                35.239001425077355,
-                36.32886455167303,
-                37.9121247026983,
-                40.556657112988766],
-        )
-    )
-
-
+    
+    PRESET_ITEMS = ["BD_RATE", "BD_CURVE"]
+    
     def __init__(self, 
                  exp_dir: Path,
-                 config: Optional[Union[BenchmarkItem, List[BenchmarkItem]]] = None,
+                 eval_items: Optional[Union[BenchmarkItem, List[BenchmarkItem]]],
                  ):
         """
         Args:
             exp_dir (Path): Directory to save the benchmark files.
-            config (BenchmarkItem): Benchmark test items defined in the yaml config file.
+            eval_items (BenchmarkItem): Benchmark test items defined in the yaml config file.
         """
-        
-        if config is None:
-            return
-
         self.exp_dir = exp_dir
-        if not isinstance(config, list):
-            self.config = [config]
-        else:
-            self.config = config
 
         self.exp_metrics = {}
         # load all metrics from each model directory
+        # the metrics is organzied as {Key or Name in the config file: {codec_name: {metric_name: metric_value}}}
         for root, _, files in os.walk(exp_dir):
             for file in files:
                 if file == "metrics.pkl":
@@ -93,15 +34,13 @@ class Benchmark:
                         data = pickle.load(f)
                         self.exp_metrics[root.split('/')[-1]] = data
 
-        for item in config:
-            if item.Key == "BD_RATE":
-                self.calc_bd_rate(item.Params)
-            elif item.Key == "BD_CURVE":
-                self.plot_bd_curve(item.Params)
-            else:
-                logging.error(f"Unknown benchmark test item: {item.Key}")
+        for item in eval_items:
+            if item.Key.upper() not in self.PRESET_ITEMS:
+                logging.error(f"Unknown benchmark test item: {item.Key}. Skipping...")
+                continue
+            getattr(self, item.Key.lower())(**item.Params)
 
-    def plot_bd_curve(self, *args, **kwargs):
+    def bd_curve(self, *args, **kwargs):
         plt.figure()
         for model_name, metrics in self.exp_metrics.items():
             bpp = []
@@ -118,9 +57,9 @@ class Benchmark:
         plt.savefig(os.path.join(self.exp_dir, "bd_curve.pdf"))
 
 
-    def calc_bd_rate(self, *args, 
-                     baseline: str="JPEG", 
-                     mode: int=1, **kwargs):
+    def bd_rate(self, *args, 
+                baseline: str="JPEG", 
+                mode: int=1, **kwargs):
         """
         Calculate BD-Rate for lossy compression
         Args:

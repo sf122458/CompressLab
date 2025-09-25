@@ -79,7 +79,7 @@ def distribute_apples(m, n):
     return tuple(distribution)
 
 
-def get_chunk_sizes(Dkl, max_size=8, chunk_padding_bits=2):
-    n = int(np.ceil(Dkl))
+def get_chunk_sizes(dkl, max_size=8, chunk_padding_bits=2):
+    n = int(np.ceil(dkl))
     num_chunks = int(np.ceil(n / (max_size - chunk_padding_bits)))
     return distribute_apples(n + chunk_padding_bits * num_chunks, num_chunks)

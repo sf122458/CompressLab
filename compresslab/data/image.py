@@ -24,18 +24,21 @@ class BasicImageDataset(BasicDataset):
                 in a dictionary format. Defaults to False.
         """
         super().__init__(**kwargs)
-        if isinstance(self.root, list): # support multiple root directories for training
-            self.image_list = []
-            for r in self.root:
-                image_paths = os.listdir(r)
-                for image_path in image_paths:
-                    self.image_list.append(os.path.join(r, image_path))
-        else:
-            image_paths = os.listdir(self.root)
-            self.image_list = []
-            for image_path in image_paths:
-                self.image_list.append(os.path.join(self.root, image_path))
-                
+
+        assert isinstance(self.root, (str, list)), "The root should be a string or a list of strings."
+        # support multiple root directories for training
+
+        if isinstance(self.root, str):
+            self.root = [self.root]
+            
+        self.image_list = []
+
+        for r in self.root:
+            for root, _, files in os.walk(r):
+                for file in files:
+                    if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                        self.image_list.append(os.path.join(root, file))
+
         self.return_img_info = return_img_info
 
     def __len__(self):

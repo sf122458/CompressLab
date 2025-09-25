@@ -37,8 +37,8 @@ class VDM(BasicTrainer):
         clip_grad_norm: bool = True,
         
         # eval config
-        num_samples: int = 64,
-        sampling_batch: int = 64,
+        num_samples: int = 9,
+        sampling_batch: int = 3,
         n_sample_steps: int = 250,
         clip_samples: bool = True,
         
@@ -224,7 +224,11 @@ class VDM(BasicTrainer):
             
             task = self.progress.add_task("Sampling", total=self.n_sample_steps)
             for i in range(self.n_sample_steps):
-                z = self.noise_schedule.denoise_step(z, steps[i], steps[i + 1])
+                pred_noise = self.diffusion_model(
+                    z,
+                    self.noise_schedule.gamma(steps[i])
+                )
+                z = self.noise_schedule.denoise_step(z, pred_noise, steps[i], steps[i + 1])
                 self.progress.update(task, advance=1)
                 self.progress.refresh()
             self.progress.update(task, visible=False)
