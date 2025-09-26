@@ -96,8 +96,11 @@ class MetricsLogger:
                             filtered_values = [v for v in values if lower_bound <= v <= upper_bound]
                             if filtered_values:  # If we still have values after filtering
                                 values = filtered_values
-                                
-                    self.metrics[name][key] = sum(values) / len(values)
+                        
+                    try:        
+                        self.metrics[name][key] = sum(values) / len(values)
+                    except:
+                        self.metrics[name][key] = -1
 
         os.makedirs(self.save_dir, exist_ok=True)
         if not self.metrics == {}:
