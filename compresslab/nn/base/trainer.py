@@ -1,4 +1,6 @@
 import lightning as L
+import logging
+from rich.progress import Progress
 from compresslab.nn.base.utils import write_body, read_body, filesize
 from compresslab.core.models import CompressionModel, update_registered_buffers
 from compresslab.core.entropy_models import EntropyBottleneck, GaussianConditional
@@ -32,28 +34,44 @@ class BasicTrainer(L.LightningModule):
         self.metrics_collector = MetricsCollector()
         
         self.metrics_logger: MetricsLogger # will be initialized in `on_test_start`
+        self.progress: Progress # will be initialized in `on_test_start`
         
     def __init_subclass__(cls):
-        def init_logger(func):
+        def on_validation_start_callback(func):
             def wrapper(self: BasicTrainer, *args, **kwargs):
+                # attach the progress bar
+                self.progress = self.trainer.progress_bar_callback.progress
+                return func(self, *args, **kwargs)
+            return wrapper
+        
+        if hasattr(cls, 'on_validation_start') and callable(cls.on_validation_start):
+            cls.on_validation_start = on_validation_start_callback(cls.on_validation_start)
+        
+        def on_test_start_callback(func):
+            def wrapper(self: BasicTrainer, *args, **kwargs):
+                # initialize metrics logger
                 self.metrics_logger = MetricsLogger(
                     save_dir=self.trainer.default_root_dir,
                 )
+                # attach the progress bar
+                self.progress = self.trainer.progress_bar_callback.progress
+    
                 return func(self, *args, **kwargs)
             return wrapper
         
         if hasattr(cls, 'on_test_start') and callable(cls.on_test_start):
-            cls.on_test_start = init_logger(cls.on_test_start)
+            cls.on_test_start = on_test_start_callback(cls.on_test_start)
             
-        def save_logger(func):
+        def on_test_end_callback(func):
             def wrapper(self: BasicTrainer, *args, **kwargs):
                 result = func(self, *args, **kwargs)
+                # save the metrics
                 self.metrics_logger.save()
                 return result
             return wrapper
         
         if hasattr(cls, 'on_test_end') and callable(cls.on_test_end):
-            cls.on_test_end = save_logger(cls.on_test_end)
+            cls.on_test_end = on_test_end_callback(cls.on_test_end)
         
     def bar_metrics(self, metrics: Dict[str, Any]):
         """
@@ -132,8 +150,9 @@ class BasicTrainer(L.LightningModule):
         raise NotImplementedError("Please implement the `training_step` method in your trainer class.")
 
     def validation_step(self, batch, batch_idx):
-        raise NotImplementedError("Please implement the `validation_step` method in your trainer class.")
-
+        if self.trainer.local_rank == 0:
+            logging.warning("The `validation_step` method is not implemented. Please implement it in your trainer class if you want to use validation.")
+        
     def test_step(self, batch, batch_idx, dataloader_idx=0):
         raise NotImplementedError("Please implement the `test_step` method in your trainer class.")
     
@@ -311,15 +330,3 @@ class CompressAIImageCodecTrainer(BasicTrainer):
         ], **self.ext_params.Optimizer.Params)
 
         return optimizer
-    
-# TODO
-class VQCodecTrainer(BasicTrainer):
-    pass
-
-
-class LosslessImageCodec(BasicTrainer):
-    pass
-
-
-class OverfitImageCodec(BasicTrainer):
-    pass
