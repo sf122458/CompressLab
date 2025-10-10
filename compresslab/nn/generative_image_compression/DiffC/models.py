@@ -463,7 +463,7 @@ class DiffC(BasicTrainer):
         
         metrics = self.metrics_collector.forward(
             imgs, preds, 
-            bytes=out_compress["image_bytes"],
+            strings=bytes(out_compress["image_bytes"]),
             psnr=True, ms_ssim=True, lpips=True, dists=True, kid=True, fid=True
         )
         
