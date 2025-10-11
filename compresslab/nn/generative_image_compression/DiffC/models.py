@@ -36,9 +36,6 @@ class DiffC(BasicTrainer):
                           23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 
                           11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
     
-    recon_timesteps_preset = [900, 800, 700, 600, 500, 400, 300, 200, 100, 
-                       90, 80, 70, 60, 50, 40, 30, 20, 10]
-    
     denoising_timesteps_preset = [981, 961, 941, 921, 901, 881, 861, 841, 821, 801, 
                            781, 761, 741, 721, 701, 681, 661, 641, 621, 601, 
                            581, 561, 541, 521, 501, 481, 461, 441, 421, 401, 
@@ -65,14 +62,13 @@ class DiffC(BasicTrainer):
                 Supported models are "SD1.5", "SD2.1", "SDXL", and "Flux".
             max_chunk_size (int, optional): Used in the gaussian channel simulator. Defaults to 16.
             chunk_padding (int, optional): Used in the gaussian channel simulator. Defaults to 2.
-            encoding_guidance_scale (float, optional): _description_. Defaults to 0.
-            denoising_guidance_scale (float, optional): _description_. Defaults to 0.
+            encoding_guidance_scale (float, optional): The guidance scale used in encoding. Defaults to 0.
+            denoising_guidance_scale (float, optional): The guidance scale used in denoising. Defaults to 0.
             manual_dkl_per_step (List[Union[int, float]], optional): Pre-computed KL divergence of each step. 
                 If it's set to None, the KL divergence will be encoded. Defaults to None.
-            recon_timestep (int, optional): _description_. Defaults to 200.
-            encoding_timesteps (List[int], optional): _description_. Defaults to None.
-            recon_timesteps (List[int], optional): _description_. Defaults to None.
-            denoising_timesteps (List[int], optional): _description_. Defaults to None.
+            recon_timestep (int, optional): The timestep where the latent is encoded with DiffC. Defaults to 200.
+            encoding_timesteps (List[int], optional): Custom encoding timesteps. Defaults to None.
+            denoising_timesteps (List[int], optional): Custom denoising timesteps. Defaults to None.
             seed (int, optional): The seed used in random coding. Defaults to 0.
         """
         super().__init__(**kwargs)
@@ -112,49 +108,24 @@ class DiffC(BasicTrainer):
             self.captioner = BlipCaptioner()
         else:
             logging.info("Skipping captioner initialization")
-            
-    #     """Creates a compressed representation of an image using a diffusion model.
-
-    #     Args:
-    #         target_latent: Latent representation of the image to encode, as produced by the
-    #             diffusion model's VAE encoder.
-    #         timestep_schedule: List of timesteps, parallel to SNR_schedule. The timesteps should match the SNRs that the diffusion model expects at those timesteps.
-    #         SNR_schedule: List of signal-to-noise ratios, decreasing towards zero (e.g.,
-    #             [0.8, 0.6, 0.4, 0.2, 0.1]). SNR values must be in the set of values expected
-    #             by the predict_noise function. Last element must be > 0. Ending with '0'
-    #             (lossless compression of the latent) is not currently supported (and probably
-    #             not desirable).
-    #         predict_noise: Callable which takes in a noisy latent and that latent's SNR, and
-    #             returns a prediction of the latent's noise component.
-    #         gaussian_channel_simulator: Used for gaussian channel simulation.
-    #         manual_dkl_per_step: Used to manually hard-code the dkl per step. Otherwise we'd
-    #             need to send it as side-information. TODO: fancier entropy models of dkl per
-    #             step?
-    #         recon_timesteps: List of timesteps in decreasing order. When used, saves the noisy
-    #             latents from the encoding process at each timestep.
-    #         seed:
-    #             random seed for the compression process.
-
-    #     Returns:
-    #         tuple:
-    #             - chunk_seeds_per_step (List[List[int]]): One list of ints per step. This is
-    #             the compressed representation of the image, although it still needs to be
-    #             entropy coded. Fed back into the gaussian channel simulator for decoding.
-    #             - dkl_per_step (List[float]): This is also fed back in to the gaussian
-    #             channel simulator to reconstruct the denoising process.
-    #             - noisy_recons: Noisy reconstructions of the target image generated during
-    #             the encoding process. These will be the same noisy reconstructions
-    #             generated during decoding. For faster evaluation, we can skip decoding and
-    #             just use these recons.
-    #             - noisy_recon_step_indices (List[float]): List which is parallel to
-    #             noisy_recons, and reports the step index for each recon.
-    #     """
     
     @torch.no_grad()
     def encode(
         self, 
         target_latent: Tensor,
     ):
+        """Perform DiffC on the latent.
+
+        Args:
+            target_latent (Tensor): The latent of the origianl image, which is encoded with VAE encoder.
+
+        Returns:
+            Tuple:
+                - chunk_seeds_per_step (List[List[int]]): The chunk seeds of each step.
+                - dkl_per_step (List[float]): The KL divergence of each step.
+                - noisy_latent (Tensor): The noisy latent at the recon_timestep.
+                - recon_step_index (int): The index of the recon_timestep in the encoding timesteps.
+        """
         chunk_seeds_per_step = []
         dkl_per_step = []
         
@@ -202,26 +173,6 @@ class DiffC(BasicTrainer):
 
         return chunk_seeds_per_step, dkl_per_step, noisy_latent, len(timestep_schedule)
 
-    #     """Decodes a compressed image representation back into its latent space form.
-
-    #     Args:
-    #         image_width (int): Width of the original image.
-    #         image_height (int): Height of the original image.
-    #         timestep_schedule (List[float]): List of timesteps in decreasing order.
-    #         predict_noise (callable): Function that predicts the noise component given a noisy
-    #             latent and its SNR.
-    #         gaussian_channel_simulator: Simulator used for gaussian channel reconstruction.
-    #         chunk_seeds_per_step (List[List[int]]): Compressed representation of the image,
-    #             consisting of lists of integer seeds for each denoising step.
-    #         dkl_per_step (List[float]): List of Kullback-Leibler divergence values per step,
-    #             used to reconstruct the denoising process.
-    #         seed (int): Random seed for reproducibility of the denoising process.
-
-    #     Returns:
-    #         torch.Tensor: The reconstructed latent representation of the image, obtained
-    #             through progressive denoising steps guided by the compressed representation.
-    #     """
-    
     @torch.no_grad()
     def decode(
         self,

@@ -14,12 +14,12 @@ class GaussianChannelSimulator:
         self.chunk_padding = chunk_padding
 
     def encode(self, mu: np.ndarray, manual_dkl: List[Union[float, int]]=None, seed: int=0):
-        """_summary_
+        """Encode using PFR.
 
         Args:
             mu (np.ndarray): _description_
-            manual_dkl (List[Union[float, int]], optional): _description_. Defaults to None.
-            seed (int, optional): _description_. Defaults to 0.
+            manual_dkl (List[Union[float, int]], optional): The custom KL divergence. Defaults to None.
+            seed (int, optional): The seed of . Defaults to 0.
 
         Returns:
             Tuple: 
@@ -32,7 +32,6 @@ class GaussianChannelSimulator:
             dkl = 0.5 * float((mu.astype(np.float32) ** 2).sum() / np.log(2))
 
         chunk_sizes = get_chunk_sizes(dkl, self.max_chunk_size, self.chunk_padding)
-        # FIXME: This cost too much time
         chunk_seeds, sample = chunk_and_encode(
             mu, chunk_sizes=chunk_sizes, shared_seed=seed
         )

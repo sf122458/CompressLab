@@ -64,13 +64,13 @@ def Q(noisy_latent: Tensor, target_latent: Tensor, current_snr: float, prev_snr:
     """q(x_{t-1} | x_t, x_0), i.e. the posterior distribution of x_{t-1} given x_t and x_0.
 
     Args:
-        noisy_latent (Tensor): _description_
-        target_latent (Tensor): _description_
+        noisy_latent (Tensor): x_t
+        target_latent (Tensor): x_0
         current_snr (float): The current SNR value in SNR schedule.
         prev_snr (float): The previous SNR value in SNR schedule.
 
     Returns:
-        _type_: _description_
+        mu (Tensor): The mean of the posterior distribution.
     """
     alpha_prod_t, beta_prod_t = get_alpha_prod_and_beta_prod(current_snr)
     alpha_prod_t_prev, beta_prod_t_prev = get_alpha_prod_and_beta_prod(prev_snr)
