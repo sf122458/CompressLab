@@ -88,7 +88,7 @@ class DiffC(BasicTrainer):
         
         model_name = model_name.upper()
         assert model_name in self.supported_models, f"model_name should be in {self.supported_models}, but got {model_name}"
-        
+        self.model_name = model_name
         if model_name == "SD1.5":
             self.model = SD15Model()
         elif model_name == "SD2.1":
@@ -399,7 +399,7 @@ class DiffC(BasicTrainer):
     
     def test_step(self, batch, batch_idx, dataloader_idx=0):
         imgs, filename, dataset = batch["image"], batch["filename"][0], batch["dataset"][0]
-        model_name = f"{dataset}/DiffC" #TODO
+        model_name = f"{dataset}/DiffC_{self.model_name}_{self.recon_timestep}" #TODO
         with self.timer("compress", model_name):
             out_compress = self.compress(imgs)
             
