@@ -191,7 +191,7 @@ class DiffC(BasicTrainer):
         
         timestep_schedule = [t for t in self.encoding_timesteps if t >= self.recon_timestep]
         
-        task = self.progress.add_task("Decoding...", total=len(chunk_seeds_per_step))
+        task = self.progress.add_task("Decoding...", total=len(timestep_schedule))
         for step_index, (prev_timestep, chunk_seeds, dkl) in enumerate(
             zip(timestep_schedule, chunk_seeds_per_step, self.manual_dkl_per_step)
         ):
