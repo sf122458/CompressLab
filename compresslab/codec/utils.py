@@ -8,6 +8,7 @@ from PIL import Image
 from pytorch_msssim import ms_ssim
 import logging
 
+BPG_BUILD_DIR = "third_party/BPG"
 HM_BUILD_DIR = "third_party/HM/bin"
 VTM_BUILD_DIR = "third_party/VTM/bin"
 

@@ -34,3 +34,4 @@ CIFAR10
 playground
 *.jpg
 cache/
+third_party/

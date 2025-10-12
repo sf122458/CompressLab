@@ -253,6 +253,7 @@ class BPG(BinaryCodec):
 
     def __init__(
             self, 
+            build_dir: str = BPG_BUILD_DIR,
             encoder_path: str = "bpgenc",
             decoder_path: str = "bpgdec",
             subsampling_mode: str = "444", 
@@ -280,8 +281,8 @@ class BPG(BinaryCodec):
         self.subsampling_mode = subsampling_mode
         self.bitdepth = bitdepth
         self.color_mode = color_mode
-        self.encoder_path = encoder_path
-        self.decoder_path = decoder_path
+        self.encoder_path = os.path.join(build_dir, encoder_path)
+        self.decoder_path = os.path.join(build_dir, decoder_path)
         self.encoder = encoder
 
     def _get_encode_cmd(self, img_path: str, quality: int, out_filepath):
