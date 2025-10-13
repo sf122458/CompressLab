@@ -7,16 +7,11 @@ pwd = os.path.dirname(os.path.abspath(__file__))
 cuda_code = open(f"{pwd}/cuda_kernels.cu", "r").read()
 cuda_module = cp.RawModule(code=cuda_code)
 
-# Get the kernel functions
-# reverse_channel_encode_kernel = cuda_module.get_function(
-#     "reverse_channel_encode_kernel"
-# )
-# generate_sample_kernel = cuda_module.get_function("generate_sample_kernel")
-
 
 def generate_sample(dim, shared_seed, sample_seed):
     sample_out = cp.empty(dim, dtype=cp.float32)
 
+    # generate gaussian sample with one thread
     cuda_module.get_function("generate_sample_kernel")(
         (1, 1, 1),
         (1, 1, 1),
@@ -32,7 +27,6 @@ def _reverse_channel_encode(mu_q_in, K, shared_seed=0):
 
     # Allocate memory on GPU
     log_w = cp.empty(K, dtype=cp.float32)
-    max_log_w = cp.array([-cp.inf], dtype=cp.float32)
 
     # Set up grid and block dimensions
     block_size = 256
@@ -49,7 +43,7 @@ def _reverse_channel_encode(mu_q_in, K, shared_seed=0):
     )(
         (grid_size, 1, 1),
         (block_size, 1, 1),
-        (mu_q, cp.int32(dim), cp.uint64(K), cp.uint64(shared_seed), log_w, max_log_w),
+        (mu_q, cp.int32(dim), cp.uint64(K), cp.uint64(shared_seed), log_w),
     )
     cp.cuda.stream.get_current_stream().synchronize()
 

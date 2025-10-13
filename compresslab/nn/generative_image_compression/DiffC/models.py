@@ -438,5 +438,5 @@ class DiffC(BasicTrainer):
         )
         
         if self.ext_params.SaveRecon:
-            self.save_recon_imgs(preds, f"{model_name}/{filename}_{metrics.bpp:.4f}.png")
+            self.save_recon_imgs(preds, f"{model_name}/{filename}_{metrics.bpp:.4f}_{metrics.psnr:.2f}_{metrics.lpips:.4f}.png")
     

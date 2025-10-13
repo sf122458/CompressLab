@@ -10,10 +10,11 @@ __global__ void generate_sample_kernel(
 
     if (threadIdx.x == 0 && blockIdx.x == 0) {
         curandState state;
+        // Initialize the state with a shared seed and a unique sequence for each thread
         curand_init(shared_seed, 0, idx * dim, &state);
-        //curand_init(shared_seed + idx, 0, 0, &state);
 
         for (int i = 0; i < dim; i++) {
+            // every call to curand_normal updates the state internally
             sample_out[i] = curand_normal(&state);
         }
     }
@@ -31,8 +32,6 @@ __global__ void reverse_channel_encode_kernel(
 
     curandState state;
     curand_init(shared_seed, 0, idx * dim, &state);
-    
-    //curand_init(shared_seed + idx, 0, 0, &state);
     
     float log_w_value = 0.0f;
     for (int i = 0; i < dim; i++) {
