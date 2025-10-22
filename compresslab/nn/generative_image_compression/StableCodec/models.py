@@ -304,7 +304,7 @@ class StableCodec(BasicTrainer):
         )
         
         if self.ext_params.SaveRecon:
-            self.save_recon_imgs(preds, f"{model_name}/{filename}_{metrics.bpp:.4f}.png")
+            self.save_recon_imgs(preds, f"{model_name}/{filename}_{metrics.bpp:.4f}_{metrics.psnr}_{metrics.lpips}.png")
 
     def _make_one_step_scheduler(self, pretrained_path):
         noise_scheduler_one_step = DDPMScheduler.from_pretrained(

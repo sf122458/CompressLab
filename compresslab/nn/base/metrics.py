@@ -15,14 +15,14 @@ from lightning import LightningModule
 @dataclass
 class ImageMetricsOutput:
     bpp: Union[float, torch.Tensor]
-    mse_loss: torch.Tensor = field(default=None)
-    psnr: float = field(default=None)
-    ms_ssim_loss: torch.Tensor = field(default=None)
-    ms_ssim: float = field(default=None)
-    lpips: torch.Tensor = field(default=None)
-    dists: torch.Tensor = field(default=None)
-    kid: float = field(default=None)
-    fid: float = field(default=None)
+    mse_loss: torch.Tensor = field(default=-1)
+    psnr: float = field(default=-1)
+    ms_ssim_loss: torch.Tensor = field(default=-1)
+    ms_ssim: float = field(default=-1)
+    lpips: torch.Tensor = field(default=-1)
+    dists: torch.Tensor = field(default=-1)
+    kid: float = field(default=-1)
+    fid: float = field(default=-1)
         
 
 class MetricsCollector:
@@ -76,7 +76,8 @@ class MetricsCollector:
                 assert isinstance(s, bytes), f"Expected bytes or bytearray, got {type(s)}"
                 total_bits += len(s) * 8
         else:
-            raise ValueError("Either likelihoods or strings must be provided.")
+            total_bits = 0.0
+            # raise ValueError("Either likelihoods or strings must be provided.")
         
         output_metrics["bpp"] = total_bits / num_pixels
         

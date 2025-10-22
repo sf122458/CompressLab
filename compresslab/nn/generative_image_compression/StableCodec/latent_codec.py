@@ -242,24 +242,44 @@ class LatentCodec(CompressionModel):
         curr_mask_str = f"{batch}_{channel}x{width}x{height}"
         if curr_mask_str not in self.masks:
             micro_m0 = torch.tensor(((1., 0), (0, 0)), device=device)
+            # m0
+            # 1 0 1 0
+            # 0 0 0 0
+            # 1 0 1 0
+            # 0 0 0 0
             m0 = micro_m0.repeat((height + 1) // 2, (width + 1) // 2)
             m0 = m0[:height, :width]
             m0 = torch.unsqueeze(m0, 0)
             m0 = torch.unsqueeze(m0, 0)
 
             micro_m1 = torch.tensor(((0, 1.), (0, 0)), device=device)
+            # m1
+            # 0 1 0 1
+            # 0 0 0 0
+            # 0 1 0 1
+            # 0 0 0 0
             m1 = micro_m1.repeat((height + 1) // 2, (width + 1) // 2)
             m1 = m1[:height, :width]
             m1 = torch.unsqueeze(m1, 0)
             m1 = torch.unsqueeze(m1, 0)
 
             micro_m2 = torch.tensor(((0, 0), (1., 0)), device=device)
+            # m2
+            # 0 0 0 0
+            # 1 0 1 0
+            # 0 0 0 0
+            # 1 0 1 0
             m2 = micro_m2.repeat((height + 1) // 2, (width + 1) // 2)
             m2 = m2[:height, :width]
             m2 = torch.unsqueeze(m2, 0)
             m2 = torch.unsqueeze(m2, 0)
 
             micro_m3 = torch.tensor(((0, 0), (0, 1.)), device=device)
+            # m3
+            # 0 0 0 0
+            # 0 1 0 1
+            # 0 0 0 0
+            # 0 1 0 1
             m3 = micro_m3.repeat((height + 1) // 2, (width + 1) // 2)
             m3 = m3[:height, :width]
             m3 = torch.unsqueeze(m3, 0)
@@ -274,12 +294,39 @@ class LatentCodec(CompressionModel):
         return self.masks[curr_mask_str]
     
     def sequeeze_with_mask(self, latent, mask):
+        """Return a tensor with 1 / 4 channels of the input latent by applying the mask.
+        E.g., for the first stage mask, the latent channels are grouped as:
+        a b
+        c d
+        `a` is the element of the first channel group. `b` is the element of the second channel group.
+        `c` is the element of the third channel group. `d` is the element of the fourth channel group.
+
+        Args:
+            latent (_type_): _description_
+            mask (_type_): _description_
+
+        Returns:
+            Tensor: [B, C // 4, H, W]
+        """
+        # Split latent along the channel dim into 4 groups
         latent_group_1, latent_group_2, latent_group_3, latent_group_4 = latent.chunk(4, 1)
         mask_group_1, mask_group_2, mask_group_3, mask_group_4 = mask.chunk(4, 1)
         latent_sequeeze = latent_group_1 * mask_group_1 + latent_group_2 * mask_group_2 + latent_group_3 * mask_group_3 + latent_group_4 * mask_group_4
         return latent_sequeeze
     
     def unsequeeze_with_mask(self, latent_sequeeze, mask):
+        """Restore the squeeze tensor into the original format. Note that 
+        for the first channel group (B, C // 4, H, W), the elements are placed at:
+        a 0
+        0 0
+
+        Args:
+            latent_sequeeze (_type_): _description_
+            mask (_type_): _description_
+
+        Returns:
+            Tensor: [B, C, H, W]
+        """
         mask_group_1, mask_group_2, mask_group_3, mask_group_4 = mask.chunk(4, 1)
         latent = torch.cat((latent_sequeeze * mask_group_1, latent_sequeeze * mask_group_2, latent_sequeeze * mask_group_3, latent_sequeeze * mask_group_4), dim=1)
         return latent
@@ -303,7 +350,70 @@ class LatentCodec(CompressionModel):
         latent_squeeze_hat = torch.Tensor(latent_squeeze_hat).reshape(scales_squeeze.shape).to(scales.device)
         latent_hat = self.unsequeeze_with_mask(latent_squeeze_hat + means_squeeze, mask)
         return latent_hat
+    
+    def forward_group_with_mask(self, latent, scales, means, mask):
+        latent_squeeze = self.sequeeze_with_mask(latent, mask)
+        scales_squeeze = self.sequeeze_with_mask(scales, mask)
+        means_squeeze = self.sequeeze_with_mask(means, mask)
+        latent_squeeze_hat, latent_squeeze_likelihoods = self.gaussian_conditional(latent_squeeze, scales_squeeze, means=means_squeeze)
+        latent_hat = self.unsequeeze_with_mask(latent_squeeze_hat, mask)
+        latent_likelihoods = self.unsequeeze_with_mask(latent_squeeze_likelihoods, mask)
+        return latent_hat, latent_likelihoods
+    
+    def forward(self, latent, latent2):
+        y = self.g_a(latent, latent2)
+        z = self.h_a(y)
+        
+        z_hat, z_likelihoods = self.entropy_bottleneck(z)
+        
+        B, C, H, W = y.shape
+        mask_0, mask_1, mask_2, mask_3 = self.get_mask_four_parts(B, C, H, W, device=y.device)
 
+        base = self.h_s(z_hat)
+        means_0_supp, scales_0_supp = self.adapter_out[0](self.g_c(self.adapter_in[0](base))).chunk(2, 1)
+        y_hat_0, y_hat_likelihoods_0 = self.forward_group_with_mask(y, scales_0_supp, means_0_supp, mask_0)
+        lrp = self.LRP[0](torch.cat([y_hat_0, base], dim=1)) * mask_0
+        lrp = 0.5 * torch.tanh(lrp)
+        y_hat_0 = y_hat_0 + lrp
+        
+        base = base * (1 - mask_0) + y_hat_0    # some elements in base are replaced by y_hat_0
+        means_1_supp, scales_1_supp = self.adapter_out[1](self.g_c(self.adapter_in[1](base))).chunk(2, 1)
+        y_hat_1, y_hat_likelihoods_1 = self.forward_group_with_mask(y, scales_1_supp, means_1_supp, mask_1)
+        lrp = self.LRP[1](torch.cat([y_hat_1, base], dim=1)) * mask_1
+        lrp = 0.5 * torch.tanh(lrp)
+        y_hat_1 = y_hat_1 + lrp
+        
+        base = base * (1 - mask_1) + y_hat_1
+        means_2_supp, scales_2_supp = self.adapter_out[2](self.g_c(self.adapter_in[2](base))).chunk(2, 1)
+        y_hat_2, y_hat_likelihoods_2 = self.forward_group_with_mask(y, scales_2_supp, means_2_supp, mask_2)
+        lrp = self.LRP[2](torch.cat([y_hat_2, base], dim=1)) * mask_2
+        lrp = 0.5 * torch.tanh(lrp)
+        y_hat_2 = y_hat_2 + lrp
+        
+        base = base * (1 - mask_2) + y_hat_2
+        means_3_supp, scales_3_supp = self.adapter_out[3](self.g_c(self.adapter_in[3](base))).chunk(2, 1)
+        y_hat_3, y_hat_likelihoods_3 = self.forward_group_with_mask(y, scales_3_supp, means_3_supp, mask_3)
+        lrp = self.LRP[3](torch.cat([y_hat_3, base], dim=1)) * mask_3
+        lrp = 0.5 * torch.tanh(lrp)
+        y_hat_3 = y_hat_3 + lrp
+        
+        
+        y_likelihoods = y_hat_likelihoods_0 + y_hat_likelihoods_1 + y_hat_likelihoods_2 + y_hat_likelihoods_3
+        
+        y_hat = y_hat_0 + y_hat_1 + y_hat_2 + y_hat_3
+        
+        x_hat = self.g_s(y_hat)
+        res = self.aux(y_hat)
+        
+        return {
+            "x_hat": x_hat,
+            "res": res, 
+            "likelihoods": {
+                "z": z_likelihoods,
+                "y": y_likelihoods
+            }
+        }
+        
     def compress(self, latent, latent2):
 
         y = self.g_a(latent, latent2)
@@ -323,7 +433,8 @@ class LatentCodec(CompressionModel):
         B, C, H, W = y.shape
         mask_0, mask_1, mask_2, mask_3 = self.get_mask_four_parts(B, C, H, W, device=y.device)
 
-        base = self.h_s(z_hat)
+        base = self.h_s(z_hat)  # base: [B, M, H, W]
+        # mean: [B, M, H, W], scale: [B, M, H, W]
         means_0_supp, scales_0_supp = self.adapter_out[0](self.g_c(self.adapter_in[0](base))).chunk(2, 1)
         y_hat_0 = self.compress_group_with_mask(self.gaussian_conditional, y, scales_0_supp, means_0_supp, mask_0, symbols_list, indexes_list)
         lrp = self.LRP[0](torch.cat([y_hat_0, base], dim=1)) * mask_0
@@ -346,7 +457,6 @@ class LatentCodec(CompressionModel):
 
         base = base * (1 - mask_2) + y_hat_2
         means_3_supp, scales_3_supp = self.adapter_out[3](self.g_c(self.adapter_in[3](base))).chunk(2, 1)
-        _ = self.compress_group_with_mask(self.gaussian_conditional, y, scales_3_supp, means_3_supp, mask_3, symbols_list, indexes_list)
 
         encoder.encode_with_indexes(symbols_list, indexes_list, cdf, cdf_lengths, offsets)
         y_string = encoder.flush()
