@@ -32,8 +32,8 @@ class MetricsCollector:
         
     def setup(self, device):
         self.ms_ssim = MultiScaleStructuralSimilarityIndexMeasure(data_range=1.0).to(device)
-        self.lpips_alex = LearnedPerceptualImagePatchSimilarity(net_type='vgg', normalize=True).to(device)
-        self.lpips_vgg = LearnedPerceptualImagePatchSimilarity(net_type='alex', normalize=True).to(device)
+        self.lpips_alex = LearnedPerceptualImagePatchSimilarity(net_type='alex', normalize=True).to(device)
+        self.lpips_vgg = LearnedPerceptualImagePatchSimilarity(net_type='vgg', normalize=True).to(device)
         self.dists = DeepImageStructureAndTextureSimilarity(reduction='mean').to(device)
         self.fid = FrechetInceptionDistance(normalize=True).to(device)
         self.kid = KernelInceptionDistance(normalize=True).to(device)
