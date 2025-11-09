@@ -26,16 +26,14 @@ class ImageMetricsOutput:
         
 
 class MetricsCollector:
-    def __init__(
-        self, 
-    ):
-        super().__init__()
+    def __init__(self):
         
         self.initialized = False
         
     def setup(self, device):
         self.ms_ssim = MultiScaleStructuralSimilarityIndexMeasure(data_range=1.0).to(device)
-        self.lpips = LearnedPerceptualImagePatchSimilarity(net_type='alex', normalize=True).to(device)
+        self.lpips_alex = LearnedPerceptualImagePatchSimilarity(net_type='vgg', normalize=True).to(device)
+        self.lpips_vgg = LearnedPerceptualImagePatchSimilarity(net_type='alex', normalize=True).to(device)
         self.dists = DeepImageStructureAndTextureSimilarity(reduction='mean').to(device)
         self.fid = FrechetInceptionDistance(normalize=True).to(device)
         self.kid = KernelInceptionDistance(normalize=True).to(device)
@@ -101,8 +99,12 @@ class MetricsCollector:
                 "ms_ssim": ms_ssim
             })
         
-        if lpips:
-            output_metrics["lpips"] = self.lpips(recons, imgs)
+        if lpips is True or lpips == 'alex':
+            output_metrics["lpips"] = self.lpips_alex(recons, imgs)
+        elif lpips == 'vgg':
+            output_metrics["lpips"] = self.lpips_vgg(recons, imgs)
+        else:
+            pass
         
         if dists:
             output_metrics["dists"] = self.dists(recons, imgs)

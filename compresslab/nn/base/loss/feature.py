@@ -3,10 +3,9 @@ import torch.nn as nn
 from transformers import CLIPVisionModelWithProjection
 from torchvision import transforms
 from typing import Dict, Any
-from lightning import LightningModule
 from compresslab.utils.constant import PRETRAINED_CACHE_DIR
 
-class FeatureLoss(LightningModule):
+class FeatureLoss:
     """FeatureLoss
     
     Calculate the similarity of the embeddings from the pretrained vit models.
@@ -15,9 +14,7 @@ class FeatureLoss(LightningModule):
         self,
         backbone: str = "clip",
         loss_type: str = "cos",
-    ):
-        super().__init__()
-        
+    ):  
         assert backbone in ["clip"], f"Backbone {backbone} not supported."
         assert loss_type in ["l2", "cos"], f"Loss type {loss_type} not supported."
         
@@ -48,8 +45,6 @@ class FeatureLoss(LightningModule):
         # Freeze model parameters
         for model in self.models.values():
             model.requires_grad_(False)
-            
-        self.eval()
          
     def __call__(self, x, x_hat):
         for model in self.models.values():
@@ -68,7 +63,8 @@ class FeatureLoss(LightningModule):
         features_x_hat = features_x_hat / features_x_hat.norm(p=2, dim=-1, keepdim=True)
         
         if self.loss_type == "l2":
-            loss = nn.functional.mse_loss(features_x, features_x_hat, reduction="mean")
+            # loss = nn.functional.mse_loss(features_x, features_x_hat, reduction="mean")
+            loss = torch.norm(features_x - features_x_hat, p=2)
         elif self.loss_type == "cos":
             loss = 1 - nn.functional.cosine_similarity(features_x, features_x_hat, dim=1).mean()
             
