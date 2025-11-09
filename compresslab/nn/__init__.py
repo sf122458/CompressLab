@@ -6,7 +6,7 @@ import inspect
 from torch.nn import Module
 
 SKIP_DIRS = ["__pycache__", "base", 
-             "video_compression"]   # TODO: fix later
+             "video_compression", "tmp"]   # TODO: fix later
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 

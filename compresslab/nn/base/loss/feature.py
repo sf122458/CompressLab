@@ -52,6 +52,10 @@ class FeatureLoss(LightningModule):
         self.eval()
          
     def __call__(self, x, x_hat):
+        for model in self.models.values():
+            if model.device != x.device:
+                model.to(x.device)
+        
         x_transform = self.transform[self.backbone](x)
         x_hat_transform = self.transform[self.backbone](x_hat)
         
@@ -69,15 +73,3 @@ class FeatureLoss(LightningModule):
             loss = 1 - nn.functional.cosine_similarity(features_x, features_x_hat, dim=1).mean()
             
         return loss
-            
-    def on_train_start(self):
-        for model in self.models.values():
-            model.to(self.device)
-            
-    def on_validation_start(self):
-        for model in self.models.values():
-            model.to(self.device)
-            
-    def on_test_start(self):
-        for model in self.models.values():
-            model.to(self.device)
