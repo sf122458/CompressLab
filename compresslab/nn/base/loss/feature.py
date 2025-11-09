@@ -54,16 +54,17 @@ class FeatureLoss(LightningModule):
         x_transform = self.transform[self.backbone](x)
         x_hat_transform = self.transform[self.backbone](x_hat)
         
+        # extract features from pretrained backbone
         features_x = self.models[self.backbone](x_transform).image_embeds
         features_x_hat = self.models[self.backbone](x_hat_transform).image_embeds
         
+        # l2 normalize
         features_x = features_x / features_x.norm(p=2, dim=-1, keepdim=True)
         features_x_hat = features_x_hat / features_x_hat.norm(p=2, dim=-1, keepdim=True)
         
         if self.loss_type == "l2":
             loss = nn.functional.mse_loss(features_x, features_x_hat, reduction="mean")
         elif self.loss_type == "cos":
-            
             loss = 1 - nn.functional.cosine_similarity(features_x, features_x_hat, dim=1).mean()
             
         return loss
