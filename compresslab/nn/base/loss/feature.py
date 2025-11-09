@@ -49,7 +49,8 @@ class FeatureLoss(LightningModule):
         for model in self.models.values():
             model.requires_grad_(False)
             
-            
+        self.eval()
+         
     def __call__(self, x, x_hat):
         x_transform = self.transform[self.backbone](x)
         x_hat_transform = self.transform[self.backbone](x_hat)
