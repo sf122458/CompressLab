@@ -122,12 +122,15 @@ class MetricsCollector:
                 output_metrics["fid"] = self.fid.compute()
             except Exception as e:
                 output_metrics["fid"] = torch.tensor(float('nan'))
+        
+        self.reset()
             
         return ImageMetricsOutput(**output_metrics)
     
     def reset(self):
         self.ms_ssim.reset()
-        self.lpips.reset()
+        self.lpips_alex.reset()
+        self.lpips_vgg.reset()
         self.dists.reset()
         self.fid.reset()
         self.kid.reset()
