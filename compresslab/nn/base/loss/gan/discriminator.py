@@ -3,7 +3,7 @@ import torch
 from torch.nn.utils import spectral_norm
 from .backbone import *
 from .loss import sigmoid_loss, hinge_loss
-from lightning import LightningModule
+import vision_aided_loss
 
 class MLPD(nn.Module):
     def __init__(self, in_ch=768, out_ch=256, activation=nn.LeakyReLU(0.2, inplace=True)):
@@ -21,7 +21,7 @@ class MLPD(nn.Module):
         return out
 
 
-class Discriminator(LightningModule):
+class Discriminator(nn.Module):
     def __init__(
         self, 
         backbone: str = "dinov2",
@@ -50,7 +50,7 @@ class Discriminator(LightningModule):
             p.requires_grad = False
     
         feat = self.backbone(x)
-        return self.loss_fn(self.decoder(feat), for_real=True)
+        return self.loss_fn(self.decoder(feat), for_real=True).mean()
 
     
     def discriminator_loss(self, real, fake):
@@ -61,8 +61,8 @@ class Discriminator(LightningModule):
         real_feat = self.backbone(real)
         fake_feat = self.backbone(fake)
             
-        real_loss = self.loss_fn(self.decoder(real_feat), for_real=True)
-        fake_loss = self.loss_fn(self.decoder(fake_feat), for_real=False)
+        real_loss = self.loss_fn(self.decoder(real_feat), for_real=True).mean()
+        fake_loss = self.loss_fn(self.decoder(fake_feat), for_real=False).mean()
         
         return (real_loss + fake_loss) / 2
     
@@ -71,12 +71,3 @@ class Discriminator(LightningModule):
             self.decoder.parameters(),
             lr=lr,
         )
-        
-    def on_train_start(self):
-        self.backbone.to(self.device)
-        
-    def on_validation_start(self):
-        self.backbone.to(self.device)
-        
-    def on_test_start(self):
-        self.backbone.to(self.device)

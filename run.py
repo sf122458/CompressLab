@@ -9,6 +9,7 @@ import importlib.util
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning, module="torchmetrics")
+warnings.filterwarnings("ignore", module="torch.autograd.graph")
 from compresslab.utils.logging import logging
 from compresslab.utils.config import Config, Loader
 from compresslab.nn.base import BasicTrainer
