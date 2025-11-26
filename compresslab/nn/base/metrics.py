@@ -10,6 +10,7 @@ from torchmetrics.image.dists import DeepImageStructureAndTextureSimilarity
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.kid import KernelInceptionDistance
 from lightning import LightningModule
+from .loss import FeatureLoss
 
 
 @dataclass
@@ -25,18 +26,15 @@ class ImageMetricsOutput:
     fid: float = field(default=-1)
         
 
-class MetricsCollector:
+class MetricsCollector(LightningModule):
     def __init__(self):
-        
-        self.initialized = False
-        
-    def setup(self, device):
-        self.ms_ssim = MultiScaleStructuralSimilarityIndexMeasure(data_range=1.0).to(device)
-        self.lpips_alex = LearnedPerceptualImagePatchSimilarity(net_type='alex', normalize=True).to(device)
-        self.lpips_vgg = LearnedPerceptualImagePatchSimilarity(net_type='vgg', normalize=True).to(device)
-        self.dists = DeepImageStructureAndTextureSimilarity(reduction='mean').to(device)
-        self.fid = FrechetInceptionDistance(normalize=True).to(device)
-        self.kid = KernelInceptionDistance(normalize=True).to(device)
+        super().__init__()
+        self.ms_ssim = MultiScaleStructuralSimilarityIndexMeasure(data_range=1.0)
+        self.lpips_alex = LearnedPerceptualImagePatchSimilarity(net_type='alex', normalize=True)
+        self.lpips_vgg = LearnedPerceptualImagePatchSimilarity(net_type='vgg', normalize=True)
+        self.dists = DeepImageStructureAndTextureSimilarity(reduction='mean')
+        self.fid = FrechetInceptionDistance(normalize=True)
+        self.kid = KernelInceptionDistance(normalize=True)
     
     def forward(self, imgs: Tensor, recons: Tensor, 
                 likelihoods: Dict[str, Tensor] = None, 
@@ -49,10 +47,6 @@ class MetricsCollector:
                 kid: bool = False,
                 fid: bool = False,
                 ) -> ImageMetricsOutput:
-        if self.initialized is False:   # This avoid saving the pretrained model weights in checkpoints
-            self.setup(imgs.device)
-            self.initialized = True
-        
         recons = recons.clamp(0, 1)
         
         output_metrics = dict()
@@ -75,7 +69,6 @@ class MetricsCollector:
                 total_bits += len(s) * 8
         else:
             total_bits = 0.0
-            # raise ValueError("Either likelihoods or strings must be provided.")
         
         output_metrics["bpp"] = total_bits / num_pixels
         

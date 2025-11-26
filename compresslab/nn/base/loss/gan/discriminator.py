@@ -35,7 +35,7 @@ class Discriminator(nn.Module):
         assert loss_type in ["sigmoid", "hinge"], "Only sigmoid and hinge loss are supported currently."
         
         if backbone == "dinov2":
-            self.backbone = DINOV2(diff_aug=diff_aug)
+            self.backbone = [DINOV2(diff_aug=diff_aug)]
             
         if loss_type == "sigmoid":
             self.loss_fn = sigmoid_loss()
@@ -49,7 +49,7 @@ class Discriminator(nn.Module):
         for p in self.decoder.parameters():
             p.requires_grad = False
     
-        feat = self.backbone(x)
+        feat = self.backbone[0](x)
         return self.loss_fn(self.decoder(feat), for_real=True).mean()
 
     
@@ -58,8 +58,8 @@ class Discriminator(nn.Module):
         for p in self.decoder.parameters():
             p.requires_grad = True
             
-        real_feat = self.backbone(real)
-        fake_feat = self.backbone(fake)
+        real_feat = self.backbone[0](real)
+        fake_feat = self.backbone[0](fake)
             
         real_loss = self.loss_fn(self.decoder(real_feat), for_real=True).mean()
         fake_loss = self.loss_fn(self.decoder(fake_feat), for_real=False).mean()

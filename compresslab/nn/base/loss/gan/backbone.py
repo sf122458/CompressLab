@@ -1,16 +1,17 @@
 import torch
 import torch.nn as nn
-from transformers import Dinov2WithRegistersBackbone, DINOv3ViTModel
+from transformers import Dinov2WithRegistersModel, DINOv3ViTModel
 from torchvision import transforms
 from compresslab.utils.constant import PRETRAINED_CACHE_DIR
 from .augument import DiffAugment
 
 
-class DINOV2:
+class DINOV2(nn.Module):
     def __init__(self, diff_aug: bool = True):
+        super().__init__()
         self.diff_aug = diff_aug
         
-        self.backbone = Dinov2WithRegistersBackbone.from_pretrained(
+        self.backbone = Dinov2WithRegistersModel.from_pretrained(
             "facebook/dinov2-with-registers-base", 
             cache_dir=PRETRAINED_CACHE_DIR
         )
@@ -41,6 +42,9 @@ class DINOV2:
         x = self.transform(x)
         x_aug = DiffAugment(x, policy=self.policy) if self.diff_aug else x
         return self.dinov2_forward(x_aug)
+    
+    def state_dict():
+        return {}
     
     
 class DINOV3:

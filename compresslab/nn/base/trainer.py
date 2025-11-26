@@ -1,4 +1,5 @@
 import lightning as L
+import re
 import logging
 from rich.progress import Progress
 from compresslab.nn.base.utils import write_body, read_body, filesize
@@ -240,6 +241,34 @@ class BasicTrainer(L.LightningModule):
                 )
 
         return nn.Module.load_state_dict(self, state_dict, strict=strict)
+    
+    def _filter_keys(self, key: str, include: List[str] = None, exclude: List[str] = None) -> bool:
+        if include is not None:
+            if isinstance(include, str):
+                include = [include]
+            assert isinstance(include, list), "include must be a string or a list of strings."
+            for i in include:
+                if re.match(i, key):
+                    return True
+            return False
+        
+        if exclude is not None:
+            if isinstance(exclude, str):
+                exclude = [exclude]
+            assert isinstance(exclude, list), "exclude must be a string or a list of strings."
+            for e in exclude:
+                if re.match(e, key):
+                    return False
+                
+        return True
+            
+    def state_dict(self):
+        state_dict = super().state_dict()
+        filtered_state_dict = {}
+        for k, v in state_dict.items():
+            if self._filter_keys(k, exclude=[r"metrics_collector.*"]):
+                filtered_state_dict[k] = v
+        return filtered_state_dict
 
 
 class CompressAIImageCodecTrainer(BasicTrainer):
