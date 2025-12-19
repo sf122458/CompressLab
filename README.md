@@ -2,14 +2,6 @@
 
 A PyTorch-based framework for deep-learning-based data compression research.
 
-### Features
-
-- All implementations of models and datasets are modularized and registered in a registry. The training and testing pipelines can be easily configured by YAML files. Please refer to the example configuration files in the `config` folder and see the details of available options in `compresslab/utils/config.py`.
-- Add `!include` tag to include other YAML files, and `!loop` tag to generate repeated structures in the configuration files. Please refer to the examples in `config` folder.
-- For the vae-based image compression models `compresslab/nn/lossy_image_compression`, training with several rate-distortion points simultaneously is supported in one run. 
-- The framework is built on [PyTorch Lightning](https://lightning.ai), which makes it easy to run in DDP mode and adjust the precision. Moreover, it supports logging via TensorBoard, and resume from the checkpoint automatically.
-- A general metrics computation module is provided, and you can easily obtain the final results in the `output` folder after testing.
-
 ### Installation
 
 ```shell
@@ -80,14 +72,6 @@ to check all supported datasets.
 - [DVC](https://arxiv.org/abs/1812.00101)
 - [SSF](https://openaccess.thecvf.com/content_CVPR_2020/papers/Agustsson_Scale-Space_Flow_for_End-to-End_Optimized_Video_Compression_CVPR_2020_paper.pdf)
  -->
-
-
-### TODO
-- [ ] Refactor the code of video compression models.
-- [ ] Load video dataset directly from `.yuv` files.
-- [ ] Try to implement finetining from checkpoints or two-stage training in one run.
-- [ ] Support automatically padding the input image to the required size.
-- [ ] `benchmark.py` can't give the correct bd-rate curve. Fix it later.
 
 
 ### Related links
